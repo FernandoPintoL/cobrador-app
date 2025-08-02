@@ -63,6 +63,8 @@ class Usuario {
   bool esCobrador() => tieneRol('cobrador');
   bool esCliente() => tieneRol('cliente');
   bool esJefe() => tieneRol('jefe');
+  bool esAdmin() => tieneRol('admin');
+  bool esManager() => tieneRol('manager');
 
   Usuario copyWith({
     BigInt? id,

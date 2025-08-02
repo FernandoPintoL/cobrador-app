@@ -1,11 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'negocio/providers/auth_provider.dart';
 import 'presentacion/pantallas/splash_screen.dart';
 import 'presentacion/pantallas/login_screen.dart';
 import 'presentacion/pantallas/home_screen.dart';
+import 'presentacion/pantallas/admin_dashboard_screen.dart';
+import 'presentacion/pantallas/manager_dashboard_screen.dart';
+import 'presentacion/pantallas/cobrador_dashboard_screen.dart';
 
-void main() {
+Future<void> main() async {
+  // Cargar variables de entorno con manejo de errores
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    print("Error cargando .env: $e");
+    // Continuar sin variables de entorno
+  }
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -84,12 +96,26 @@ class _MyAppState extends ConsumerState<MyApp> {
       return const SplashScreen();
     }
 
-    // Si está autenticado, mostrar pantalla principal
+    // Si está autenticado, mostrar pantalla principal según el rol
     if (authState.isAuthenticated) {
-      return const HomeScreen();
+      return _buildDashboardByRole(authState);
     }
 
     // Si no está autenticado, mostrar pantalla de login
     return const LoginScreen();
+  }
+
+  Widget _buildDashboardByRole(AuthState authState) {
+    // Determinar qué dashboard mostrar según el rol del usuario
+    if (authState.isAdmin) {
+      return const AdminDashboardScreen();
+    } else if (authState.isManager) {
+      return const ManagerDashboardScreen();
+    } else if (authState.isCobrador) {
+      return const CobradorDashboardScreen();
+    } else {
+      // Por defecto, mostrar el dashboard del cobrador
+      return const CobradorDashboardScreen();
+    }
   }
 }

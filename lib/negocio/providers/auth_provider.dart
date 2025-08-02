@@ -34,6 +34,8 @@ class AuthState {
   bool get isCobrador => usuario?.esCobrador() ?? false;
   bool get isJefe => usuario?.esJefe() ?? false;
   bool get isCliente => usuario?.esCliente() ?? false;
+  bool get isAdmin => usuario?.esAdmin() ?? false;
+  bool get isManager => usuario?.esManager() ?? false;
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
