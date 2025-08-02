@@ -1,16 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'negocio/providers/auth_provider.dart';
+import 'presentacion/pantallas/splash_screen.dart';
 import 'presentacion/pantallas/login_screen.dart';
 import 'presentacion/pantallas/home_screen.dart';
 
 void main() {
-  runApp(const CobradorApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
-class CobradorApp extends StatelessWidget {
-  const CobradorApp({super.key});
+class MyApp extends ConsumerStatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Inicializar la aplicación verificando sesión guardada
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authProvider.notifier).initialize();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return MaterialApp(
       title: 'Cobrador App',
       debugShowCheckedModeBanner: false,
@@ -43,19 +62,34 @@ class CobradorApp extends StatelessWidget {
             borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: const CardThemeData(
           elevation: 4,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
         ),
         useMaterial3: true,
       ),
-      initialRoute: '/login',
+      home: _buildInitialScreen(authState),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
       },
     );
+  }
+
+  Widget _buildInitialScreen(AuthState authState) {
+    // Mostrar pantalla de splash mientras se inicializa
+    if (!authState.isInitialized) {
+      return const SplashScreen();
+    }
+
+    // Si está autenticado, mostrar pantalla principal
+    if (authState.isAuthenticated) {
+      return const HomeScreen();
+    }
+
+    // Si no está autenticado, mostrar pantalla de login
+    return const LoginScreen();
   }
 }

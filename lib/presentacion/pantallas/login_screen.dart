@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../negocio/providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _emailOrPhoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _rememberMe = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _emailOrPhoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -87,19 +89,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           children: [
                             TextFormField(
-                              controller: _emailController,
+                              controller: _emailOrPhoneController,
                               decoration: const InputDecoration(
-                                labelText: 'Correo electrónico',
+                                labelText: 'Correo electrónico o teléfono',
                                 prefixIcon: Icon(Icons.email),
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.emailAddress,
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
-                                  return 'Por favor ingresa tu correo';
-                                }
-                                if (!value.contains('@')) {
-                                  return 'Por favor ingresa un correo válido';
+                                  return 'Por favor ingresa tu correo o teléfono';
                                 }
                                 return null;
                               },
@@ -135,40 +134,70 @@ class _LoginScreenState extends State<LoginScreen> {
                                 return null;
                               },
                             ),
+                            const SizedBox(height: 16),
+
+                            // Checkbox "Recordarme"
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: _rememberMe,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _rememberMe = value ?? false;
+                                    });
+                                  },
+                                  activeColor: const Color(0xFF667eea),
+                                ),
+                                const Text(
+                                  'Recordarme',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF718096),
+                                  ),
+                                ),
+                              ],
+                            ),
                             const SizedBox(height: 24),
 
                             // Botón de login
                             SizedBox(
                               width: double.infinity,
                               height: 50,
-                              child: ElevatedButton(
-                                onPressed: _isLoading ? null : _handleLogin,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF667eea),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                Colors.white,
-                                              ),
-                                        ),
-                                      )
-                                    : const Text(
-                                        'Iniciar Sesión',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                              child: Consumer(
+                                builder: (context, ref, child) {
+                                  final authState = ref.watch(authProvider);
+                                  return ElevatedButton(
+                                    onPressed: authState.isLoading
+                                        ? null
+                                        : _handleLogin,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF667eea),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
+                                    ),
+                                    child: authState.isLoading
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Iniciar Sesión',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                  );
+                                },
                               ),
                             ),
                           ],
@@ -187,32 +216,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleLogin() async {
     if (_formKey.currentState?.validate() ?? false) {
-      setState(() {
-        _isLoading = true;
-      });
+      final emailOrPhone = _emailOrPhoneController.text.trim();
+      final password = _passwordController.text;
 
       try {
-        final email = _emailController.text;
-        final password = _passwordController.text;
-
-        // TODO: Implementar con AuthProvider
-        await Future.delayed(const Duration(seconds: 2)); // Simulación
+        await ref
+            .read(authProvider.notifier)
+            .login(emailOrPhone, password, rememberMe: _rememberMe);
 
         if (mounted) {
-          // Navegar a la pantalla principal
-          Navigator.of(context).pushReplacementNamed('/home');
+          final authState = ref.read(authProvider);
+          if (authState.isAuthenticated) {
+            // Navegar a la pantalla principal
+            Navigator.of(context).pushReplacementNamed('/home');
+          } else if (authState.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error: ${authState.error}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       } catch (e) {
+        print('Error en el screen login: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
         }
       }
     }

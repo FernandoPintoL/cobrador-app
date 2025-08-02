@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../negocio/providers/auth_provider.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
@@ -301,11 +303,14 @@ class MapScreen extends StatelessWidget {
   }
 }
 
-class PerfilScreen extends StatelessWidget {
+class PerfilScreen extends ConsumerWidget {
   const PerfilScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final usuario = authState.usuario;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Perfil'),
@@ -314,14 +319,156 @@ class PerfilScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              // TODO: Implementar logout
-              Navigator.of(context).pushReplacementNamed('/login');
+            onPressed: () async {
+              // Mostrar diálogo de confirmación
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Cerrar Sesión'),
+                  content: const Text(
+                    '¿Estás seguro de que quieres cerrar sesión?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancelar'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Cerrar Sesión'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                await ref.read(authProvider.notifier).logout();
+              }
             },
           ),
         ],
       ),
-      body: const Center(child: Text('Perfil de usuario - En desarrollo')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Información del usuario
+            if (usuario != null) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 40,
+                            backgroundColor: const Color(0xFF667eea),
+                            child: Text(
+                              usuario.nombre.isNotEmpty
+                                  ? usuario.nombre[0].toUpperCase()
+                                  : 'U',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  usuario.nombre,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  usuario.email,
+                                  style: const TextStyle(color: Colors.grey),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  usuario.telefono,
+                                  style: const TextStyle(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Roles: ${usuario.roles.join(', ')}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // Opciones del perfil
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.edit),
+                    title: const Text('Editar Perfil'),
+                    onTap: () {
+                      // TODO: Implementar edición de perfil
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Función en desarrollo')),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.security),
+                    title: const Text('Cambiar Contraseña'),
+                    onTap: () {
+                      // TODO: Implementar cambio de contraseña
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Función en desarrollo')),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.settings),
+                    title: const Text('Configuración'),
+                    onTap: () {
+                      // TODO: Implementar configuración
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Función en desarrollo')),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.help),
+                    title: const Text('Ayuda'),
+                    onTap: () {
+                      // TODO: Implementar ayuda
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Función en desarrollo')),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

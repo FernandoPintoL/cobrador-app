@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'storage_service.dart';
+import '../modelos/usuario.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:8000/api';
+  static const String baseUrl = 'http://192.168.5.44:8000/api';
   late final Dio _dio;
+  final StorageService _storageService = StorageService();
   String? _token;
 
   ApiService() {
@@ -23,12 +25,25 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
+          print('🌐 API Request: ${options.method} ${options.uri}');
+          print('📤 Headers: ${options.headers}');
+          print('📤 Data: ${options.data}');
+
           if (_token != null) {
             options.headers['Authorization'] = 'Bearer $_token';
           }
           handler.next(options);
         },
+        onResponse: (response, handler) async {
+          print('📥 Response Status: ${response.statusCode}');
+          print('📥 Response Data: ${response.data}');
+          handler.next(response);
+        },
         onError: (error, handler) async {
+          print('❌ Error Response Status: ${error.response?.statusCode}');
+          print('❌ Error Response Data: ${error.response?.data}');
+          print('❌ Error Message: ${error.message}');
+
           if (error.response?.statusCode == 401) {
             await _logout();
           }
@@ -39,19 +54,18 @@ class ApiService {
   }
 
   Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('auth_token');
+    _token = await _storageService.getToken();
   }
 
   Future<void> _saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_token', token);
+    print('💾 Guardando token: ${token.substring(0, 20)}...');
+    await _storageService.saveToken(token);
     _token = token;
+    print('✅ Token guardado exitosamente');
   }
 
   Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+    await _storageService.clearSession();
     _token = null;
   }
 
@@ -98,21 +112,60 @@ class ApiService {
     return _dio.delete<T>(path, queryParameters: queryParameters);
   }
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(
+    String emailOrPhone,
+    String password,
+  ) async {
     try {
+      print('🔐 Iniciando login para: $emailOrPhone');
+
       final response = await post(
         '/login',
-        data: {'email': email, 'password': password},
+        data: {'email_or_phone': emailOrPhone, 'password': password},
       );
+
+      print('📡 Respuesta del servidor: ${response.statusCode}');
+      print('📄 Datos de respuesta: ${response.data}');
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        await _saveToken(data['token']);
-        return data;
+
+        // Verificar si la respuesta tiene la estructura esperada
+        if (data['success'] == true && data['data'] != null) {
+          final responseData = data['data'] as Map<String, dynamic>;
+
+          // Verificar si el token existe y no es null
+          if (responseData['token'] != null) {
+            print(
+              '✅ Token recibido: ${responseData['token'].toString().substring(0, 20)}...',
+            );
+            await _saveToken(responseData['token']);
+          } else {
+            print('❌ Token no encontrado en la respuesta');
+            throw Exception('Token no encontrado en la respuesta del servidor');
+          }
+
+          // Guardar datos del usuario si están disponibles
+          if (responseData['user'] != null) {
+            print('👤 Datos de usuario recibidos');
+            final usuario = Usuario.fromJson(responseData['user']);
+            await _storageService.saveUser(usuario);
+          } else {
+            print('⚠️ No se recibieron datos de usuario');
+          }
+
+          return data;
+        } else {
+          print('❌ Estructura de respuesta inesperada: $data');
+          throw Exception('Estructura de respuesta inesperada del servidor');
+        }
       } else {
-        throw Exception('Error en el login');
+        print('❌ Error en el login: ${response.statusCode} - ${response.data}');
+        throw Exception('Error en el login: ${response.statusCode}');
       }
     } catch (e) {
+      print('💥 Error de conexión: $e');
+      print('🔍 Stack trace: ${StackTrace.current}');
       throw Exception('Error de conexión: $e');
     }
   }
@@ -127,6 +180,52 @@ class ApiService {
 
   Future<Map<String, dynamic>> getMe() async {
     final response = await get('/me');
-    return response.data as Map<String, dynamic>;
+    final data = response.data as Map<String, dynamic>;
+
+    // Actualizar datos del usuario en almacenamiento local
+    if (data['user'] != null) {
+      final usuario = Usuario.fromJson(data['user']);
+      await _storageService.saveUser(usuario);
+    }
+
+    return data;
+  }
+
+  // Verificar si existe un email o teléfono
+  Future<Map<String, dynamic>> checkExists(String emailOrPhone) async {
+    try {
+      final response = await post(
+        '/check-exists',
+        data: {'email_or_phone': emailOrPhone},
+      );
+
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
+      } else {
+        throw Exception('Error al verificar existencia');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  // Obtener usuario desde almacenamiento local
+  Future<Usuario?> getLocalUser() async {
+    return await _storageService.getUser();
+  }
+
+  // Verificar si hay sesión válida
+  Future<bool> hasValidSession() async {
+    return await _storageService.hasValidSession();
+  }
+
+  // Restaurar sesión desde almacenamiento local
+  Future<bool> restoreSession() async {
+    final hasSession = await _storageService.hasValidSession();
+    if (hasSession) {
+      await _loadToken();
+      return true;
+    }
+    return false;
   }
 }
