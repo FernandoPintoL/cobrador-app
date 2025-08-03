@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
+import 'user_management_screen.dart';
+import 'cobrador_assignment_screen.dart';
+import '../widgets/user_stats_widget.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -14,6 +17,12 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Panel de Administración'),
         actions: [
+          // Botón temporal para debug
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: () => ref.read(authProvider.notifier).forceNewLogin(),
+            tooltip: 'Limpiar sesión (Debug)',
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authProvider.notifier).logout(),
@@ -95,44 +104,7 @@ class AdminDashboardScreen extends ConsumerWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.5,
-              children: [
-                _buildStatCard(
-                  context,
-                  'Total Usuarios',
-                  '1,234',
-                  Icons.people,
-                  Colors.blue,
-                ),
-                _buildStatCard(
-                  context,
-                  'Cobradores Activos',
-                  '45',
-                  Icons.person_pin,
-                  Colors.green,
-                ),
-                _buildStatCard(
-                  context,
-                  'Clientes',
-                  '2,156',
-                  Icons.business,
-                  Colors.orange,
-                ),
-                _buildStatCard(
-                  context,
-                  'Préstamos Activos',
-                  '3,421',
-                  Icons.account_balance_wallet,
-                  Colors.purple,
-                ),
-              ],
-            ),
+            const UserStatsWidget(),
             const SizedBox(height: 32),
 
             // Funciones administrativas
@@ -151,7 +123,16 @@ class AdminDashboardScreen extends ConsumerWidget {
                   Colors.blue,
                   () => _navigateToUserManagement(context),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                _buildAdminFunctionCard(
+                  context,
+                  'Asignaciones',
+                  'Asignar clientes a cobradores',
+                  Icons.person_add,
+                  Colors.teal,
+                  () => _navigateToCobradorAssignment(context),
+                ),
+                const SizedBox(height: 8), // Reducido de 12 a 8
                 _buildAdminFunctionCard(
                   context,
                   'Gestión de Roles',
@@ -160,7 +141,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   Colors.green,
                   () => _navigateToRoleManagement(context),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8), // Reducido de 12 a 8
                 _buildAdminFunctionCard(
                   context,
                   'Configuración del Sistema',
@@ -169,7 +150,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   Colors.orange,
                   () => _navigateToSystemSettings(context),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8), // Reducido de 12 a 8
                 _buildAdminFunctionCard(
                   context,
                   'Reportes y Analytics',
@@ -178,7 +159,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   Colors.purple,
                   () => _navigateToReports(context),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8), // Reducido de 12 a 8
                 _buildAdminFunctionCard(
                   context,
                   'Soporte Técnico',
@@ -187,7 +168,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   Colors.red,
                   () => _navigateToSupport(context),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8), // Reducido de 12 a 8
                 _buildAdminFunctionCard(
                   context,
                   'Logs del Sistema',
@@ -197,42 +178,6 @@ class AdminDashboardScreen extends ConsumerWidget {
                   () => _navigateToSystemLogs(context),
                 ),
               ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-    BuildContext context,
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 40, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -254,38 +199,55 @@ class AdminDashboardScreen extends ConsumerWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(10.0), // Reducido de 12 a 10
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8), // Reducido de 10 a 8
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 18,
+                ), // Reducido de 20 a 18
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 10), // Reducido de 12 a 10
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize:
+                      MainAxisSize.min, // Añadido para evitar overflow
                   children: [
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 13, // Reducido de 14 a 13
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 1), // Reducido de 2 a 1
                     Text(
                       description,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[600],
+                      ), // Reducido de 11 a 10
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+              Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.grey[400],
+                size: 12,
+              ), // Reducido de 14 a 12
             ],
           ),
         ),
@@ -294,9 +256,16 @@ class AdminDashboardScreen extends ConsumerWidget {
   }
 
   void _navigateToUserManagement(BuildContext context) {
-    // TODO: Implementar navegación a gestión de usuarios
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Gestión de usuarios - En desarrollo')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const UserManagementScreen()),
+    );
+  }
+
+  void _navigateToCobradorAssignment(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CobradorAssignmentScreen()),
     );
   }
 

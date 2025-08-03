@@ -15,6 +15,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _rememberMe = false;
+  String? _lastShownError; // Para evitar mostrar el mismo error repetidamente
 
   @override
   void dispose() {
@@ -25,6 +26,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Escuchar cambios en el estado de autenticación para mostrar errores
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next.error != null && next.error != _lastShownError && mounted) {
+        _lastShownError = next.error;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Cerrar',
+              textColor: Colors.white,
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                // Limpiar el error al cerrar el SnackBar
+                ref.read(authProvider.notifier).clearError();
+                _lastShownError = null;
+              },
+            ),
+          ),
+        );
+
+        // Limpiar el error después de un delay para evitar ciclos infinitos
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted && ref.read(authProvider).error == next.error) {
+            ref.read(authProvider.notifier).clearError();
+            _lastShownError = null;
+          }
+        });
+      } else if (next.error == null) {
+        // Reset _lastShownError cuando no hay error
+        _lastShownError = null;
+      }
+    });
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -219,33 +256,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final emailOrPhone = _emailOrPhoneController.text.trim();
       final password = _passwordController.text;
 
-      try {
-        await ref
-            .read(authProvider.notifier)
-            .login(emailOrPhone, password, rememberMe: _rememberMe);
+      await ref
+          .read(authProvider.notifier)
+          .login(emailOrPhone, password, rememberMe: _rememberMe);
 
-        if (mounted) {
-          final authState = ref.read(authProvider);
-          if (authState.isAuthenticated) {
-            // Navegar a la pantalla principal
-            Navigator.of(context).pushReplacementNamed('/home');
-          } else if (authState.error != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error: ${authState.error}'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        print('Error en el screen login: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-          );
-        }
-      }
+      // No necesitamos navegar manualmente - el MyApp se encargará
+      // de detectar el cambio de estado y mostrar el dashboard correcto
+      // según el rol del usuario a través de _buildDashboardByRole()
     }
   }
 }

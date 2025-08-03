@@ -5,25 +5,48 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:cobrador_app/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:cobrador_app/main.dart';
+import 'package:cobrador_app/presentacion/cobrador/cobrador_dashboard_screen.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Dashboard Layout Tests', () {
+    testWidgets('Cobrador dashboard should render without overflow', (
+      WidgetTester tester,
+    ) async {
+      // Build our app and trigger a frame.
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: CobradorDashboardScreen()),
+        ),
+      );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      // Verify that the dashboard renders without overflow errors
+      expect(find.text('Panel de Cobrador'), findsOneWidget);
+      expect(find.text('Mis Estadísticas'), findsOneWidget);
+      expect(find.text('Acciones Rápidas'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+      // Verify that stat cards are present
+      expect(find.text('Clientes Asignados'), findsOneWidget);
+      expect(find.text('Préstamos Activos'), findsOneWidget);
+      expect(find.text('Cobros del Día'), findsOneWidget);
+      expect(find.text('Visitas Pendientes'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      // Verify that action cards are present
+      expect(find.text('Gestionar Clientes'), findsOneWidget);
+      expect(find.text('Gestionar Préstamos'), findsOneWidget);
+      expect(find.text('Ruta del Día'), findsOneWidget);
+    });
+
+    testWidgets('App should start without errors', (WidgetTester tester) async {
+      // Build our app and trigger a frame.
+      await tester.pumpWidget(const ProviderScope(child: MyApp()));
+
+      // Verify that the app starts without errors
+      expect(find.byType(MaterialApp), findsOneWidget);
+    });
   });
 }

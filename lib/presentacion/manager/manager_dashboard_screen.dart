@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../cliente/clientes_screen.dart';
 
 class ManagerDashboardScreen extends ConsumerWidget {
   const ManagerDashboardScreen({super.key});
@@ -14,6 +15,12 @@ class ManagerDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Panel de Gestión'),
         actions: [
+          // Botón temporal para debug
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: () => ref.read(authProvider.notifier).forceNewLogin(),
+            tooltip: 'Limpiar sesión (Debug)',
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authProvider.notifier).logout(),
@@ -99,9 +106,9 @@ class ManagerDashboardScreen extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.5,
+              crossAxisSpacing: 12, // Reducido de 16 a 12
+              mainAxisSpacing: 12, // Reducido de 16 a 12
+              childAspectRatio: 1.8, // Aumentado de 1.5 a 1.8 para más espacio
               children: [
                 _buildStatCard(
                   context,
@@ -214,25 +221,32 @@ class ManagerDashboardScreen extends ConsumerWidget {
     return Card(
       elevation: 4,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(12.0), // Reducido de 16 a 12
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 40, color: color),
-            const SizedBox(height: 8),
+            Icon(icon, size: 32, color: color), // Reducido de 40 a 32
+            const SizedBox(height: 6), // Reducido de 8 a 6
             Text(
               value,
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 20, // Reducido de 24 a 20
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[600],
+              ), // Reducido de 12 a 11
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -254,18 +268,22 @@ class ManagerDashboardScreen extends ConsumerWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(12.0), // Reducido de 16 a 12
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10), // Reducido de 12 a 10
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 20,
+                ), // Reducido de 24 a 20
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12), // Reducido de 16 a 12
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,19 +291,30 @@ class ManagerDashboardScreen extends ConsumerWidget {
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 14, // Reducido de 16 a 14
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2), // Reducido de 4 a 2
                     Text(
                       description,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[600],
+                      ), // Reducido de 12 a 11
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+              Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.grey[400],
+                size: 14,
+              ), // Reducido de 16 a 14
             ],
           ),
         ),
@@ -301,9 +330,9 @@ class ManagerDashboardScreen extends ConsumerWidget {
   }
 
   void _navigateToClientManagement(BuildContext context) {
-    // TODO: Implementar navegación a gestión de clientes
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Gestión de clientes - En desarrollo')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ClientesScreen()),
     );
   }
 

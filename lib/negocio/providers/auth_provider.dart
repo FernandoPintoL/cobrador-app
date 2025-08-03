@@ -21,11 +21,12 @@ class AuthState {
     bool? isLoading,
     String? error,
     bool? isInitialized,
+    bool clearError = false,
   }) {
     return AuthState(
       usuario: usuario ?? this.usuario,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
       isInitialized: isInitialized ?? this.isInitialized,
     );
   }
@@ -50,27 +51,55 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     try {
       final hasSession = await _storageService.hasValidSession();
+      print('🔍 DEBUG: hasValidSession = $hasSession');
 
       if (hasSession) {
-        // Intentar restaurar sesión
-        final restored = await _apiService.restoreSession();
-        if (restored) {
-          // Obtener usuario desde almacenamiento local
-          final usuario = await _storageService.getUser();
-          if (usuario != null) {
-            state = state.copyWith(
-              usuario: usuario,
-              isLoading: false,
-              isInitialized: true,
-            );
-            return;
+        // Obtener usuario desde almacenamiento local primero
+        final usuario = await _storageService.getUser();
+        print('🔍 DEBUG: Usuario recuperado del almacenamiento:');
+        print('  - Usuario: ${usuario?.nombre}');
+        print('  - Email: ${usuario?.email}');
+        print('  - Roles: ${usuario?.roles}');
+
+        if (usuario != null && usuario.roles.isNotEmpty) {
+          // Intentar restaurar sesión con el servidor
+          try {
+            final restored = await _apiService.restoreSession();
+            print('🔍 DEBUG: restoreSession = $restored');
+
+            if (restored) {
+              // Si la restauración fue exitosa, actualizar usuario desde el servidor
+              await refreshUser();
+            }
+          } catch (e) {
+            print('⚠️ Error al restaurar sesión con el servidor: $e');
+            print('⚠️ Continuando con usuario del almacenamiento local');
           }
+
+          // Usar el usuario del almacenamiento local o el actualizado
+          final currentUser = state.usuario ?? usuario;
+          state = state.copyWith(
+            usuario: currentUser,
+            isLoading: false,
+            isInitialized: true,
+          );
+
+          // Validar la sesión restaurada
+          await validateAndFixSession();
+
+          print('✅ Usuario restaurado exitosamente');
+          return;
+        } else {
+          print('⚠️ Usuario no válido en almacenamiento local');
+          await _storageService.clearSession();
         }
       }
 
       // No hay sesión válida
+      print('⚠️ No hay sesión válida, inicializando sin usuario');
       state = state.copyWith(isLoading: false, isInitialized: true);
     } catch (e) {
+      print('❌ Error durante la inicialización: $e');
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),
@@ -99,33 +128,62 @@ class AuthNotifier extends StateNotifier<AuthState> {
       Usuario? usuario;
       if (response['user'] != null) {
         usuario = Usuario.fromJson(response['user']);
+        print('🔍 DEBUG: Usuario obtenido de la respuesta del servidor:');
+        print('  - Usuario: ${usuario.nombre}');
+        print('  - Email: ${usuario.email}');
+        print('  - Roles: ${usuario.roles}');
       } else {
         usuario = await _storageService.getUser();
+        print('🔍 DEBUG: Usuario obtenido del almacenamiento local:');
+        print('  - Usuario: ${usuario?.nombre}');
+        print('  - Email: ${usuario?.email}');
+        print('  - Roles: ${usuario?.roles}');
       }
 
       if (usuario != null) {
+        print('✅ Login exitoso, guardando usuario en el estado');
         state = state.copyWith(usuario: usuario, isLoading: false);
       } else {
         throw Exception('No se pudo obtener información del usuario');
       }
     } catch (e) {
       print('Error en el provider login: $e');
-      state = state.copyWith(isLoading: false, error: e.toString());
+      // Extraer solo el mensaje de la excepción, no toda la información de stack
+      String errorMessage = 'Error desconocido';
+
+      if (e is Exception) {
+        errorMessage = e.toString().replaceAll('Exception: ', '');
+      } else if (e is String) {
+        errorMessage = e;
+      } else {
+        errorMessage = e.toString();
+      }
+
+      state = state.copyWith(isLoading: false, error: errorMessage);
     }
   }
 
   Future<void> logout() async {
+    print('🚪 Iniciando proceso de logout...');
     state = state.copyWith(isLoading: true);
 
     try {
       // Llamar al endpoint de logout si hay conexión
+      print('📡 Llamando al endpoint de logout...');
       await _apiService.logout();
+      print('✅ Logout exitoso en el servidor');
     } catch (e) {
       // Si no hay conexión, continuar con el logout local
+      print('⚠️ Error al hacer logout en el servidor: $e');
+      print('⚠️ Continuando con logout local...');
     } finally {
       // Limpiar sesión local
+      print('🧹 Limpiando sesión local...');
       await _storageService.clearSession();
+
+      // Resetear estado completamente
       state = const AuthState(isInitialized: true);
+      print('✅ Logout completado - Estado reseteado');
     }
   }
 
@@ -134,15 +192,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final response = await _apiService.getMe();
       if (response['user'] != null) {
         final usuario = Usuario.fromJson(response['user']);
+        print('🔄 Usuario actualizado desde el servidor:');
+        print('  - Usuario: ${usuario.nombre}');
+        print('  - Email: ${usuario.email}');
+        print('  - Roles: ${usuario.roles}');
+
+        // Guardar el usuario actualizado en almacenamiento local
+        await _storageService.saveUser(usuario);
+
         state = state.copyWith(usuario: usuario);
+        print('✅ Usuario actualizado exitosamente');
       }
     } catch (e) {
+      print('⚠️ Error al actualizar usuario desde el servidor: $e');
+      print('⚠️ Manteniendo usuario actual del almacenamiento local');
       // Si no se puede actualizar, mantener el usuario actual
     }
   }
 
   void clearError() {
-    state = state.copyWith(error: null);
+    state = state.copyWith(clearError: true);
   }
 
   // Verificar si existe un email o teléfono
@@ -157,6 +226,49 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // Obtener información de la sesión
   Future<Map<String, dynamic>> getSessionInfo() async {
     return await _storageService.getSessionInfo();
+  }
+
+  // Limpiar toda la sesión
+  Future<void> clearSession() async {
+    await _storageService.clearSession();
+    state = const AuthState(isInitialized: true);
+  }
+
+  // Método para debug: limpiar sesión y forzar nuevo login
+  Future<void> forceNewLogin() async {
+    print('🔄 Forzando nuevo login...');
+    await clearSession();
+    print('✅ Sesión limpiada, usuario debe hacer login nuevamente');
+  }
+
+  // Método para validar y corregir sesión si es necesario
+  Future<void> validateAndFixSession() async {
+    if (state.usuario != null) {
+      print('🔍 Validando sesión actual...');
+      print('  - Usuario: ${state.usuario!.nombre}');
+      print('  - Roles: ${state.usuario!.roles}');
+
+      // Verificar que el usuario tiene roles válidos
+      if (state.usuario!.roles.isEmpty) {
+        print('❌ Usuario sin roles, limpiando sesión');
+        await clearSession();
+        return;
+      }
+
+      // Verificar que al menos uno de los roles principales está presente
+      final hasValidRole =
+          state.usuario!.tieneRol('admin') ||
+          state.usuario!.tieneRol('manager') ||
+          state.usuario!.tieneRol('cobrador');
+
+      if (!hasValidRole) {
+        print('❌ Usuario sin roles válidos, limpiando sesión');
+        await clearSession();
+        return;
+      }
+
+      print('✅ Sesión válida');
+    }
   }
 }
 

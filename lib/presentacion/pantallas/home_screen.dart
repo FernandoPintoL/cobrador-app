@@ -37,7 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+            label: 'Dashboards',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Clientes'),
           BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Cobros'),

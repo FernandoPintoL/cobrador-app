@@ -226,6 +226,6 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 
 ## Contacto
 
-- Desarrollador: [Tu Nombre]
-- Email: [tu-email@ejemplo.com]
-- Proyecto: [https://github.com/tu-usuario/app-cobrador]
+- Desarrollador: [Fernando Pinto Lino]
+- Email: [pintolinofernando@gmail..com]
+- Proyecto: [https://github.com/FernandoPintoL/cobrador-app]
