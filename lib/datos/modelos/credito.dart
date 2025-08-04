@@ -1,169 +1,445 @@
-enum FrecuenciaPago { diario, quincenal, mensual }
-
-enum EstadoCredito { activo, pagado, vencido, cancelado }
+import 'usuario.dart';
 
 class Credito {
-  final BigInt id;
-  final BigInt clienteId;
-  final double monto;
-  final double saldo;
-  final FrecuenciaPago frecuencia;
-  final DateTime fechaInicio;
-  final DateTime fechaFin;
-  final EstadoCredito estado;
-  final DateTime fechaCreacion;
-  final DateTime fechaActualizacion;
+  final int id;
+  final int clientId;
+  final int? cobradorId;
+  final int? createdBy;
+  final double amount; // Monto original
+  final double balance; // Balance actual pendiente
+  final double? interestRate; // Porcentaje de interés (ej: 20.00 para 20%)
+  final double? totalAmount; // Monto total con interés incluido
+  final double? installmentAmount; // Monto de cada cuota
+  final String frequency; // 'daily', 'weekly', 'biweekly', 'monthly'
+  final String status; // 'active', 'completed', 'defaulted'
+  final DateTime startDate;
+  final DateTime endDate;
+  final DateTime? nextPaymentDate;
+  final double? paymentAmount; // Deprecated: usar installmentAmount
+  final String? notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  // Relaciones
+  final Usuario? client;
+  final Usuario? cobrador;
+  final Usuario? creator;
+  final List<Pago>? payments;
 
   Credito({
     required this.id,
-    required this.clienteId,
-    required this.monto,
-    required this.saldo,
-    required this.frecuencia,
-    required this.fechaInicio,
-    required this.fechaFin,
-    required this.estado,
-    required this.fechaCreacion,
-    required this.fechaActualizacion,
+    required this.clientId,
+    this.cobradorId,
+    this.createdBy,
+    required this.amount,
+    required this.balance,
+    this.interestRate,
+    this.totalAmount,
+    this.installmentAmount,
+    required this.frequency,
+    required this.status,
+    required this.startDate,
+    required this.endDate,
+    this.nextPaymentDate,
+    this.paymentAmount,
+    this.notes,
+    required this.createdAt,
+    required this.updatedAt,
+    this.client,
+    this.cobrador,
+    this.creator,
+    this.payments,
   });
 
   factory Credito.fromJson(Map<String, dynamic> json) {
     return Credito(
-      id: BigInt.parse(json['id'].toString()),
-      clienteId: BigInt.parse(json['client_id'].toString()),
-      monto: double.parse(json['amount'].toString()),
-      saldo: double.parse(json['balance'].toString()),
-      frecuencia: _parseFrecuencia(json['frequency']),
-      fechaInicio: DateTime.parse(json['start_date']),
-      fechaFin: DateTime.parse(json['end_date']),
-      estado: _parseEstado(json['status']),
-      fechaCreacion: DateTime.parse(json['created_at']),
-      fechaActualizacion: DateTime.parse(json['updated_at']),
+      id: json['id'] ?? 0,
+      clientId: json['client_id'] ?? 0,
+      cobradorId: json['cobrador_id'],
+      createdBy: json['created_by'] is Map
+          ? json['created_by']['id']
+          : json['created_by'],
+      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      balance: double.tryParse(json['balance'].toString()) ?? 0.0,
+      interestRate: json['interest_rate'] != null
+          ? double.tryParse(json['interest_rate'].toString())
+          : null,
+      totalAmount: json['total_amount'] != null
+          ? double.tryParse(json['total_amount'].toString())
+          : null,
+      installmentAmount: json['installment_amount'] != null
+          ? double.tryParse(json['installment_amount'].toString())
+          : null,
+      frequency: json['frequency'] ?? 'monthly',
+      status: json['status'] ?? 'active',
+      startDate: DateTime.tryParse(json['start_date'] ?? '') ?? DateTime.now(),
+      endDate: DateTime.tryParse(json['end_date'] ?? '') ?? DateTime.now(),
+      nextPaymentDate: json['next_payment_date'] != null
+          ? DateTime.tryParse(json['next_payment_date'])
+          : null,
+      paymentAmount: json['payment_amount'] != null
+          ? double.tryParse(json['payment_amount'].toString())
+          : null,
+      notes: json['notes'],
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+      client: json['client'] != null ? Usuario.fromJson(json['client']) : null,
+      cobrador: json['cobrador'] != null
+          ? Usuario.fromJson(json['cobrador'])
+          : null,
+      creator: json['created_by'] != null && json['created_by'] is Map
+          ? Usuario.fromJson(json['created_by'])
+          : (json['creator'] != null
+                ? Usuario.fromJson(json['creator'])
+                : null),
+      payments: json['payments'] != null
+          ? (json['payments'] as List).map((p) => Pago.fromJson(p)).toList()
+          : null,
     );
-  }
-
-  static FrecuenciaPago _parseFrecuencia(String? frecuencia) {
-    switch (frecuencia?.toLowerCase()) {
-      case 'daily':
-        return FrecuenciaPago.diario;
-      case 'biweekly':
-        return FrecuenciaPago.quincenal;
-      case 'monthly':
-        return FrecuenciaPago.mensual;
-      default:
-        return FrecuenciaPago.diario;
-    }
-  }
-
-  static EstadoCredito _parseEstado(String? estado) {
-    switch (estado?.toLowerCase()) {
-      case 'active':
-        return EstadoCredito.activo;
-      case 'paid':
-        return EstadoCredito.pagado;
-      case 'overdue':
-        return EstadoCredito.vencido;
-      case 'cancelled':
-        return EstadoCredito.cancelado;
-      default:
-        return EstadoCredito.activo;
-    }
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id.toString(),
-      'client_id': clienteId.toString(),
-      'amount': monto.toString(),
-      'balance': saldo.toString(),
-      'frequency': _frecuenciaToString(),
-      'start_date': fechaInicio.toIso8601String(),
-      'end_date': fechaFin.toIso8601String(),
-      'status': _estadoToString(),
-      'created_at': fechaCreacion.toIso8601String(),
-      'updated_at': fechaActualizacion.toIso8601String(),
+      'id': id,
+      'client_id': clientId,
+      'cobrador_id': cobradorId,
+      'created_by': createdBy,
+      'amount': amount,
+      'balance': balance,
+      'interest_rate': interestRate,
+      'total_amount': totalAmount,
+      'installment_amount': installmentAmount,
+      'frequency': frequency,
+      'status': status,
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+      'next_payment_date': nextPaymentDate?.toIso8601String().split('T')[0],
+      'payment_amount': paymentAmount,
+      'notes': notes,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
   }
 
-  String _frecuenciaToString() {
-    switch (frecuencia) {
-      case FrecuenciaPago.diario:
-        return 'daily';
-      case FrecuenciaPago.quincenal:
-        return 'biweekly';
-      case FrecuenciaPago.mensual:
-        return 'monthly';
+  // Métodos de utilidad
+  bool get isActive => status == 'active';
+  bool get isCompleted => status == 'completed';
+  bool get isDefaulted => status == 'defaulted';
+
+  bool get isOverdue {
+    return DateTime.now().isAfter(endDate) && !isCompleted;
+  }
+
+  bool get requiresAttention {
+    if (isOverdue) return true;
+
+    // Próximo a vencer en 7 días
+    final now = DateTime.now();
+    final daysUntilDue = endDate.difference(now).inDays;
+    return daysUntilDue <= 7 && daysUntilDue >= 0 && isActive;
+  }
+
+  double get progressPercentage {
+    final total = totalAmount ?? amount;
+    if (total == 0) return 0.0;
+    return ((total - balance) / total) * 100;
+  }
+
+  // Calcular el número total de cuotas
+  int get totalInstallments {
+    final daysDiff = endDate.difference(startDate).inDays + 1;
+    switch (frequency) {
+      case 'daily':
+        return daysDiff;
+      case 'weekly':
+        return (daysDiff / 7).ceil();
+      case 'biweekly':
+        return (daysDiff / 14).ceil();
+      case 'monthly':
+        return (daysDiff / 30).ceil();
+      default:
+        return daysDiff;
     }
   }
 
-  String _estadoToString() {
-    switch (estado) {
-      case EstadoCredito.activo:
-        return 'active';
-      case EstadoCredito.pagado:
-        return 'paid';
-      case EstadoCredito.vencido:
-        return 'overdue';
-      case EstadoCredito.cancelado:
-        return 'cancelled';
+  // Calcular cuotas pendientes
+  int get pendingInstallments {
+    final currentInstallment =
+        installmentAmount ?? (totalAmount ?? amount) / totalInstallments;
+    if (currentInstallment == 0) return 0;
+    return (balance / currentInstallment).ceil();
+  }
+
+  // Calcular cuotas pagadas
+  int get paidInstallments {
+    return totalInstallments - pendingInstallments;
+  }
+
+  // Calcular monto total pagado
+  double get totalPaidAmount {
+    final total = totalAmount ?? amount;
+    return total - balance;
+  }
+
+  String get frequencyLabel {
+    switch (frequency) {
+      case 'daily':
+        return 'Diario';
+      case 'weekly':
+        return 'Semanal';
+      case 'biweekly':
+        return 'Quincenal';
+      case 'monthly':
+        return 'Mensual';
+      default:
+        return frequency;
     }
   }
 
-  int getCuotasRestantes() {
-    final diasTotales = fechaFin.difference(fechaInicio).inDays;
-    switch (frecuencia) {
-      case FrecuenciaPago.diario:
-        return diasTotales;
-      case FrecuenciaPago.quincenal:
-        return (diasTotales / 15).ceil();
-      case FrecuenciaPago.mensual:
-        return (diasTotales / 30).ceil();
+  String get statusLabel {
+    switch (status) {
+      case 'active':
+        return 'Activo';
+      case 'completed':
+        return 'Completado';
+      case 'defaulted':
+        return 'En Mora';
+      default:
+        return status;
     }
   }
-
-  double getMontoCuota() {
-    return monto / getCuotasRestantes();
-  }
-
-  bool get estaVencido =>
-      estado == EstadoCredito.activo && DateTime.now().isAfter(fechaFin);
 
   Credito copyWith({
-    BigInt? id,
-    BigInt? clienteId,
-    double? monto,
-    double? saldo,
-    FrecuenciaPago? frecuencia,
-    DateTime? fechaInicio,
-    DateTime? fechaFin,
-    EstadoCredito? estado,
-    DateTime? fechaCreacion,
-    DateTime? fechaActualizacion,
+    int? id,
+    int? clientId,
+    int? cobradorId,
+    int? createdBy,
+    double? amount,
+    double? balance,
+    String? frequency,
+    String? status,
+    DateTime? startDate,
+    DateTime? endDate,
+    DateTime? nextPaymentDate,
+    double? paymentAmount,
+    String? notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Usuario? client,
+    Usuario? cobrador,
+    Usuario? creator,
+    List<Pago>? payments,
   }) {
     return Credito(
       id: id ?? this.id,
-      clienteId: clienteId ?? this.clienteId,
-      monto: monto ?? this.monto,
-      saldo: saldo ?? this.saldo,
-      frecuencia: frecuencia ?? this.frecuencia,
-      fechaInicio: fechaInicio ?? this.fechaInicio,
-      fechaFin: fechaFin ?? this.fechaFin,
-      estado: estado ?? this.estado,
-      fechaCreacion: fechaCreacion ?? this.fechaCreacion,
-      fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
+      clientId: clientId ?? this.clientId,
+      cobradorId: cobradorId ?? this.cobradorId,
+      createdBy: createdBy ?? this.createdBy,
+      amount: amount ?? this.amount,
+      balance: balance ?? this.balance,
+      frequency: frequency ?? this.frequency,
+      status: status ?? this.status,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      nextPaymentDate: nextPaymentDate ?? this.nextPaymentDate,
+      paymentAmount: paymentAmount ?? this.paymentAmount,
+      notes: notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      client: client ?? this.client,
+      cobrador: cobrador ?? this.cobrador,
+      creator: creator ?? this.creator,
+      payments: payments ?? this.payments,
+    );
+  }
+}
+
+class Pago {
+  final int id;
+  final int creditId;
+  final int? cobradorId;
+  final double amount;
+  final String? paymentType; // 'cash', 'transfer', etc.
+  final String status; // 'pending', 'completed', 'failed'
+  final DateTime paymentDate;
+  final String? notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Pago({
+    required this.id,
+    required this.creditId,
+    this.cobradorId,
+    required this.amount,
+    this.paymentType,
+    this.status = 'completed',
+    required this.paymentDate,
+    this.notes,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory Pago.fromJson(Map<String, dynamic> json) {
+    return Pago(
+      id: json['id'] ?? 0,
+      creditId: json['credit_id'] ?? 0,
+      cobradorId: json['cobrador_id'],
+      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      paymentType: json['payment_type'],
+      status: json['status'] ?? 'completed',
+      paymentDate:
+          DateTime.tryParse(json['payment_date'] ?? '') ?? DateTime.now(),
+      notes: json['notes'],
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
     );
   }
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is Credito && runtimeType == other.runtimeType && id == other.id;
-
-  @override
-  int get hashCode => id.hashCode;
-
-  @override
-  String toString() {
-    return 'Credito{id: $id, clienteId: $clienteId, monto: $monto, saldo: $saldo, estado: $estado}';
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'credit_id': creditId,
+      'cobrador_id': cobradorId,
+      'amount': amount,
+      'payment_type': paymentType,
+      'status': status,
+      'payment_date': paymentDate.toIso8601String().split('T')[0],
+      'notes': notes,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
   }
+}
+
+class CreditStats {
+  final int totalCredits;
+  final int activeCredits;
+  final int completedCredits;
+  final int defaultedCredits;
+  final double totalAmount;
+  final double totalBalance;
+
+  CreditStats({
+    required this.totalCredits,
+    required this.activeCredits,
+    required this.completedCredits,
+    required this.defaultedCredits,
+    required this.totalAmount,
+    required this.totalBalance,
+  });
+
+  factory CreditStats.fromJson(Map<String, dynamic> json) {
+    return CreditStats(
+      totalCredits: json['total_credits'] ?? 0,
+      activeCredits: json['active_credits'] ?? 0,
+      completedCredits: json['completed_credits'] ?? 0,
+      defaultedCredits: json['defaulted_credits'] ?? 0,
+      totalAmount: double.tryParse(json['total_amount'].toString()) ?? 0.0,
+      totalBalance: double.tryParse(json['total_balance'].toString()) ?? 0.0,
+    );
+  }
+
+  double get collectionRate {
+    if (totalAmount == 0) return 0.0;
+    return ((totalAmount - totalBalance) / totalAmount) * 100;
+  }
+
+  double get defaultRate {
+    if (totalCredits == 0) return 0.0;
+    return (defaultedCredits / totalCredits) * 100;
+  }
+}
+
+// Análisis de pago
+class PaymentAnalysis {
+  final double paymentAmount;
+  final double regularInstallment;
+  final double remainingBalance;
+  final String
+  type; // 'partial', 'regular', 'multiple_installments', 'full_payment'
+  final int? installmentsCovered;
+  final double? excessAmount;
+  final String message;
+
+  PaymentAnalysis({
+    required this.paymentAmount,
+    required this.regularInstallment,
+    required this.remainingBalance,
+    required this.type,
+    this.installmentsCovered,
+    this.excessAmount,
+    required this.message,
+  });
+
+  factory PaymentAnalysis.fromJson(Map<String, dynamic> json) {
+    return PaymentAnalysis(
+      paymentAmount: double.tryParse(json['payment_amount'].toString()) ?? 0.0,
+      regularInstallment:
+          double.tryParse(json['regular_installment'].toString()) ?? 0.0,
+      remainingBalance:
+          double.tryParse(json['remaining_balance'].toString()) ?? 0.0,
+      type: json['type'] ?? 'regular',
+      installmentsCovered: json['installments_covered'],
+      excessAmount: json['excess_amount'] != null
+          ? double.tryParse(json['excess_amount'].toString())
+          : null,
+      message: json['message'] ?? '',
+    );
+  }
+}
+
+// Estado del crédito después de un pago
+class CreditStatus {
+  final double currentBalance;
+  final double totalPaid;
+  final int pendingInstallments;
+  final bool isOverdue;
+  final double overdueAmount;
+
+  CreditStatus({
+    required this.currentBalance,
+    required this.totalPaid,
+    required this.pendingInstallments,
+    required this.isOverdue,
+    required this.overdueAmount,
+  });
+
+  factory CreditStatus.fromJson(Map<String, dynamic> json) {
+    return CreditStatus(
+      currentBalance:
+          double.tryParse(json['current_balance'].toString()) ?? 0.0,
+      totalPaid: double.tryParse(json['total_paid'].toString()) ?? 0.0,
+      pendingInstallments: json['pending_installments'] ?? 0,
+      isOverdue: json['is_overdue'] ?? false,
+      overdueAmount: double.tryParse(json['overdue_amount'].toString()) ?? 0.0,
+    );
+  }
+}
+
+// Cuota del cronograma de pagos
+class PaymentSchedule {
+  final int installmentNumber;
+  final DateTime dueDate;
+  final double amount;
+  final String status; // 'pending', 'paid', 'overdue'
+
+  PaymentSchedule({
+    required this.installmentNumber,
+    required this.dueDate,
+    required this.amount,
+    required this.status,
+  });
+
+  factory PaymentSchedule.fromJson(Map<String, dynamic> json) {
+    return PaymentSchedule(
+      installmentNumber: json['installment_number'] ?? 0,
+      dueDate: DateTime.tryParse(json['due_date'] ?? '') ?? DateTime.now(),
+      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      status: json['status'] ?? 'pending',
+    );
+  }
+
+  bool get isPaid => status == 'paid';
+  bool get isPending => status == 'pending';
+  bool get isOverdue => status == 'overdue';
 }

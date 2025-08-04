@@ -677,4 +677,253 @@ class ApiService {
       throw Exception('Error al eliminar cliente: $e');
     }
   }
+
+  // ========================================
+  // MÉTODOS DE CRÉDITOS
+  // ========================================
+
+  /// Obtiene todos los créditos (para cobradores, solo de sus clientes asignados)
+  Future<Map<String, dynamic>> getCredits({
+    int? clientId,
+    int? cobradorId,
+    String? status,
+    String? search,
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    try {
+      print('📋 Obteniendo créditos...');
+
+      final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
+
+      if (clientId != null) queryParams['client_id'] = clientId;
+      if (cobradorId != null) queryParams['cobrador_id'] = cobradorId;
+      if (status != null && status.isNotEmpty) queryParams['status'] = status;
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+      final response = await get('/credits', queryParameters: queryParams);
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Créditos obtenidos exitosamente');
+        return data;
+      } else {
+        throw Exception('Error al obtener créditos: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al obtener créditos: $e');
+      throw Exception('Error al obtener créditos: $e');
+    }
+  }
+
+  /// Crea un nuevo crédito
+  Future<Map<String, dynamic>> createCredit(
+    Map<String, dynamic> creditData,
+  ) async {
+    try {
+      print('➕ Creando nuevo crédito...');
+      print('📋 Datos a enviar: $creditData');
+
+      final response = await post('/credits', data: creditData);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Crédito creado exitosamente');
+        return data;
+      } else {
+        throw Exception('Error al crear crédito: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al crear crédito: $e');
+      throw Exception('Error al crear crédito: $e');
+    }
+  }
+
+  /// Obtiene un crédito específico
+  Future<Map<String, dynamic>> getCredit(int creditId) async {
+    try {
+      print('🔍 Obteniendo crédito: $creditId');
+
+      final response = await get('/credits/$creditId');
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Crédito obtenido exitosamente');
+        return data;
+      } else {
+        throw Exception('Error al obtener crédito: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al obtener crédito: $e');
+      throw Exception('Error al obtener crédito: $e');
+    }
+  }
+
+  /// Actualiza un crédito
+  Future<Map<String, dynamic>> updateCredit(
+    int creditId,
+    Map<String, dynamic> creditData,
+  ) async {
+    try {
+      print('✏️ Actualizando crédito: $creditId');
+      print('📋 Datos a actualizar: $creditData');
+
+      final response = await put('/credits/$creditId', data: creditData);
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Crédito actualizado exitosamente');
+        return data;
+      } else {
+        throw Exception('Error al actualizar crédito: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al actualizar crédito: $e');
+      throw Exception('Error al actualizar crédito: $e');
+    }
+  }
+
+  /// Elimina un crédito
+  Future<Map<String, dynamic>> deleteCredit(int creditId) async {
+    try {
+      print('🗑️ Eliminando crédito: $creditId');
+
+      final response = await delete('/credits/$creditId');
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Crédito eliminado exitosamente');
+        return data;
+      } else {
+        throw Exception('Error al eliminar crédito: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al eliminar crédito: $e');
+      throw Exception('Error al eliminar crédito: $e');
+    }
+  }
+
+  /// Obtiene créditos de un cliente específico
+  Future<Map<String, dynamic>> getClientCredits(
+    int clientId, {
+    String? status,
+    String? search,
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    try {
+      print('📋 Obteniendo créditos del cliente: $clientId');
+
+      final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
+
+      if (status != null && status.isNotEmpty) queryParams['status'] = status;
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+      final response = await get(
+        '/credits/client/$clientId',
+        queryParameters: queryParams,
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Créditos del cliente obtenidos exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al obtener créditos del cliente: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener créditos del cliente: $e');
+      throw Exception('Error al obtener créditos del cliente: $e');
+    }
+  }
+
+  /// Obtiene créditos de un cobrador específico (solo para admins/managers)
+  Future<Map<String, dynamic>> getCobradorCredits(
+    int cobradorId, {
+    String? status,
+    String? search,
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    try {
+      print('📋 Obteniendo créditos del cobrador: $cobradorId');
+
+      final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
+
+      if (status != null && status.isNotEmpty) queryParams['status'] = status;
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+      final response = await get(
+        '/credits/cobrador/$cobradorId',
+        queryParameters: queryParams,
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Créditos del cobrador obtenidos exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al obtener créditos del cobrador: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener créditos del cobrador: $e');
+      throw Exception('Error al obtener créditos del cobrador: $e');
+    }
+  }
+
+  /// Obtiene estadísticas de créditos de un cobrador
+  Future<Map<String, dynamic>> getCobradorStats(int cobradorId) async {
+    try {
+      print('📊 Obteniendo estadísticas del cobrador: $cobradorId');
+
+      final response = await get('/credits/cobrador/$cobradorId/stats');
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Estadísticas del cobrador obtenidas exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al obtener estadísticas: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener estadísticas: $e');
+      throw Exception('Error al obtener estadísticas: $e');
+    }
+  }
+
+  /// Obtiene créditos que requieren atención
+  Future<Map<String, dynamic>> getCreditsRequiringAttention({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    try {
+      print('⚠️ Obteniendo créditos que requieren atención...');
+
+      final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
+
+      final response = await get(
+        '/credits-requiring-attention',
+        queryParameters: queryParams,
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Créditos que requieren atención obtenidos exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al obtener créditos que requieren atención: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener créditos que requieren atención: $e');
+      throw Exception('Error al obtener créditos que requieren atención: $e');
+    }
+  }
 }

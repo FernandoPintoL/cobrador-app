@@ -23,7 +23,9 @@ class _ClienteAsignacionScreenState
   @override
   void initState() {
     super.initState();
-    _cargarDatos();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargarDatos();
+    });
   }
 
   Future<void> _cargarDatos() async {

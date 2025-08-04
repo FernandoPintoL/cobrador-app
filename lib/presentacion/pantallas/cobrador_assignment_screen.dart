@@ -21,7 +21,9 @@ class _CobradorAssignmentScreenState
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _cargarCobradores();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargarCobradores();
+    });
   }
 
   @override

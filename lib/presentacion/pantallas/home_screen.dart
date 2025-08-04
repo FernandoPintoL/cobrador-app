@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
+import 'admin_dashboard_screen.dart';
+import '../manager/manager_dashboard_screen.dart';
+import '../cobrador/cobrador_dashboard_screen.dart';
+// Importar otras pantallas según sea necesario
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -12,18 +16,16 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const DashboardScreen(),
-    const ClientesScreen(),
-    const CobrosScreen(),
-    const MapScreen(),
-    const PerfilScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
+    // Generar la lista de pantallas según el rol del usuario
+    final screens = _getScreensByRole(authState);
+    final navigationItems = _getNavigationItemsByRole(authState);
+
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
@@ -34,18 +36,90 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         },
         selectedItemColor: const Color(0xFF667eea),
         unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboards',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Clientes'),
-          BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Cobros'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
-        ],
+        items: navigationItems,
       ),
     );
+  }
+
+  List<Widget> _getScreensByRole(AuthState authState) {
+    if (authState.isAdmin) {
+      return [
+        const AdminDashboardScreen(),
+        const Center(child: Text('Clientes - En desarrollo')),
+        const Center(child: Text('Gestión Usuarios - En desarrollo')),
+        const Center(child: Text('Reportes - En desarrollo')),
+        const Center(child: Text('Perfil - En desarrollo')),
+      ];
+    } else if (authState.isManager) {
+      return [
+        const ManagerDashboardScreen(),
+        const Center(child: Text('Clientes - En desarrollo')),
+        const Center(child: Text('Asignaciones - En desarrollo')),
+        const Center(child: Text('Reportes - En desarrollo')),
+        const Center(child: Text('Perfil - En desarrollo')),
+      ];
+    } else if (authState.isCobrador) {
+      return [
+        const CobradorDashboardScreen(),
+        const Center(child: Text('Clientes - En desarrollo')),
+        const Center(child: Text('Cobros - En desarrollo')),
+        const Center(child: Text('Mapa - En desarrollo')),
+        const Center(child: Text('Perfil - En desarrollo')),
+      ];
+    } else {
+      // Fallback para usuarios sin rol específico
+      return [
+        const CobradorDashboardScreen(),
+        const Center(child: Text('Clientes - En desarrollo')),
+        const Center(child: Text('Cobros - En desarrollo')),
+        const Center(child: Text('Mapa - En desarrollo')),
+        const Center(child: Text('Perfil - En desarrollo')),
+      ];
+    }
+  }
+
+  List<BottomNavigationBarItem> _getNavigationItemsByRole(AuthState authState) {
+    if (authState.isAdmin) {
+      return const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.admin_panel_settings),
+          label: 'Dashboard',
+        ),
+        BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Clientes'),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.manage_accounts),
+          label: 'Usuarios',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.assessment),
+          label: 'Reportes',
+        ),
+        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+      ];
+    } else if (authState.isManager) {
+      return const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard),
+          label: 'Dashboard',
+        ),
+        BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Clientes'),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.assignment_ind),
+          label: 'Asignar',
+        ),
+        BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Reportes'),
+        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+      ];
+    } else {
+      // Cobrador u otros roles
+      return const [
+        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
+        BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Clientes'),
+        BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Cobros'),
+        BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
+        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+      ];
+    }
   }
 }
 

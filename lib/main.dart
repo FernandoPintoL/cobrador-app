@@ -4,7 +4,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'negocio/providers/auth_provider.dart';
 import 'presentacion/pantallas/splash_screen.dart';
 import 'presentacion/pantallas/login_screen.dart';
-import 'presentacion/pantallas/home_screen.dart';
 import 'presentacion/pantallas/admin_dashboard_screen.dart';
 import 'presentacion/manager/manager_dashboard_screen.dart';
 import 'presentacion/cobrador/cobrador_dashboard_screen.dart';
@@ -57,10 +56,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       darkTheme: _buildDarkTheme(),
       themeMode: ThemeMode.system, // Respeta la configuración del sistema
       home: _buildInitialScreen(authState),
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/home': (context) => const HomeScreen(),
-      },
+      routes: {'/login': (context) => const LoginScreen()},
     );
   }
 

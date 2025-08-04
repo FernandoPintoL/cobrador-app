@@ -59,7 +59,9 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
 
     // Cargar cobradores si estamos creando un cliente
     if (widget.userType == 'client' && widget.usuario == null) {
-      _cargarCobradores();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _cargarCobradores();
+      });
     }
   }
 

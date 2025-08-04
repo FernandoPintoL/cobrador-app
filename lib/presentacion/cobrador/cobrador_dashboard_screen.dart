@@ -3,16 +3,37 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/profile_image_provider.dart';
+import '../../negocio/providers/credit_provider.dart';
 import '../widgets/profile_image_widget.dart';
 import '../pantallas/profile_settings_screen.dart';
 import '../cliente/clientes_screen.dart';
+import '../creditos/credits_screen.dart';
+import 'package:intl/intl.dart';
 
-class CobradorDashboardScreen extends ConsumerWidget {
+class CobradorDashboardScreen extends ConsumerStatefulWidget {
   const CobradorDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CobradorDashboardScreen> createState() =>
+      _CobradorDashboardScreenState();
+}
+
+class _CobradorDashboardScreenState
+    extends ConsumerState<CobradorDashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Cargar datos iniciales
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(creditProvider.notifier).loadCredits();
+      ref.read(creditProvider.notifier).loadCobradorStats();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final creditState = ref.watch(creditProvider);
     final usuario = authState.usuario;
     final profileImageState = ref.watch(profileImageProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -138,43 +159,51 @@ class CobradorDashboardScreen extends ConsumerWidget {
               // GridView mejorado con mejor responsive design
               LayoutBuilder(
                 builder: (context, constraints) {
+                  final stats = creditState.stats;
+                  final activeCredits = creditState.credits
+                      .where((c) => c.status == 'active')
+                      .length;
+                  final attentionCredits = creditState.attentionCredits.length;
+
                   return GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisCount: 2,
-                    crossAxisSpacing: 10, // Reducido de 12 a 10
-                    mainAxisSpacing: 10, // Reducido de 12 a 10
-                    childAspectRatio: constraints.maxWidth > 400
-                        ? 1.5
-                        : 1.3, // Ajustado para más espacio
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: constraints.maxWidth > 400 ? 1.5 : 1.3,
                     children: [
                       _buildStatCard(
                         context,
-                        'Clientes Asignados',
-                        '23',
-                        Icons.people,
+                        'Créditos Activos',
+                        '$activeCredits',
+                        Icons.credit_card,
                         Colors.blue,
                       ),
                       _buildStatCard(
                         context,
-                        'Préstamos Activos',
-                        '45',
+                        'Saldo Pendiente',
+                        stats != null
+                            ? 'Bs. ${NumberFormat('#,##0').format(stats.totalBalance)}'
+                            : 'Bs. 0',
                         Icons.account_balance_wallet,
                         Colors.green,
                       ),
                       _buildStatCard(
                         context,
-                        'Cobros del Día',
-                        '\$2,450',
-                        Icons.attach_money,
+                        'Requieren Atención',
+                        '$attentionCredits',
+                        Icons.warning,
                         Colors.orange,
                       ),
                       _buildStatCard(
                         context,
-                        'Visitas Pendientes',
-                        '8',
-                        Icons.schedule,
-                        Colors.red,
+                        'Tasa Cobranza',
+                        stats != null
+                            ? '${stats.collectionRate.toStringAsFixed(1)}%'
+                            : '0%',
+                        Icons.trending_up,
+                        Colors.purple,
                       ),
                     ],
                   );
@@ -207,11 +236,11 @@ class CobradorDashboardScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   _buildCobradorActionCard(
                     context,
-                    'Gestionar Préstamos',
-                    'Ver y gestionar préstamos de clientes',
-                    Icons.account_balance_wallet,
+                    'Gestionar Créditos',
+                    'Ver y gestionar créditos de clientes',
+                    Icons.credit_card,
                     Colors.green,
-                    () => _navigateToLoanManagement(context),
+                    () => _navigateToCreditManagement(context),
                   ),
                   const SizedBox(height: 12),
                   _buildCobradorActionCard(
@@ -381,98 +410,44 @@ class CobradorDashboardScreen extends ConsumerWidget {
     );
   }
 
-  void _navigateToLoanManagement(BuildContext context) {
+  void _navigateToCreditManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const PrestamosScreen()),
+      MaterialPageRoute(builder: (context) => const CreditsScreen()),
     );
   }
 
   void _navigateToDailyRoute(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const RutaDiariaScreen()),
+    // TODO: Implementar ruta diaria
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Ruta del día - En desarrollo'),
+        backgroundColor: Colors.orange,
+      ),
     );
   }
 
   void _navigateToRecordPayment(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const RegistrarCobroScreen()),
+    // TODO: Implementar registro de cobros
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Registro de cobros - En desarrollo'),
+        backgroundColor: Colors.orange,
+      ),
     );
   }
 
   void _navigateToReports(BuildContext context) {
-    Navigator.push(
+    // TODO: Implementar pantalla de reportes
+    ScaffoldMessenger.of(
       context,
-      MaterialPageRoute(builder: (context) => const ReportesCobradorScreen()),
-    );
+    ).showSnackBar(const SnackBar(content: Text('Reportes - En desarrollo')));
   }
 
   void _navigateToSettings(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const ProfileSettingsScreen()),
-    );
-  }
-}
-
-class PrestamosScreen extends StatelessWidget {
-  const PrestamosScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Préstamos')),
-      body: const Center(child: Text('Gestión de préstamos - En desarrollo')),
-    );
-  }
-}
-
-class RutaDiariaScreen extends StatelessWidget {
-  const RutaDiariaScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Ruta del Día')),
-      body: const Center(child: Text('Ruta diaria - En desarrollo')),
-    );
-  }
-}
-
-class RegistrarCobroScreen extends StatelessWidget {
-  const RegistrarCobroScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Registrar Cobro')),
-      body: const Center(child: Text('Registrar cobro - En desarrollo')),
-    );
-  }
-}
-
-class ReportesCobradorScreen extends StatelessWidget {
-  const ReportesCobradorScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Mis Reportes')),
-      body: const Center(child: Text('Reportes - En desarrollo')),
-    );
-  }
-}
-
-class ConfiguracionCobradorScreen extends StatelessWidget {
-  const ConfiguracionCobradorScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Configuración')),
-      body: const Center(child: Text('Configuración - En desarrollo')),
     );
   }
 }
