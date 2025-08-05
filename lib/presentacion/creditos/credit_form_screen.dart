@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../negocio/providers/credit_provider.dart';
@@ -22,7 +23,8 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   final _amountController = TextEditingController();
   final _interestRateController = TextEditingController();
   final _balanceController = TextEditingController();
-  final _paymentAmountController = TextEditingController();
+  final _totalAmountController = TextEditingController();
+  final _installmentAmountController = TextEditingController();
   final _notesController = TextEditingController();
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
@@ -51,8 +53,10 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       _amountController.text = credit.amount.toString();
       _interestRateController.text = credit.interestRate?.toString() ?? '0';
       _balanceController.text = credit.balance.toString();
-      _paymentAmountController.text = credit.paymentAmount?.toString() ?? '';
-      _notesController.text = credit.notes ?? '';
+
+      _totalAmountController.text = credit.totalAmount?.toString() ?? '';
+      _installmentAmountController.text =
+          credit.installmentAmount?.toString() ?? '';
       _selectedFrequency = credit.frequency;
       _selectedStatus = credit.status;
       _startDate = credit.startDate;
@@ -115,7 +119,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         int numberOfPayments = _calculateNumberOfPayments();
         if (numberOfPayments > 0) {
           final suggestedPayment = totalAmount / numberOfPayments;
-          _paymentAmountController.text = suggestedPayment.toStringAsFixed(2);
+          _installmentAmountController.text = suggestedPayment.toStringAsFixed(
+            2,
+          );
         }
       }
     }
@@ -169,12 +175,115 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     return '$daysDifference días • $numberOfPayments $frequencyText';
   }
 
+  Future<void> _selectStartDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (date != null) {
+      setState(() {
+        _startDate = date;
+        _startDateController.text = DateFormat('dd/MM/yyyy').format(date);
+
+        // Si la fecha de fin es anterior a la nueva fecha de inicio, ajustarla
+        if (_endDate != null && _endDate!.isBefore(date)) {
+          _endDate = date.add(const Duration(days: 24)); // 24 días por defecto
+          _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
+        }
+      });
+      // Recalcular automáticamente después de cambiar las fechas
+      _updateCalculations();
+    }
+  }
+
+  Future<void> _selectEndDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? DateTime.now().add(const Duration(days: 30)),
+      firstDate: _startDate ?? DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+
+    if (date != null) {
+      setState(() {
+        _endDate = date;
+        _endDateController.text = DateFormat('dd/MM/yyyy').format(date);
+      });
+      // Recalcular automáticamente después de cambiar las fechas
+      _updateCalculations();
+    }
+  }
+
+  Future<void> _saveCredit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final amount = double.parse(_amountController.text);
+    final interestRate = _interestRateController.text.isNotEmpty
+        ? double.parse(_interestRateController.text)
+        : 0.0;
+    final balance = double.parse(_balanceController.text);
+    final installmentAmount = _installmentAmountController.text.isNotEmpty
+        ? double.parse(_installmentAmountController.text)
+        : null;
+
+    bool success = false;
+
+    if (widget.credit != null) {
+      success = await ref
+          .read(creditProvider.notifier)
+          .updateCredit(
+            creditId: widget.credit!.id,
+            amount: amount,
+            interestRate: interestRate,
+            balance: balance,
+            frequency: _selectedFrequency,
+            status: _selectedStatus,
+            startDate: _startDate!,
+            endDate: _endDate!,
+            installmentAmount: installmentAmount,
+            totalAmount: balance,
+          );
+    } else {
+      success = await ref
+          .read(creditProvider.notifier)
+          .createCredit(
+            clientId: _selectedClient!.id.toInt(),
+            amount: amount,
+            interestRate: interestRate,
+            balance: balance,
+            frequency: _selectedFrequency,
+            startDate: _startDate!,
+            endDate: _endDate!,
+            installmentAmount: installmentAmount,
+            totalAmount: balance,
+          );
+    }
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (success) {
+      if (mounted) {
+        Navigator.pop(context, true); // Devolver true para indicar éxito
+      }
+    }
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
     _interestRateController.dispose();
     _balanceController.dispose();
-    _paymentAmountController.dispose();
+    _totalAmountController.dispose();
     _notesController.dispose();
     _startDateController.dispose();
     _endDateController.dispose();
@@ -224,6 +333,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                 height: 56,
                                 child: Center(
                                   child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       SizedBox(
                                         width: 20,
@@ -238,30 +348,204 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                   ),
                                 ),
                               )
-                            : DropdownButtonFormField<Usuario>(
-                                value: _selectedClient,
-                                decoration: const InputDecoration(
-                                  labelText: 'Cliente *',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.person),
+                            : clientState.clientes.isEmpty
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.yellow.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.yellow.shade200,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline,
+                                          color: Colors.orange.shade700,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'No hay clientes registrados. Crea uno nuevo para continuar.',
+                                            style: TextStyle(
+                                              color: Colors.orange.shade700,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    icon: const Icon(Icons.person_add),
+                                    label: const Text('Crear nuevo cliente'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    onPressed: () async {
+                                      final result = await Navigator.pushNamed(
+                                        context,
+                                        '/crear-cliente',
+                                      );
+                                      if (result == true) {
+                                        // Recargar clientes automáticamente después de crear uno nuevo
+                                        await Future.delayed(
+                                          const Duration(milliseconds: 300),
+                                        );
+                                        _loadClients();
+                                        // Esperar a que los clientes se carguen
+                                        await Future.delayed(
+                                          const Duration(milliseconds: 500),
+                                        );
+                                        final clientList = ref
+                                            .read(clientProvider)
+                                            .clientes;
+                                        if (clientList.isNotEmpty) {
+                                          setState(() {
+                                            _selectedClient = clientList.last;
+                                          });
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
+                              )
+                            : DropdownSearch<Usuario>(
+                                items: clientState.clientes,
+                                selectedItem: _selectedClient,
+                                itemAsString: (Usuario u) =>
+                                    '${u.nombre} - ${u.telefono}',
+                                filterFn: (usuario, searchText) {
+                                  // Buscar por nombre o teléfono
+                                  final searchLower = searchText.toLowerCase();
+                                  return usuario.nombre.toLowerCase().contains(
+                                        searchLower,
+                                      ) ||
+                                      usuario.telefono.toLowerCase().contains(
+                                        searchLower,
+                                      );
+                                },
+                                dropdownDecoratorProps: DropDownDecoratorProps(
+                                  dropdownSearchDecoration: InputDecoration(
+                                    labelText: 'Cliente *',
+                                    border: OutlineInputBorder(),
+                                    prefixIcon: Icon(Icons.person),
+                                  ),
                                 ),
-                                items: clientState.clientes.map((cliente) {
-                                  return DropdownMenuItem<Usuario>(
-                                    value: cliente,
-                                    child: Text(cliente.nombre),
-                                  );
-                                }).toList(),
                                 onChanged: (Usuario? value) {
                                   setState(() {
                                     _selectedClient = value;
                                   });
                                 },
-                                validator: (value) {
+                                validator: (Usuario? value) {
                                   if (value == null) {
                                     return 'Por favor selecciona un cliente';
                                   }
                                   return null;
                                 },
+                                popupProps: PopupProps.menu(
+                                  showSearchBox: true,
+                                  searchFieldProps: TextFieldProps(
+                                    decoration: const InputDecoration(
+                                      labelText: 'Buscar por nombre o teléfono',
+                                      border: OutlineInputBorder(),
+                                      prefixIcon: Icon(Icons.search),
+                                      hintText: 'Ej: Juan Pérez o 77123456',
+                                    ),
+                                  ),
+                                  emptyBuilder: (context, searchEntry) {
+                                    return Container(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.person_search,
+                                              size: 48,
+                                              color: Colors.grey[400],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              'No se encontró ningún cliente',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              searchEntry.isEmpty
+                                                  ? 'No hay clientes registrados'
+                                                  : 'No hay coincidencias para "$searchEntry"',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey[500],
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                            const SizedBox(height: 16),
+                                            ElevatedButton.icon(
+                                              onPressed: () async {
+                                                Navigator.pop(
+                                                  context,
+                                                ); // Cerrar el dropdown
+                                                final result =
+                                                    await Navigator.pushNamed(
+                                                      context,
+                                                      '/crear-cliente',
+                                                    );
+                                                if (result == true) {
+                                                  await Future.delayed(
+                                                    const Duration(
+                                                      milliseconds: 300,
+                                                    ),
+                                                  );
+                                                  _loadClients();
+                                                  await Future.delayed(
+                                                    const Duration(
+                                                      milliseconds: 500,
+                                                    ),
+                                                  );
+                                                  final clientList = ref
+                                                      .read(clientProvider)
+                                                      .clientes;
+                                                  if (clientList.isNotEmpty) {
+                                                    setState(() {
+                                                      _selectedClient =
+                                                          clientList.last;
+                                                    });
+                                                  }
+                                                }
+                                              },
+                                              icon: const Icon(
+                                                Icons.person_add,
+                                              ),
+                                              label: const Text(
+                                                'Crear nuevo cliente',
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.orange,
+                                                foregroundColor: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
 
                         // Mostrar error si hay problemas cargando clientes
@@ -601,7 +885,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
 
                       // Monto de cuota sugerido - Calculado automáticamente
                       TextFormField(
-                        controller: _paymentAmountController,
+                        controller: _installmentAmountController,
                         decoration: const InputDecoration(
                           labelText: 'Monto de Cuota Sugerido',
                           border: OutlineInputBorder(),
@@ -622,25 +906,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-
-                      // Notas
-                      TextFormField(
-                        controller: _notesController,
-                        decoration: const InputDecoration(
-                          labelText: 'Notas',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.note),
-                          helperText: 'Información adicional sobre el crédito',
-                        ),
-                        maxLines: 3,
-                        maxLength: 500,
-                      ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 24),
-
               // Botones de acción
               Row(
                 children: [
@@ -674,115 +944,5 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _selectStartDate() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _startDate ?? DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-
-    if (date != null) {
-      setState(() {
-        _startDate = date;
-        _startDateController.text = DateFormat('dd/MM/yyyy').format(date);
-
-        // Si la fecha de fin es anterior a la nueva fecha de inicio, ajustarla
-        if (_endDate != null && _endDate!.isBefore(date)) {
-          _endDate = date.add(const Duration(days: 24)); // 24 días por defecto
-          _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
-        }
-      });
-      // Recalcular automáticamente después de cambiar las fechas
-      _updateCalculations();
-    }
-  }
-
-  Future<void> _selectEndDate() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _endDate ?? DateTime.now().add(const Duration(days: 30)),
-      firstDate: _startDate ?? DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
-
-    if (date != null) {
-      setState(() {
-        _endDate = date;
-        _endDateController.text = DateFormat('dd/MM/yyyy').format(date);
-      });
-      // Recalcular automáticamente después de cambiar las fechas
-      _updateCalculations();
-    }
-  }
-
-  Future<void> _saveCredit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final amount = double.parse(_amountController.text);
-    final interestRate = _interestRateController.text.isNotEmpty
-        ? double.parse(_interestRateController.text)
-        : 0.0;
-    final balance = double.parse(_balanceController.text);
-    final paymentAmount = _paymentAmountController.text.isNotEmpty
-        ? double.parse(_paymentAmountController.text)
-        : null;
-
-    bool success = false;
-
-    if (widget.credit != null) {
-      // Actualizar crédito existente - Nota: el backend calculará automáticamente total_amount e installment_amount
-      success = await ref
-          .read(creditProvider.notifier)
-          .updateCredit(
-            creditId: widget.credit!.id,
-            amount: amount,
-            interestRate: interestRate,
-            balance: balance,
-            frequency: _selectedFrequency,
-            status: _selectedStatus,
-            startDate: _startDate!,
-            endDate: _endDate!,
-            notes: _notesController.text.trim().isEmpty
-                ? null
-                : _notesController.text.trim(),
-            paymentAmount: paymentAmount,
-          );
-    } else {
-      // Crear nuevo crédito - el backend calculará automáticamente total_amount e installment_amount
-      success = await ref
-          .read(creditProvider.notifier)
-          .createCredit(
-            clientId: _selectedClient!.id.toInt(),
-            amount: amount,
-            interestRate: interestRate,
-            balance: balance,
-            frequency: _selectedFrequency,
-            startDate: _startDate!,
-            endDate: _endDate!,
-            notes: _notesController.text.trim().isEmpty
-                ? null
-                : _notesController.text.trim(),
-            paymentAmount: paymentAmount,
-          );
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (success) {
-      if (mounted) {
-        Navigator.pop(context, true); // Devolver true para indicar éxito
-      }
-    }
   }
 }

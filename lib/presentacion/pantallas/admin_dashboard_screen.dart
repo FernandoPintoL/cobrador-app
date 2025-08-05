@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../../negocio/providers/websocket_provider.dart';
 import 'user_management_screen.dart';
 import 'cobrador_assignment_screen.dart';
+import 'notifications_screen.dart';
 import '../widgets/user_stats_widget.dart';
+import '../widgets/websocket_widgets.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -17,12 +20,35 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Panel de Administración'),
         actions: [
-          // Botón temporal para debug
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: () => ref.read(authProvider.notifier).forceNewLogin(),
-            tooltip: 'Limpiar sesión (Debug)',
+          // Botón de notificaciones
+          Consumer(
+            builder: (context, ref, child) {
+              final wsState = ref.watch(webSocketProvider);
+              final unreadCount = wsState.notifications
+                  .where((n) => !(n['isRead'] ?? false))
+                  .length;
+
+              return IconButton(
+                icon: Badge(
+                  label: unreadCount > 0 ? Text('$unreadCount') : null,
+                  child: const Icon(Icons.notifications),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const NotificationsScreen(),
+                  ),
+                ),
+                tooltip: 'Notificaciones',
+              );
+            },
           ),
+          const SizedBox(width: 8),
+          // Estado WebSocket
+          const WebSocketStatusWidget(),
+          const SizedBox(width: 8),
+          // Botón de pruebas WebSocket
+          const WebSocketTestButton(),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authProvider.notifier).logout(),
@@ -67,7 +93,11 @@ class AdminDashboardScreen extends ConsumerWidget {
                           Text(
                             usuario?.email ?? '',
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.grey[300]
+                                  : Colors.grey[600],
                               fontSize: 14,
                             ),
                           ),
@@ -77,13 +107,21 @@ class AdminDashboardScreen extends ConsumerWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.red[100],
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.red[900]!.withOpacity(0.3)
+                                  : Colors.red[100],
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Administrador',
                               style: TextStyle(
-                                color: Colors.red,
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.red[300]
+                                    : Colors.red[700],
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
@@ -99,18 +137,30 @@ class AdminDashboardScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // Estadísticas generales
-            const Text(
+            Text(
               'Estadísticas del Sistema',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black87,
+              ),
             ),
             const SizedBox(height: 16),
             const UserStatsWidget(),
             const SizedBox(height: 32),
 
             // Funciones administrativas
-            const Text(
+            Text(
               'Funciones Administrativas',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black87,
+              ),
             ),
             const SizedBox(height: 16),
             Column(
@@ -118,7 +168,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                 _buildAdminFunctionCard(
                   context,
                   'Gestión de Usuarios',
-                  'Crear, editar y gestionar todos los usuarios del sistema',
+                  'Crear y gestionar clientes, cobradores y managers',
                   Icons.people_alt,
                   Colors.blue,
                   () => _navigateToUserManagement(context),
@@ -177,6 +227,10 @@ class AdminDashboardScreen extends ConsumerWidget {
                   Colors.grey,
                   () => _navigateToSystemLogs(context),
                 ),
+
+                // Panel de notificaciones WebSocket
+                const SizedBox(height: 24),
+                const RealtimeNotificationsPanel(),
               ],
             ),
           ],
@@ -235,7 +289,9 @@ class AdminDashboardScreen extends ConsumerWidget {
                       description,
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey[600],
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[400]
+                            : Colors.grey[600],
                       ), // Reducido de 11 a 10
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -245,7 +301,9 @@ class AdminDashboardScreen extends ConsumerWidget {
               ),
               Icon(
                 Icons.arrow_forward_ios,
-                color: Colors.grey[400],
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[500]
+                    : Colors.grey[400],
                 size: 12,
               ), // Reducido de 14 a 12
             ],
@@ -272,37 +330,60 @@ class AdminDashboardScreen extends ConsumerWidget {
   void _navigateToRoleManagement(BuildContext context) {
     // TODO: Implementar navegación a gestión de roles
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Gestión de roles - En desarrollo')),
+      SnackBar(
+        content: const Text('Gestión de roles - En desarrollo'),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[800]
+            : Colors.grey[600],
+      ),
     );
   }
 
   void _navigateToSystemSettings(BuildContext context) {
     // TODO: Implementar navegación a configuración del sistema
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Configuración del sistema - En desarrollo'),
+      SnackBar(
+        content: const Text('Configuración del sistema - En desarrollo'),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[800]
+            : Colors.grey[600],
       ),
     );
   }
 
   void _navigateToReports(BuildContext context) {
     // TODO: Implementar navegación a reportes
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Reportes - En desarrollo')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Reportes - En desarrollo'),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[800]
+            : Colors.grey[600],
+      ),
+    );
   }
 
   void _navigateToSupport(BuildContext context) {
     // TODO: Implementar navegación a soporte
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Soporte técnico - En desarrollo')),
+      SnackBar(
+        content: const Text('Soporte técnico - En desarrollo'),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[800]
+            : Colors.grey[600],
+      ),
     );
   }
 
   void _navigateToSystemLogs(BuildContext context) {
     // TODO: Implementar navegación a logs del sistema
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Logs del sistema - En desarrollo')),
+      SnackBar(
+        content: const Text('Logs del sistema - En desarrollo'),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[800]
+            : Colors.grey[600],
+      ),
     );
   }
 }

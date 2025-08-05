@@ -20,7 +20,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       // Usar addPostFrameCallback para evitar errores de Riverpod
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -49,10 +49,17 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
       ref
           .read(userManagementProvider.notifier)
           .cargarClientes(search: search.isEmpty ? null : search);
-    } else {
+    } else if (_tabController.index == 1) {
       ref
           .read(userManagementProvider.notifier)
           .cargarCobradores(search: search.isEmpty ? null : search);
+    } else {
+      ref
+          .read(userManagementProvider.notifier)
+          .cargarUsuarios(
+            role: 'manager',
+            search: search.isEmpty ? null : search,
+          );
     }
   }
 
@@ -68,6 +75,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
           tabs: const [
             Tab(text: 'Clientes'),
             Tab(text: 'Cobradores'),
+            Tab(text: 'Managers'),
           ],
         ),
       ),
@@ -115,6 +123,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
               children: [
                 _buildUserList(state, 'client'),
                 _buildUserList(state, 'cobrador'),
+                _buildUserList(state, 'manager'),
               ],
             ),
           ),
@@ -157,18 +166,35 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
     }
 
     if (state.usuarios.isEmpty) {
+      String userTypeDisplayName;
+      IconData iconData;
+
+      switch (userType) {
+        case 'client':
+          userTypeDisplayName = 'clientes';
+          iconData = Icons.people;
+          break;
+        case 'cobrador':
+          userTypeDisplayName = 'cobradores';
+          iconData = Icons.person_pin;
+          break;
+        case 'manager':
+          userTypeDisplayName = 'managers';
+          iconData = Icons.supervisor_account;
+          break;
+        default:
+          userTypeDisplayName = 'usuarios';
+          iconData = Icons.person;
+      }
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              userType == 'client' ? Icons.people : Icons.person_pin,
-              size: 64,
-              color: Colors.grey[400],
-            ),
+            Icon(iconData, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'No hay ${userType == 'client' ? 'clientes' : 'cobradores'} registrados',
+              'No hay $userTypeDisplayName registrados',
               style: TextStyle(fontSize: 18, color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
@@ -287,7 +313,15 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
   }
 
   void _mostrarFormularioUsuario() {
-    final userType = _tabController.index == 0 ? 'client' : 'cobrador';
+    String userType;
+    if (_tabController.index == 0) {
+      userType = 'client';
+    } else if (_tabController.index == 1) {
+      userType = 'cobrador';
+    } else {
+      userType = 'manager';
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(

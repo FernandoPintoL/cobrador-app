@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
-import '../../datos/servicios/api_service.dart';
+import '../../datos/servicios/api_services.dart';
 
 class ClientState {
   final List<Usuario> clientes;
@@ -35,7 +35,8 @@ class ClientState {
 }
 
 class ClientNotifier extends StateNotifier<ClientState> {
-  final ApiService _apiService = ApiService();
+  final UserApiService _userApiService = UserApiService();
+  final ClientApiService _clientApiService = ClientApiService();
 
   ClientNotifier() : super(ClientState());
 
@@ -55,7 +56,7 @@ class ClientNotifier extends StateNotifier<ClientState> {
 
       if (cobradorId != null) {
         // Obtener clientes asignados a un cobrador específico
-        final response = await _apiService.getCobradorClients(
+        final response = await _clientApiService.getCobradorClients(
           cobradorId,
           search: search,
           perPage: 50, // Ajustable según necesidades
@@ -91,18 +92,18 @@ class ClientNotifier extends StateNotifier<ClientState> {
           queryParams['filter'] = filter;
         }
 
-        final response = await _apiService.get(
-          '/users',
-          queryParameters: queryParams,
+        final response = await _userApiService.getUsers(
+          search: search,
+          filter: filter,
         );
 
-        if (response.data['success'] == true) {
+        if (response['success'] == true) {
           List<dynamic> clientesData;
 
-          if (response.data['data'] is List) {
-            clientesData = response.data['data'] as List<dynamic>;
-          } else if (response.data['data'] is Map) {
-            final dataMap = response.data['data'] as Map<String, dynamic>;
+          if (response['data'] is List) {
+            clientesData = response['data'] as List<dynamic>;
+          } else if (response['data'] is Map) {
+            final dataMap = response['data'] as Map<String, dynamic>;
             if (dataMap['users'] is List) {
               clientesData = dataMap['users'] as List<dynamic>;
             } else if (dataMap['data'] is List) {
@@ -183,14 +184,14 @@ class ClientNotifier extends StateNotifier<ClientState> {
 
       print('🚀 Enviando datos al servidor: $clientData');
 
-      final response = await _apiService.createClient(clientData);
+      final response = await _clientApiService.createClient(clientData);
 
       if (response['success'] == true) {
         final nuevoCliente = Usuario.fromJson(response['data']);
 
         // Si el cliente fue creado por un cobrador, asignarlo automáticamente
         if (cobradorId != null) {
-          await _apiService.assignClientsToCollector(cobradorId, [
+          await _clientApiService.assignClientsToCollector(cobradorId, [
             nuevoCliente.id.toString(),
           ]);
         }
@@ -267,7 +268,7 @@ class ClientNotifier extends StateNotifier<ClientState> {
         clientData['address'] = direccion;
       }
 
-      final response = await _apiService.updateClient(id, clientData);
+      final response = await _clientApiService.updateClient(id, clientData);
 
       if (response['success'] == true) {
         // Recargar la lista de clientes
@@ -303,7 +304,7 @@ class ClientNotifier extends StateNotifier<ClientState> {
     state = state.copyWith(isLoading: true, error: null, successMessage: null);
 
     try {
-      final response = await _apiService.deleteClient(id);
+      final response = await _clientApiService.deleteClient(id);
 
       if (response['success'] == true) {
         // Recargar la lista de clientes
@@ -342,7 +343,7 @@ class ClientNotifier extends StateNotifier<ClientState> {
     state = state.copyWith(isLoading: true, error: null, successMessage: null);
 
     try {
-      final response = await _apiService.assignClientsToCollector(
+      final response = await _clientApiService.assignClientsToCollector(
         cobradorId,
         clientIds,
       );
@@ -381,7 +382,7 @@ class ClientNotifier extends StateNotifier<ClientState> {
     state = state.copyWith(isLoading: true, error: null, successMessage: null);
 
     try {
-      final response = await _apiService.removeClientFromCollector(
+      final response = await _clientApiService.removeClientFromCollector(
         cobradorId,
         clientId,
       );

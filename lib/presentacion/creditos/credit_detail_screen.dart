@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
 import 'credit_form_screen.dart';
 import 'credit_payment_screen.dart';
@@ -292,6 +293,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
 
           const SizedBox(height: 16),
 
+          // Información de lista de espera (solo si no está activo)
+          if (!credit.isActive) _buildWaitingListInfo(credit),
+
           // Información del cliente
           Card(
             child: Padding(
@@ -356,7 +360,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
           ),
 
           // Notas
-          if (credit.notes != null && credit.notes!.isNotEmpty) ...[
+          /* if (credit.notes != null && credit.notes!.isNotEmpty) ...[
             const SizedBox(height: 16),
             Card(
               child: Padding(
@@ -376,7 +380,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                 ),
               ),
             ),
-          ],
+          ], */
         ],
       ),
     );
@@ -406,10 +410,10 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                 Icons.receipt,
                 Colors.blue,
               ),
-              if (credit.paymentAmount != null)
+              if (credit.installmentAmount != null)
                 _buildPaymentSummary(
                   'Cuota Sugerida',
-                  'Bs. ${NumberFormat('#,##0.00').format(credit.paymentAmount!)}',
+                  'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount!)}',
                   Icons.schedule,
                   Colors.orange,
                 ),
@@ -496,6 +500,14 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     String label;
 
     switch (status) {
+      case 'pending_approval':
+        color = Colors.orange;
+        label = 'Pendiente de Aprobación';
+        break;
+      case 'waiting_delivery':
+        color = Colors.blue;
+        label = 'En Lista de Espera';
+        break;
       case 'active':
         color = Colors.green;
         label = 'Activo';
@@ -507,6 +519,14 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       case 'defaulted':
         color = Colors.red;
         label = 'En Mora';
+        break;
+      case 'rejected':
+        color = Colors.red;
+        label = 'Rechazado';
+        break;
+      case 'cancelled':
+        color = Colors.grey;
+        label = 'Cancelado';
         break;
       default:
         color = Colors.grey;
@@ -667,6 +687,713 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
           .deleteCredit(credit.id);
       if (success && mounted) {
         Navigator.pop(context); // Regresar a la lista de créditos
+      }
+    }
+  }
+
+  Widget _buildWaitingListInfo(Credito credit) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Estado de Lista de Espera',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                _buildWaitingListStatusChip(credit.status),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Información específica según el estado
+            if (credit.isPendingApproval) ...[
+              _buildWaitingListRow(
+                'Estado:',
+                'Pendiente de aprobación por un manager',
+                Icons.hourglass_empty,
+                Colors.orange,
+              ),
+              if (credit.creator != null) ...[
+                const SizedBox(height: 8),
+                _buildWaitingListRow(
+                  'Creado por:',
+                  credit.creator!.nombre,
+                  Icons.person,
+                  Colors.blue,
+                ),
+              ],
+            ],
+
+            if (credit.isWaitingDelivery) ...[
+              if (credit.scheduledDeliveryDate != null) ...[
+                _buildWaitingListRow(
+                  'Fecha programada:',
+                  DateFormat(
+                    'dd/MM/yyyy HH:mm',
+                  ).format(credit.scheduledDeliveryDate!),
+                  Icons.schedule,
+                  credit.isReadyForDelivery ? Colors.green : Colors.blue,
+                ),
+                const SizedBox(height: 8),
+                if (credit.isReadyForDelivery)
+                  _buildWaitingListRow(
+                    'Estado:',
+                    'Listo para entrega',
+                    Icons.check_circle,
+                    Colors.green,
+                  )
+                else if (credit.isOverdueForDelivery)
+                  _buildWaitingListRow(
+                    'Estado:',
+                    'Entrega atrasada (${credit.daysOverdueForDelivery} días)',
+                    Icons.warning,
+                    Colors.red,
+                  )
+                else
+                  _buildWaitingListRow(
+                    'Estado:',
+                    'Programado para ${credit.daysUntilDelivery} días',
+                    Icons.timer,
+                    Colors.blue,
+                  ),
+              ],
+              if (credit.approver != null) ...[
+                const SizedBox(height: 8),
+                _buildWaitingListRow(
+                  'Aprobado por:',
+                  credit.approver!.nombre,
+                  Icons.person_outline,
+                  Colors.green,
+                ),
+                if (credit.approvedAt != null) ...[
+                  const SizedBox(height: 4),
+                  _buildWaitingListRow(
+                    'Fecha de aprobación:',
+                    DateFormat('dd/MM/yyyy HH:mm').format(credit.approvedAt!),
+                    Icons.calendar_today,
+                    Colors.grey,
+                  ),
+                ],
+              ],
+              if (credit.deliveryNotes != null &&
+                  credit.deliveryNotes!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _buildWaitingListRow(
+                  'Notas de entrega:',
+                  credit.deliveryNotes!,
+                  Icons.note,
+                  Colors.blue,
+                ),
+              ],
+            ],
+
+            if (credit.isRejected) ...[
+              _buildWaitingListRow(
+                'Estado:',
+                'Crédito rechazado',
+                Icons.cancel,
+                Colors.red,
+              ),
+              if (credit.rejectionReason != null &&
+                  credit.rejectionReason!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _buildWaitingListRow(
+                  'Motivo del rechazo:',
+                  credit.rejectionReason!,
+                  Icons.info_outline,
+                  Colors.red,
+                ),
+              ],
+            ],
+
+            if (credit.isActive) ...[
+              _buildWaitingListRow(
+                'Estado:',
+                'Crédito entregado y activo',
+                Icons.check_circle,
+                Colors.green,
+              ),
+              if (credit.deliverer != null) ...[
+                const SizedBox(height: 8),
+                _buildWaitingListRow(
+                  'Entregado por:',
+                  credit.deliverer!.nombre,
+                  Icons.person,
+                  Colors.green,
+                ),
+              ],
+              if (credit.deliveredAt != null) ...[
+                const SizedBox(height: 4),
+                _buildWaitingListRow(
+                  'Fecha de entrega:',
+                  DateFormat('dd/MM/yyyy HH:mm').format(credit.deliveredAt!),
+                  Icons.calendar_today,
+                  Colors.green,
+                ),
+              ],
+            ],
+
+            // Botones de acción según el estado y permisos del usuario
+            const SizedBox(height: 20),
+            _buildWaitingListActions(credit),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWaitingListStatusChip(String status) {
+    Color color;
+    String label;
+    IconData icon;
+
+    switch (status) {
+      case 'pending_approval':
+        color = Colors.orange;
+        label = 'Pendiente';
+        icon = Icons.hourglass_empty;
+        break;
+      case 'waiting_delivery':
+        color = Colors.blue;
+        label = 'En Espera';
+        icon = Icons.schedule;
+        break;
+      case 'active':
+        color = Colors.green;
+        label = 'Activo';
+        icon = Icons.check_circle;
+        break;
+      case 'rejected':
+        color = Colors.red;
+        label = 'Rechazado';
+        icon = Icons.cancel;
+        break;
+      case 'cancelled':
+        color = Colors.grey;
+        label = 'Cancelado';
+        icon = Icons.block;
+        break;
+      default:
+        color = Colors.grey;
+        label = status;
+        icon = Icons.help;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWaitingListRow(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: '$label ',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                TextSpan(
+                  text: value,
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWaitingListActions(Credito credit) {
+    final authState = ref.watch(authProvider);
+    final isManager = authState.isManager || authState.isAdmin;
+    final isCobrador = authState.isCobrador;
+
+    // Si no hay permisos, no mostrar acciones
+    if (!isManager && !isCobrador) {
+      return const SizedBox.shrink();
+    }
+
+    List<Widget> actions = [];
+
+    // Acciones para managers/admins
+    if (isManager) {
+      if (credit.isPendingApproval) {
+        actions.addAll([
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _showApprovalDialog(credit),
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text('Aprobar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _showRejectionDialog(credit),
+              icon: const Icon(Icons.cancel, size: 18),
+              label: const Text('Rechazar'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+        ]);
+      } else if (credit.isWaitingDelivery) {
+        actions.addAll([
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _showRescheduleDialog(credit),
+              icon: const Icon(Icons.schedule, size: 18),
+              label: const Text('Reprogramar'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+        ]);
+      }
+    }
+
+    // Acciones para cobradores
+    if ((isCobrador || isManager) &&
+        credit.isWaitingDelivery &&
+        credit.isReadyForDelivery) {
+      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
+      actions.add(
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _showDeliveryDialog(credit),
+            icon: const Icon(Icons.local_shipping, size: 18),
+            label: const Text('Entregar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(children: actions);
+  }
+
+  Future<void> _showApprovalDialog(Credito credit) async {
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
+    final notesController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aprobar Crédito para Entrega'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+            ),
+            const SizedBox(height: 16),
+            const Text('Fecha programada de entrega:'),
+            const SizedBox(height: 8),
+            StatefulBuilder(
+              builder: (context, setState) => Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      DateFormat('dd/MM/yyyy HH:mm').format(selectedDate),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (date != null) {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(selectedDate),
+                        );
+                        if (time != null) {
+                          setState(() {
+                            selectedDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                              time.hour,
+                              time.minute,
+                            );
+                          });
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.calendar_today),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: notesController,
+              decoration: const InputDecoration(
+                labelText: 'Notas (opcional)',
+                hintText: 'Instrucciones adicionales para la entrega',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Aprobar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      final success = await ref
+          .read(creditProvider.notifier)
+          .approveCreditForDelivery(
+            creditId: credit.id,
+            scheduledDeliveryDate: selectedDate,
+            notes: notesController.text.trim().isEmpty
+                ? null
+                : notesController.text.trim(),
+          );
+
+      if (success && mounted) {
+        // Recargar créditos para obtener información actualizada
+        ref.read(creditProvider.notifier).loadCredits();
+      }
+    }
+  }
+
+  Future<void> _showRejectionDialog(Credito credit) async {
+    final reasonController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rechazar Crédito'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Motivo del rechazo *',
+                hintText: 'Explique por qué se rechaza este crédito',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Debe proporcionar un motivo para el rechazo',
+                    ),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context, true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Rechazar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      final success = await ref
+          .read(creditProvider.notifier)
+          .rejectCredit(
+            creditId: credit.id,
+            reason: reasonController.text.trim(),
+          );
+
+      if (success && mounted) {
+        // Recargar créditos para obtener información actualizada
+        ref.read(creditProvider.notifier).loadCredits();
+      }
+    }
+  }
+
+  Future<void> _showRescheduleDialog(Credito credit) async {
+    DateTime selectedDate =
+        credit.scheduledDeliveryDate ??
+        DateTime.now().add(const Duration(days: 1));
+    final reasonController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reprogramar Entrega'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (credit.scheduledDeliveryDate != null)
+              Text(
+                'Fecha actual: ${DateFormat('dd/MM/yyyy HH:mm').format(credit.scheduledDeliveryDate!)}',
+                style: const TextStyle(color: Colors.grey),
+              ),
+            const SizedBox(height: 16),
+            const Text('Nueva fecha programada:'),
+            const SizedBox(height: 8),
+            StatefulBuilder(
+              builder: (context, setState) => Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      DateFormat('dd/MM/yyyy HH:mm').format(selectedDate),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (date != null) {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(selectedDate),
+                        );
+                        if (time != null) {
+                          setState(() {
+                            selectedDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                              time.hour,
+                              time.minute,
+                            );
+                          });
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.calendar_today),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Motivo de la reprogramación (opcional)',
+                hintText: 'Explique por qué se reprograma la entrega',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Reprogramar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      final success = await ref
+          .read(creditProvider.notifier)
+          .rescheduleCreditDelivery(
+            creditId: credit.id,
+            newScheduledDate: selectedDate,
+            reason: reasonController.text.trim().isEmpty
+                ? null
+                : reasonController.text.trim(),
+          );
+
+      if (success && mounted) {
+        // Recargar créditos para obtener información actualizada
+        ref.read(creditProvider.notifier).loadCredits();
+      }
+    }
+  }
+
+  Future<void> _showDeliveryDialog(Credito credit) async {
+    final notesController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Entregar Crédito al Cliente'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+            ),
+            if (credit.scheduledDeliveryDate != null)
+              Text(
+                'Programado para: ${DateFormat('dd/MM/yyyy HH:mm').format(credit.scheduledDeliveryDate!)}',
+                style: const TextStyle(color: Colors.blue),
+              ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: notesController,
+              decoration: const InputDecoration(
+                labelText: 'Notas de entrega (opcional)',
+                hintText: 'Detalles sobre cómo se realizó la entrega',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Confirmar Entrega'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      final success = await ref
+          .read(creditProvider.notifier)
+          .deliverCreditToClient(
+            creditId: credit.id,
+            notes: notesController.text.trim().isEmpty
+                ? null
+                : notesController.text.trim(),
+          );
+
+      if (success && mounted) {
+        // Recargar créditos para obtener información actualizada
+        ref.read(creditProvider.notifier).loadCredits();
       }
     }
   }

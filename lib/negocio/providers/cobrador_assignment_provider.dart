@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
-import '../../datos/servicios/api_service.dart';
+import '../../datos/servicios/api_services.dart';
 
 class CobradorAssignmentState {
   final List<Usuario> cobradores;
@@ -36,7 +36,8 @@ class CobradorAssignmentState {
 
 class CobradorAssignmentNotifier
     extends StateNotifier<CobradorAssignmentState> {
-  final ApiService _apiService = ApiService();
+  final UserApiService _userApiService = UserApiService();
+  final ClientApiService _clientApiService = ClientApiService();
 
   CobradorAssignmentNotifier() : super(CobradorAssignmentState());
 
@@ -47,18 +48,15 @@ class CobradorAssignmentNotifier
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.get(
-        '/users',
-        queryParameters: {'role': 'cobrador'},
-      );
+      final response = await _userApiService.getUsers(role: 'cobrador');
 
-      if (response.data['success'] == true) {
+      if (response['success'] == true) {
         List<dynamic> cobradoresData;
 
-        if (response.data['data'] is List) {
-          cobradoresData = response.data['data'] as List<dynamic>;
-        } else if (response.data['data'] is Map) {
-          final dataMap = response.data['data'] as Map<String, dynamic>;
+        if (response['data'] is List) {
+          cobradoresData = response['data'] as List<dynamic>;
+        } else if (response['data'] is Map) {
+          final dataMap = response['data'] as Map<String, dynamic>;
           if (dataMap['users'] is List) {
             cobradoresData = dataMap['users'] as List<dynamic>;
           } else if (dataMap['data'] is List) {
@@ -78,7 +76,7 @@ class CobradorAssignmentNotifier
       } else {
         state = state.copyWith(
           isLoading: false,
-          error: response.data['message'] ?? 'Error al cargar cobradores',
+          error: response['message'] ?? 'Error al cargar cobradores',
         );
       }
     } catch (e) {
@@ -93,15 +91,17 @@ class CobradorAssignmentNotifier
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.get('/users/$cobradorId/clients');
+      final response = await _clientApiService.getCobradorClients(
+        cobradorId.toString(),
+      );
 
-      if (response.data['success'] == true) {
+      if (response['success'] == true) {
         List<dynamic> clientesData;
 
-        if (response.data['data'] is List) {
-          clientesData = response.data['data'] as List<dynamic>;
-        } else if (response.data['data'] is Map) {
-          final dataMap = response.data['data'] as Map<String, dynamic>;
+        if (response['data'] is List) {
+          clientesData = response['data'] as List<dynamic>;
+        } else if (response['data'] is Map) {
+          final dataMap = response['data'] as Map<String, dynamic>;
           if (dataMap['clients'] is List) {
             clientesData = dataMap['clients'] as List<dynamic>;
           } else if (dataMap['data'] is List) {
@@ -121,8 +121,7 @@ class CobradorAssignmentNotifier
       } else {
         state = state.copyWith(
           isLoading: false,
-          error:
-              response.data['message'] ?? 'Error al cargar clientes asignados',
+          error: response['message'] ?? 'Error al cargar clientes asignados',
         );
       }
     } catch (e) {
@@ -138,14 +137,12 @@ class CobradorAssignmentNotifier
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.post(
-        '/users/$cobradorId/assign-clients',
-        data: {
-          'client_ids': [clienteId.toString()],
-        },
+      final response = await _clientApiService.assignClientsToCollector(
+        cobradorId.toString(),
+        [clienteId.toString()],
       );
 
-      if (response.data['success'] == true) {
+      if (response['success'] == true) {
         state = state.copyWith(
           isLoading: false,
           successMessage: 'Cliente asignado exitosamente',
@@ -154,7 +151,7 @@ class CobradorAssignmentNotifier
       } else {
         state = state.copyWith(
           isLoading: false,
-          error: response.data['message'] ?? 'Error al asignar cliente',
+          error: response['message'] ?? 'Error al asignar cliente',
         );
         return false;
       }
@@ -172,11 +169,12 @@ class CobradorAssignmentNotifier
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.delete(
-        '/users/$cobradorId/clients/$clienteId',
+      final response = await _clientApiService.removeClientFromCollector(
+        cobradorId.toString(),
+        clienteId.toString(),
       );
 
-      if (response.data['success'] == true) {
+      if (response['success'] == true) {
         state = state.copyWith(
           isLoading: false,
           successMessage: 'Cliente removido exitosamente',
@@ -185,7 +183,7 @@ class CobradorAssignmentNotifier
       } else {
         state = state.copyWith(
           isLoading: false,
-          error: response.data['message'] ?? 'Error al remover cliente',
+          error: response['message'] ?? 'Error al remover cliente',
         );
         return false;
       }
@@ -198,10 +196,12 @@ class CobradorAssignmentNotifier
   // Obtener cobrador asignado a un cliente
   Future<Usuario?> obtenerCobradorDeCliente(BigInt clienteId) async {
     try {
-      final response = await _apiService.get('/users/$clienteId/cobrador');
+      final response = await _clientApiService.getClientCobrador(
+        clienteId.toString(),
+      );
 
-      if (response.data['success'] == true && response.data['data'] != null) {
-        return Usuario.fromJson(response.data['data']);
+      if (response['success'] == true && response['data'] != null) {
+        return Usuario.fromJson(response['data']);
       }
       return null;
     } catch (e) {

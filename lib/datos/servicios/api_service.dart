@@ -1,688 +1,76 @@
-import 'package:dio/dio.dart';
-import 'dart:io';
-import 'storage_service.dart';
-import '../modelos/usuario.dart';
+// ARCHIVO DEPRECADO - USO SOLO PARA RETROCOMPATIBILIDAD
+// Los nuevos servicios están separados en archivos específicos:
+// - auth_api_service.dart - Para autenticación
+// - user_api_service.dart - Para gestión de usuarios
+// - client_api_service.dart - Para gestión de clientes
+// - credit_api_service.dart - Para gestión de créditos
+// - payment_api_service.dart - Para gestión de pagos
 
+// Re-exporta el servicio principal para retrocompatibilidad
+export 'api_services.dart';
+
+// Clase principal que mantiene la compatibilidad con el código existente
+import 'api_services.dart';
+
+/// DEPRECADO: Usar los servicios específicos en su lugar
+/// Esta clase se mantiene solo para retrocompatibilidad
 class ApiService {
-  static const String baseUrl = 'http://192.168.5.44:8000/api';
-  late final Dio _dio;
-  final StorageService _storageService = StorageService();
-  String? _token;
+  // Instancia singleton para retrocompatibilidad
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
 
-  ApiService() {
-    _dio = Dio(
-      BaseOptions(
-        baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ),
-    );
+  // Delegates a los servicios específicos
+  Future<Map<String, dynamic>> login(String emailOrPhone, String password) =>
+      AuthApiService().login(emailOrPhone, password);
 
-    _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          print('🌐 API Request: ${options.method} ${options.uri}');
-          print('📤 Headers: ${options.headers}');
-          print('📤 Data: ${options.data}');
+  Future<void> logout() => AuthApiService().logout();
 
-          if (_token != null) {
-            options.headers['Authorization'] = 'Bearer $_token';
-          }
-          handler.next(options);
-        },
-        onResponse: (response, handler) async {
-          print('📥 Response Status: ${response.statusCode}');
-          print('📥 Response Data: ${response.data}');
-          handler.next(response);
-        },
-        onError: (error, handler) async {
-          print('❌ Error Response Status: ${error.response?.statusCode}');
-          print('❌ Error Response Data: ${error.response?.data}');
-          print('❌ Error Message: ${error.message}');
+  Future<Map<String, dynamic>> getMe() => AuthApiService().getMe();
 
-          if (error.response?.statusCode == 401) {
-            await _logout();
-          }
-          handler.next(error);
-        },
-      ),
-    );
-  }
+  Future<Map<String, dynamic>> checkExists(String emailOrPhone) =>
+      AuthApiService().checkExists(emailOrPhone);
 
-  Future<void> _loadToken() async {
-    _token = await _storageService.getToken();
-  }
+  Future<bool> hasValidSession() => AuthApiService().hasValidSession();
 
-  Future<void> _saveToken(String token) async {
-    print('💾 Guardando token: ${token.substring(0, 20)}...');
-    await _storageService.saveToken(token);
-    _token = token;
-    print('✅ Token guardado exitosamente');
-  }
+  Future<bool> restoreSession() => AuthApiService().restoreSession();
 
-  Future<void> _logout() async {
-    print('🧹 Limpiando token en memoria...');
-    _token = null;
-    print('🧹 Limpiando almacenamiento local...');
-    await _storageService.clearSession();
-    print('✅ Limpieza local completada');
-  }
+  // Métodos de usuario/cliente
+  Future<Map<String, dynamic>> createClient(Map<String, dynamic> clientData) =>
+      ClientApiService().createClient(clientData);
 
-  Future<Response<T>> get<T>(
-    String path, {
-    Map<String, dynamic>? queryParameters,
-  }) async {
-    await _loadToken();
-    return _dio.get<T>(path, queryParameters: queryParameters);
-  }
+  Future<Map<String, dynamic>> updateClient(
+    String clientId,
+    Map<String, dynamic> clientData,
+  ) => ClientApiService().updateClient(clientId, clientData);
 
-  Future<Response<T>> post<T>(
-    String path, {
-    dynamic data,
-    Map<String, dynamic>? queryParameters,
-  }) async {
-    await _loadToken();
-    return _dio.post<T>(path, data: data, queryParameters: queryParameters);
-  }
+  Future<Map<String, dynamic>> deleteClient(String clientId) =>
+      ClientApiService().deleteClient(clientId);
 
-  Future<Response<T>> put<T>(
-    String path, {
-    dynamic data,
-    Map<String, dynamic>? queryParameters,
-  }) async {
-    await _loadToken();
-    return _dio.put<T>(path, data: data, queryParameters: queryParameters);
-  }
-
-  Future<Response<T>> patch<T>(
-    String path, {
-    dynamic data,
-    Map<String, dynamic>? queryParameters,
-  }) async {
-    await _loadToken();
-    return _dio.patch<T>(path, data: data, queryParameters: queryParameters);
-  }
-
-  Future<Response<T>> delete<T>(
-    String path, {
-    Map<String, dynamic>? queryParameters,
-  }) async {
-    await _loadToken();
-    return _dio.delete<T>(path, queryParameters: queryParameters);
-  }
-
-  // Método para subir archivos (imágenes)
-  Future<Response<T>> postFile<T>(
-    String path, {
-    required File file,
-    String fieldName = 'image',
-    Map<String, dynamic>? additionalData,
-  }) async {
-    await _loadToken();
-
-    // Crear FormData para subida de archivos
-    final formData = FormData.fromMap({
-      fieldName: await MultipartFile.fromFile(
-        file.path,
-        filename: file.path.split('/').last,
-      ),
-      ...?additionalData,
-    });
-
-    return _dio.post<T>(
-      path,
-      data: formData,
-      options: Options(
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Accept': 'application/json',
-        },
-      ),
-    );
-  }
-
-  Future<Map<String, dynamic>> login(
-    String emailOrPhone,
-    String password,
-  ) async {
-    try {
-      print('🔐 Iniciando login para: $emailOrPhone');
-
-      final response = await post(
-        '/login',
-        data: {'email_or_phone': emailOrPhone, 'password': password},
-      );
-
-      print('📡 Respuesta del servidor: ${response.statusCode}');
-      print('📄 Datos de respuesta: ${response.data}');
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-
-        // Verificar si la respuesta tiene la estructura esperada
-        if (data['success'] == true && data['data'] != null) {
-          final responseData = data['data'] as Map<String, dynamic>;
-
-          // Verificar si el token existe y no es null
-          if (responseData['token'] != null) {
-            print(
-              '✅ Token recibido: ${responseData['token'].toString().substring(0, 20)}...',
-            );
-            await _saveToken(responseData['token']);
-          } else {
-            print('❌ Token no encontrado en la respuesta');
-            throw Exception('Token no encontrado en la respuesta del servidor');
-          }
-
-          // Guardar datos del usuario si están disponibles
-          if (responseData['user'] != null) {
-            print('👤 Datos de usuario recibidos');
-            final usuario = Usuario.fromJson(responseData['user']);
-            print('👤 Datos de usuario recibidos: ${usuario.toJson()}');
-            await _storageService.saveUser(usuario);
-          } else {
-            print('⚠️ No se recibieron datos de usuario');
-          }
-
-          return data;
-        } else {
-          print('❌ Estructura de respuesta inesperada: $data');
-          throw Exception('Estructura de respuesta inesperada del servidor');
-        }
-      } else {
-        print('❌ Error en el login: ${response.statusCode} - ${response.data}');
-        throw Exception('Error en el login: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('💥 Error de conexión: $e');
-      print('🔍 Stack trace: ${StackTrace.current}');
-
-      // Extraer mensaje de error específico del servidor
-      if (e is DioException) {
-        if (e.response != null) {
-          final statusCode = e.response!.statusCode;
-          final responseData = e.response!.data;
-
-          print('📡 Status Code: $statusCode');
-          print('📄 Response Data: $responseData');
-
-          // Intentar extraer mensaje de error del servidor
-          String errorMessage = 'Error de conexión';
-
-          if (responseData is Map<String, dynamic>) {
-            if (responseData['message'] != null) {
-              errorMessage = responseData['message'].toString();
-            } else if (responseData['error'] != null) {
-              errorMessage = responseData['error'].toString();
-            } else if (responseData['errors'] != null) {
-              // Manejar errores de validación
-              final errors = responseData['errors'];
-              if (errors is Map<String, dynamic>) {
-                final firstError = errors.values.first;
-                if (firstError is List && firstError.isNotEmpty) {
-                  errorMessage = firstError.first.toString();
-                } else if (firstError is String) {
-                  errorMessage = firstError;
-                }
-              }
-            }
-          }
-
-          // Mensajes específicos según el código de estado
-          switch (statusCode) {
-            case 401:
-              errorMessage = 'Credenciales incorrectas';
-              break;
-            case 422:
-              errorMessage = errorMessage.isNotEmpty
-                  ? errorMessage
-                  : 'Datos de entrada inválidos';
-              break;
-            case 404:
-              errorMessage = 'Usuario no encontrado';
-              break;
-            case 500:
-              errorMessage = 'Error interno del servidor';
-              break;
-            default:
-              if (errorMessage == 'Error de conexión') {
-                errorMessage = 'Error del servidor: $statusCode';
-              }
-          }
-
-          throw Exception(errorMessage);
-        } else if (e.type == DioExceptionType.connectionTimeout) {
-          throw Exception('Tiempo de conexión agotado');
-        } else if (e.type == DioExceptionType.receiveTimeout) {
-          throw Exception('Tiempo de respuesta agotado');
-        } else if (e.type == DioExceptionType.connectionError) {
-          throw Exception('Error de conexión al servidor');
-        }
-      }
-
-      throw Exception('Error de conexión: $e');
-    }
-  }
-
-  Future<void> logout() async {
-    print('🔐 Iniciando logout en ApiService...');
-    try {
-      print('📡 Llamando al endpoint /logout...');
-      await post('/logout');
-      print('✅ Logout exitoso en el servidor');
-    } catch (e) {
-      print('⚠️ Error en logout del servidor: $e');
-      // Continuar con limpieza local incluso si falla el servidor
-    } finally {
-      print('🧹 Limpiando datos locales...');
-      await _logout();
-      print('✅ Logout completado en ApiService');
-    }
-  }
-
-  Future<Map<String, dynamic>> getMe() async {
-    final response = await get('/me');
-    final data = response.data as Map<String, dynamic>;
-
-    // Actualizar datos del usuario en almacenamiento local
-    if (data['user'] != null) {
-      final usuario = Usuario.fromJson(data['user']);
-      await _storageService.saveUser(usuario);
-    }
-
-    return data;
-  }
-
-  // Verificar si existe un email o teléfono
-  Future<Map<String, dynamic>> checkExists(String emailOrPhone) async {
-    try {
-      final response = await post(
-        '/check-exists',
-        data: {'email_or_phone': emailOrPhone},
-      );
-
-      if (response.statusCode == 200) {
-        return response.data as Map<String, dynamic>;
-      } else {
-        throw Exception('Error al verificar existencia');
-      }
-    } catch (e) {
-      throw Exception('Error de conexión: $e');
-    }
-  }
-
-  // Obtener usuario desde almacenamiento local
-  Future<Usuario?> getLocalUser() async {
-    return await _storageService.getUser();
-  }
-
-  // Verificar si hay sesión válida
-  Future<bool> hasValidSession() async {
-    return await _storageService.hasValidSession();
-  }
-
-  // Restaurar sesión desde almacenamiento local
-  Future<bool> restoreSession() async {
-    final hasSession = await _storageService.hasValidSession();
-    if (hasSession) {
-      await _loadToken();
-      return true;
-    }
-    return false;
-  }
-
-  // ===== MÉTODOS PARA MANEJO DE IMÁGENES DE PERFIL =====
-
-  /// Sube una imagen de perfil para el usuario actual
-  Future<Map<String, dynamic>> uploadProfileImage(File imageFile) async {
-    try {
-      print('📸 Subiendo imagen de perfil...');
-
-      final response = await postFile(
-        '/me/profile-image',
-        file: imageFile,
-        fieldName: 'profile_image',
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-
-        // Actualizar datos del usuario en almacenamiento local
-        if (data['user'] != null) {
-          final usuario = Usuario.fromJson(data['user']);
-          await _storageService.saveUser(usuario);
-          print('✅ Imagen de perfil actualizada exitosamente');
-        }
-
-        return data;
-      } else {
-        throw Exception(
-          'Error al subir imagen de perfil: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      print('❌ Error al subir imagen de perfil: $e');
-      throw Exception('Error al subir imagen de perfil: $e');
-    }
-  }
-
-  /// Sube una imagen de perfil para un usuario específico (solo admin/manager)
-  Future<Map<String, dynamic>> uploadUserProfileImage(
-    BigInt userId,
-    File imageFile,
-  ) async {
-    try {
-      print('📸 Subiendo imagen de perfil para usuario $userId...');
-
-      final response = await postFile(
-        '/users/$userId/profile-image',
-        file: imageFile,
-        fieldName: 'profile_image',
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Imagen de perfil actualizada exitosamente');
-        return data;
-      } else {
-        throw Exception(
-          'Error al subir imagen de perfil: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      print('❌ Error al subir imagen de perfil: $e');
-      throw Exception('Error al subir imagen de perfil: $e');
-    }
-  }
-
-  /// Obtiene la URL completa de la imagen de perfil
-  String getProfileImageUrl(String? profileImage) {
-    if (profileImage == null || profileImage.isEmpty) {
-      // URL de imagen por defecto
-      return '$baseUrl/images/default-avatar.png';
-    }
-
-    // Si ya es una URL completa, la devuelve tal como está
-    if (profileImage.startsWith('http://') ||
-        profileImage.startsWith('https://')) {
-      return profileImage;
-    }
-
-    // Si es una ruta relativa, la convierte en URL completa
-    if (profileImage.startsWith('/')) {
-      return '$baseUrl$profileImage';
-    }
-
-    // Si no tiene / al inicio, lo agrega
-    return '$baseUrl/$profileImage';
-  }
-
-  /// Elimina la imagen de perfil del usuario actual
-  Future<Map<String, dynamic>> deleteProfileImage() async {
-    try {
-      print('🗑️ Eliminando imagen de perfil...');
-
-      final response = await delete('/me/profile-image');
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-
-        // Actualizar datos del usuario en almacenamiento local
-        if (data['user'] != null) {
-          final usuario = Usuario.fromJson(data['user']);
-          await _storageService.saveUser(usuario);
-          print('✅ Imagen de perfil eliminada exitosamente');
-        }
-
-        return data;
-      } else {
-        throw Exception(
-          'Error al eliminar imagen de perfil: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      print('❌ Error al eliminar imagen de perfil: $e');
-      throw Exception('Error al eliminar imagen de perfil: $e');
-    }
-  }
-
-  // ================== MÉTODOS PARA GESTIÓN DE CLIENTES ASIGNADOS ==================
-
-  /// Obtiene todos los clientes asignados a un cobrador específico
   Future<Map<String, dynamic>> getCobradorClients(
     String cobradorId, {
     String? search,
     int? perPage,
-  }) async {
-    try {
-      print('📋 Obteniendo clientes del cobrador: $cobradorId');
+  }) => ClientApiService().getCobradorClients(
+    cobradorId,
+    search: search,
+    perPage: perPage,
+  );
 
-      final queryParams = <String, dynamic>{};
-      if (search != null && search.isNotEmpty) {
-        queryParams['search'] = search;
-      }
-      if (perPage != null) {
-        queryParams['per_page'] = perPage;
-      }
-
-      final response = await get(
-        '/users/$cobradorId/clients',
-        queryParameters: queryParams,
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Clientes del cobrador obtenidos exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al obtener clientes: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al obtener clientes del cobrador: $e');
-      throw Exception('Error al obtener clientes del cobrador: $e');
-    }
-  }
-
-  /// Asigna múltiples clientes a un cobrador
   Future<Map<String, dynamic>> assignClientsToCollector(
     String cobradorId,
     List<String> clientIds,
-  ) async {
-    try {
-      print(
-        '👥 Asignando ${clientIds.length} clientes al cobrador: $cobradorId',
-      );
+  ) => ClientApiService().assignClientsToCollector(cobradorId, clientIds);
 
-      final response = await post(
-        '/users/$cobradorId/assign-clients',
-        data: {'client_ids': clientIds.map((id) => int.parse(id)).toList()},
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Clientes asignados exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al asignar clientes: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al asignar clientes al cobrador: $e');
-      throw Exception('Error al asignar clientes al cobrador: $e');
-    }
-  }
-
-  /// Remueve un cliente de un cobrador
   Future<Map<String, dynamic>> removeClientFromCollector(
     String cobradorId,
     String clientId,
-  ) async {
-    try {
-      print('🗑️ Removiendo cliente $clientId del cobrador: $cobradorId');
+  ) => ClientApiService().removeClientFromCollector(cobradorId, clientId);
 
-      final response = await delete('/users/$cobradorId/clients/$clientId');
+  Future<Map<String, dynamic>> getClientCobrador(String clientId) =>
+      ClientApiService().getClientCobrador(clientId);
 
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Cliente removido del cobrador exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al remover cliente: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al remover cliente del cobrador: $e');
-      throw Exception('Error al remover cliente del cobrador: $e');
-    }
-  }
-
-  /// Obtiene el cobrador asignado a un cliente específico
-  Future<Map<String, dynamic>> getClientCobrador(String clientId) async {
-    try {
-      print('👤 Obteniendo cobrador del cliente: $clientId');
-
-      final response = await get('/users/$clientId/cobrador');
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Cobrador del cliente obtenido exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al obtener cobrador: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al obtener cobrador del cliente: $e');
-      throw Exception('Error al obtener cobrador del cliente: $e');
-    }
-  }
-
-  /// Crea un nuevo cliente (solo para cobradores y managers)
-  Future<Map<String, dynamic>> createClient(
-    Map<String, dynamic> clientData,
-  ) async {
-    try {
-      print('➕ Creando nuevo cliente...');
-      print('📋 Datos a enviar: $clientData');
-
-      final response = await post('/users', data: clientData);
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Cliente creado exitosamente');
-        return data;
-      } else {
-        // Extraer mensaje de error del servidor si existe
-        String errorMessage = 'Error del servidor';
-
-        if (response.data != null && response.data is Map) {
-          final errorData = response.data as Map<String, dynamic>;
-
-          // Intentar extraer el mensaje principal
-          errorMessage =
-              errorData['message'] ??
-              errorData['error'] ??
-              'Error ${response.statusCode}';
-
-          // Si es error 422, intentar extraer errores específicos de validación
-          if (response.statusCode == 422 && errorData['errors'] != null) {
-            final errors = errorData['errors'] as Map<String, dynamic>;
-            List<String> errorDetails = [];
-
-            errors.forEach((field, messages) {
-              if (messages is List) {
-                errorDetails.addAll(messages.map((msg) => '$field: $msg'));
-              }
-            });
-
-            if (errorDetails.isNotEmpty) {
-              errorMessage = errorDetails.join(', ');
-            }
-          }
-        }
-
-        print('❌ Error del servidor: $errorMessage (${response.statusCode})');
-        print('❌ Error Response Status: ${response.statusCode}');
-        print('❌ Error Response Data: ${response.data}');
-
-        return {
-          'success': false,
-          'message': errorMessage,
-          'status_code': response.statusCode,
-          'details': response.data,
-        };
-      }
-    } catch (e) {
-      print('❌ Error al crear cliente: $e');
-
-      String errorMessage = 'Error de conexión';
-
-      // Extraer información más específica del error de Dio
-      if (e.toString().contains('422')) {
-        errorMessage = 'Datos de entrada inválidos';
-      } else if (e.toString().contains('400')) {
-        errorMessage = 'Solicitud incorrecta';
-      } else if (e.toString().contains('401')) {
-        errorMessage = 'No autorizado';
-      } else if (e.toString().contains('403')) {
-        errorMessage = 'Sin permisos';
-      } else if (e.toString().contains('500')) {
-        errorMessage = 'Error interno del servidor';
-      }
-
-      return {'success': false, 'message': errorMessage, 'error': e.toString()};
-    }
-  }
-
-  /// Actualiza un cliente existente
-  Future<Map<String, dynamic>> updateClient(
-    String clientId,
-    Map<String, dynamic> clientData,
-  ) async {
-    try {
-      print('📝 Actualizando cliente: $clientId');
-
-      final response = await put('/users/$clientId', data: clientData);
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Cliente actualizado exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al actualizar cliente: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al actualizar cliente: $e');
-      throw Exception('Error al actualizar cliente: $e');
-    }
-  }
-
-  /// Elimina un cliente
-  Future<Map<String, dynamic>> deleteClient(String clientId) async {
-    try {
-      print('🗑️ Eliminando cliente: $clientId');
-
-      final response = await delete('/users/$clientId');
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Cliente eliminado exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al eliminar cliente: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al eliminar cliente: $e');
-      throw Exception('Error al eliminar cliente: $e');
-    }
-  }
-
-  // ========================================
-  // MÉTODOS DE CRÉDITOS
-  // ========================================
-
-  /// Obtiene todos los créditos (para cobradores, solo de sus clientes asignados)
+  // Métodos de créditos
   Future<Map<String, dynamic>> getCredits({
     int? clientId,
     int? cobradorId,
@@ -690,240 +78,83 @@ class ApiService {
     String? search,
     int page = 1,
     int perPage = 50,
-  }) async {
-    try {
-      print('📋 Obteniendo créditos...');
+  }) => CreditApiService().getCredits(
+    clientId: clientId,
+    cobradorId: cobradorId,
+    status: status,
+    search: search,
+    page: page,
+    perPage: perPage,
+  );
 
-      final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
+  Future<Map<String, dynamic>> createCredit(Map<String, dynamic> creditData) =>
+      CreditApiService().createCredit(creditData);
 
-      if (clientId != null) queryParams['client_id'] = clientId;
-      if (cobradorId != null) queryParams['cobrador_id'] = cobradorId;
-      if (status != null && status.isNotEmpty) queryParams['status'] = status;
-      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+  Future<Map<String, dynamic>> getCredit(int creditId) =>
+      CreditApiService().getCredit(creditId);
 
-      final response = await get('/credits', queryParameters: queryParams);
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos obtenidos exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al obtener créditos: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al obtener créditos: $e');
-      throw Exception('Error al obtener créditos: $e');
-    }
-  }
-
-  /// Crea un nuevo crédito
-  Future<Map<String, dynamic>> createCredit(
-    Map<String, dynamic> creditData,
-  ) async {
-    try {
-      print('➕ Creando nuevo crédito...');
-      print('📋 Datos a enviar: $creditData');
-
-      final response = await post('/credits', data: creditData);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Crédito creado exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al crear crédito: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al crear crédito: $e');
-      throw Exception('Error al crear crédito: $e');
-    }
-  }
-
-  /// Obtiene un crédito específico
-  Future<Map<String, dynamic>> getCredit(int creditId) async {
-    try {
-      print('🔍 Obteniendo crédito: $creditId');
-
-      final response = await get('/credits/$creditId');
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Crédito obtenido exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al obtener crédito: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al obtener crédito: $e');
-      throw Exception('Error al obtener crédito: $e');
-    }
-  }
-
-  /// Actualiza un crédito
   Future<Map<String, dynamic>> updateCredit(
     int creditId,
     Map<String, dynamic> creditData,
-  ) async {
-    try {
-      print('✏️ Actualizando crédito: $creditId');
-      print('📋 Datos a actualizar: $creditData');
+  ) => CreditApiService().updateCredit(creditId, creditData);
 
-      final response = await put('/credits/$creditId', data: creditData);
+  Future<Map<String, dynamic>> deleteCredit(int creditId) =>
+      CreditApiService().deleteCredit(creditId);
 
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Crédito actualizado exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al actualizar crédito: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al actualizar crédito: $e');
-      throw Exception('Error al actualizar crédito: $e');
-    }
-  }
-
-  /// Elimina un crédito
-  Future<Map<String, dynamic>> deleteCredit(int creditId) async {
-    try {
-      print('🗑️ Eliminando crédito: $creditId');
-
-      final response = await delete('/credits/$creditId');
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Crédito eliminado exitosamente');
-        return data;
-      } else {
-        throw Exception('Error al eliminar crédito: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error al eliminar crédito: $e');
-      throw Exception('Error al eliminar crédito: $e');
-    }
-  }
-
-  /// Obtiene créditos de un cliente específico
   Future<Map<String, dynamic>> getClientCredits(
     int clientId, {
     String? status,
     String? search,
     int page = 1,
     int perPage = 50,
-  }) async {
-    try {
-      print('📋 Obteniendo créditos del cliente: $clientId');
+  }) => CreditApiService().getClientCredits(
+    clientId,
+    status: status,
+    search: search,
+    page: page,
+    perPage: perPage,
+  );
 
-      final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
-      if (status != null && status.isNotEmpty) queryParams['status'] = status;
-      if (search != null && search.isNotEmpty) queryParams['search'] = search;
-
-      final response = await get(
-        '/credits/client/$clientId',
-        queryParameters: queryParams,
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos del cliente obtenidos exitosamente');
-        return data;
-      } else {
-        throw Exception(
-          'Error al obtener créditos del cliente: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      print('❌ Error al obtener créditos del cliente: $e');
-      throw Exception('Error al obtener créditos del cliente: $e');
-    }
-  }
-
-  /// Obtiene créditos de un cobrador específico (solo para admins/managers)
   Future<Map<String, dynamic>> getCobradorCredits(
     int cobradorId, {
     String? status,
     String? search,
     int page = 1,
     int perPage = 50,
-  }) async {
-    try {
-      print('📋 Obteniendo créditos del cobrador: $cobradorId');
+  }) => CreditApiService().getCobradorCredits(
+    cobradorId,
+    status: status,
+    search: search,
+    page: page,
+    perPage: perPage,
+  );
 
-      final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
+  Future<Map<String, dynamic>> getCobradorStats(int cobradorId) =>
+      CreditApiService().getCobradorStats(cobradorId);
 
-      if (status != null && status.isNotEmpty) queryParams['status'] = status;
-      if (search != null && search.isNotEmpty) queryParams['search'] = search;
-
-      final response = await get(
-        '/credits/cobrador/$cobradorId',
-        queryParameters: queryParams,
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos del cobrador obtenidos exitosamente');
-        return data;
-      } else {
-        throw Exception(
-          'Error al obtener créditos del cobrador: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      print('❌ Error al obtener créditos del cobrador: $e');
-      throw Exception('Error al obtener créditos del cobrador: $e');
-    }
-  }
-
-  /// Obtiene estadísticas de créditos de un cobrador
-  Future<Map<String, dynamic>> getCobradorStats(int cobradorId) async {
-    try {
-      print('📊 Obteniendo estadísticas del cobrador: $cobradorId');
-
-      final response = await get('/credits/cobrador/$cobradorId/stats');
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Estadísticas del cobrador obtenidas exitosamente');
-        return data;
-      } else {
-        throw Exception(
-          'Error al obtener estadísticas: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      print('❌ Error al obtener estadísticas: $e');
-      throw Exception('Error al obtener estadísticas: $e');
-    }
-  }
-
-  /// Obtiene créditos que requieren atención
   Future<Map<String, dynamic>> getCreditsRequiringAttention({
     int page = 1,
     int perPage = 50,
-  }) async {
-    try {
-      print('⚠️ Obteniendo créditos que requieren atención...');
+  }) => CreditApiService().getCreditsRequiringAttention(
+    page: page,
+    perPage: perPage,
+  );
 
-      final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
+  // Métodos de imágenes de perfil (delegados a UserApiService)
+  Future<Map<String, dynamic>> uploadProfileImage(dynamic imageFile) =>
+      UserApiService().uploadProfileImage(imageFile);
 
-      final response = await get(
-        '/credits-requiring-attention',
-        queryParameters: queryParams,
-      );
+  Future<Map<String, dynamic>> uploadUserProfileImage(
+    BigInt userId,
+    dynamic imageFile,
+  ) => UserApiService().uploadUserProfileImage(userId, imageFile);
 
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos que requieren atención obtenidos exitosamente');
-        return data;
-      } else {
-        throw Exception(
-          'Error al obtener créditos que requieren atención: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      print('❌ Error al obtener créditos que requieren atención: $e');
-      throw Exception('Error al obtener créditos que requieren atención: $e');
-    }
-  }
+  String getProfileImageUrl(String? profileImage) =>
+      UserApiService().getProfileImageUrl(profileImage);
+
+  Future<Map<String, dynamic>> deleteProfileImage() =>
+      UserApiService().deleteProfileImage();
+
+  // Obtener usuario local (delegado a AuthApiService)
+  Future<dynamic> getLocalUser() => AuthApiService().getLocalUser();
 }

@@ -25,7 +25,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
-  bool _showPassword = false;
+  // bool _showPassword = false;
   bool _isEditing = false;
   bool _obteniendoUbicacion = false;
 
@@ -177,7 +177,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
                       const SizedBox(height: 16),
 
                       // Email
-                      TextFormField(
+                      /* TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
@@ -197,7 +197,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 16), */
 
                       // Teléfono
                       TextFormField(
@@ -326,7 +326,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
               const SizedBox(height: 16),
 
               // Contraseña (opcional - solo para nuevos clientes)
-              if (!_isEditing)
+              /* if (!_isEditing)
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -403,7 +403,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
                   ),
                 ),
 
-              if (!_isEditing) const SizedBox(height: 16),
+              if (!_isEditing) const SizedBox(height: 16), */
 
               // Botones de acción
               Row(

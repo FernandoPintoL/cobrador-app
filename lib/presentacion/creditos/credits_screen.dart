@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
 import 'credit_form_screen.dart';
 import 'credit_detail_screen.dart';
+import 'waiting_list_screen.dart';
 
 class CreditsScreen extends ConsumerStatefulWidget {
   const CreditsScreen({super.key});
@@ -94,6 +96,20 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // Botón para acceder a la lista de espera (solo para managers/admins)
+          Consumer(
+            builder: (context, ref, child) {
+              final authState = ref.watch(authProvider);
+              if (authState.isManager || authState.isAdmin) {
+                return IconButton(
+                  icon: const Icon(Icons.list_alt),
+                  onPressed: () => _navigateToWaitingList(),
+                  tooltip: 'Lista de Espera',
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadInitialData,
@@ -118,6 +134,67 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
         children: [
           // Estadísticas
           if (creditState.stats != null) _buildStatsCard(creditState.stats!),
+
+          // Banner de lista de espera
+          Consumer(
+            builder: (context, ref, child) {
+              final authState = ref.watch(authProvider);
+              final pendingApproval = creditState.credits
+                  .where((c) => c.isPendingApproval)
+                  .length;
+              final waitingDelivery = creditState.credits
+                  .where((c) => c.isWaitingDelivery)
+                  .length;
+
+              if ((authState.isManager || authState.isAdmin) &&
+                  (pendingApproval > 0 || waitingDelivery > 0)) {
+                return Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Card(
+                    color: Colors.blue.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.blue.shade700),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Lista de Espera',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                ),
+                                Text(
+                                  '${pendingApproval} esperando aprobación, ${waitingDelivery} esperando entrega',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.blue.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => _navigateToWaitingList(),
+                            child: const Text('Ver Lista'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
 
           // Filtros
           _buildFiltersSection(),
@@ -205,6 +282,51 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
                   ),
                 ],
               ),
+              // Estadísticas de lista de espera (solo para managers/admins)
+              Consumer(
+                builder: (context, ref, child) {
+                  final authState = ref.watch(authProvider);
+                  final creditState = ref.watch(creditProvider);
+
+                  if (authState.isManager || authState.isAdmin) {
+                    final pendingApproval = creditState.credits
+                        .where((c) => c.isPendingApproval)
+                        .length;
+                    final waitingDelivery = creditState.credits
+                        .where((c) => c.isWaitingDelivery)
+                        .length;
+
+                    if (pendingApproval > 0 || waitingDelivery > 0) {
+                      return Column(
+                        children: [
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildStatItem(
+                                  'Esperando\nAprobación',
+                                  '$pendingApproval',
+                                  Icons.schedule,
+                                  Colors.amber,
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildStatItem(
+                                  'Esperando\nEntrega',
+                                  '$waitingDelivery',
+                                  Icons.local_shipping,
+                                  Colors.blue,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
             ],
           ),
         ),
@@ -265,63 +387,189 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
             ),
             onChanged: (_) => _onSearchChanged(),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 22),
 
           // Filtros de estado
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _selectedStatus,
-                  decoration: InputDecoration(
-                    labelText: 'Estado',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // Si el ancho es muy pequeño, usar layout vertical
+              if (constraints.maxWidth < 350) {
+                return Column(
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: _selectedStatus,
+                      decoration: InputDecoration(
+                        labelText: 'Estado',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('Todos')),
+                        DropdownMenuItem(
+                          value: 'active',
+                          child: Text('Activos'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'pending_approval',
+                          child: Text('Pend. Aprobación'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'waiting_delivery',
+                          child: Text('Pend. Entrega'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'completed',
+                          child: Text('Completados'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'defaulted',
+                          child: Text('En Mora'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'rejected',
+                          child: Text('Rechazados'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'cancelled',
+                          child: Text('Cancelados'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedStatus = value ?? 'all';
+                        });
+                        _onFiltersChanged();
+                      },
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'all', child: Text('Todos')),
-                    DropdownMenuItem(value: 'active', child: Text('Activos')),
-                    DropdownMenuItem(
-                      value: 'completed',
-                      child: Text('Completados'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'defaulted',
-                      child: Text('En Mora'),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _showOnlyAttention = !_showOnlyAttention;
+                          });
+                        },
+                        icon: Icon(
+                          _showOnlyAttention
+                              ? Icons.warning
+                              : Icons.warning_outlined,
+                        ),
+                        label: Text(
+                          _showOnlyAttention
+                              ? 'Mostrar Todos'
+                              : 'Requieren Atención',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _showOnlyAttention
+                              ? Colors.orange
+                              : null,
+                          foregroundColor: _showOnlyAttention
+                              ? Colors.white
+                              : null,
+                        ),
+                      ),
                     ),
                   ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedStatus = value ?? 'all';
-                    });
-                    _onFiltersChanged();
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _showOnlyAttention = !_showOnlyAttention;
-                  });
-                },
-                icon: Icon(
-                  _showOnlyAttention ? Icons.warning : Icons.warning_outlined,
-                ),
-                label: Text(
-                  _showOnlyAttention ? 'Mostrar Todos' : 'Requieren Atención',
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _showOnlyAttention ? Colors.orange : null,
-                  foregroundColor: _showOnlyAttention ? Colors.white : null,
-                ),
-              ),
-            ],
+                );
+              }
+
+              // Layout horizontal para pantallas más grandes
+              return Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedStatus,
+                      decoration: InputDecoration(
+                        labelText: 'Estado',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('Todos')),
+                        DropdownMenuItem(
+                          value: 'active',
+                          child: Text('Activos'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'pending_approval',
+                          child: Text('Pend. Aprobación'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'waiting_delivery',
+                          child: Text('Pend. Entrega'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'completed',
+                          child: Text('Completados'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'defaulted',
+                          child: Text('En Mora'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'rejected',
+                          child: Text('Rechazados'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'cancelled',
+                          child: Text('Cancelados'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedStatus = value ?? 'all';
+                        });
+                        _onFiltersChanged();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _showOnlyAttention = !_showOnlyAttention;
+                        });
+                      },
+                      icon: Icon(
+                        _showOnlyAttention
+                            ? Icons.warning
+                            : Icons.warning_outlined,
+                      ),
+                      label: Text(
+                        _showOnlyAttention ? 'Todos' : 'Atención',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _showOnlyAttention
+                            ? Colors.orange
+                            : null,
+                        foregroundColor: _showOnlyAttention
+                            ? Colors.white
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -386,7 +634,17 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
     Color statusColor;
     IconData statusIcon;
 
-    if (credit.isCompleted) {
+    // Priorizar estados de lista de espera
+    if (credit.isPendingApproval) {
+      statusColor = Colors.orange;
+      statusIcon = Icons.hourglass_empty;
+    } else if (credit.isWaitingDelivery) {
+      statusColor = Colors.blue;
+      statusIcon = Icons.schedule;
+    } else if (credit.isRejected) {
+      statusColor = Colors.red;
+      statusIcon = Icons.cancel;
+    } else if (credit.isCompleted) {
       statusColor = Colors.green;
       statusIcon = Icons.check_circle;
     } else if (credit.isDefaulted || credit.isOverdue) {
@@ -461,6 +719,42 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
                       ],
                     ),
                   ),
+                  // Indicador de lista de espera
+                  if (credit.isPendingApproval || credit.isWaitingDelivery) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            credit.isPendingApproval
+                                ? Icons.schedule
+                                : Icons.local_shipping,
+                            size: 12,
+                            color: Colors.blue,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            'Lista',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),
@@ -523,8 +817,107 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
                 ),
               ],
 
+              // Información de lista de espera
+              if (credit.isPendingApproval || credit.isWaitingDelivery) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: statusColor.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (credit.isPendingApproval) ...[
+                        Row(
+                          children: [
+                            Icon(Icons.schedule, color: statusColor, size: 16),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Esperando aprobación para entrega',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (credit.isWaitingDelivery) ...[
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.local_shipping,
+                              color: statusColor,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Aprobado - Esperando entrega',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (credit.scheduledDeliveryDate != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.event,
+                                color: Colors.grey[600],
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Entrega programada: ${DateFormat('dd/MM/yyyy').format(credit.scheduledDeliveryDate!)}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (credit.approvedBy != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.person,
+                                color: Colors.grey[600],
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Aprobado por: ${credit.approvedBy}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+
               // Alerta si requiere atención
-              if (credit.requiresAttention && !credit.isCompleted) ...[
+              if (credit.requiresAttention &&
+                  !credit.isCompleted &&
+                  !credit.isPendingApproval &&
+                  !credit.isWaitingDelivery) ...[
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(8),
@@ -592,6 +985,16 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
       ),
     ).then((_) {
       // Recargar créditos después de ver/editar detalles
+      _loadInitialData();
+    });
+  }
+
+  void _navigateToWaitingList() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const WaitingListScreen()),
+    ).then((_) {
+      // Recargar créditos después de gestionar la lista de espera
       _loadInitialData();
     });
   }

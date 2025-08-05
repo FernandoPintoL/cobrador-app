@@ -3,7 +3,6 @@ import 'usuario.dart';
 class Credito {
   final int id;
   final int clientId;
-  final int? cobradorId;
   final int? createdBy;
   final double amount; // Monto original
   final double balance; // Balance actual pendiente
@@ -11,25 +10,33 @@ class Credito {
   final double? totalAmount; // Monto total con interés incluido
   final double? installmentAmount; // Monto de cada cuota
   final String frequency; // 'daily', 'weekly', 'biweekly', 'monthly'
-  final String status; // 'active', 'completed', 'defaulted'
+  final String
+  status; // 'pending_approval', 'waiting_delivery', 'active', 'completed', 'defaulted', 'rejected', 'cancelled'
   final DateTime startDate;
   final DateTime endDate;
-  final DateTime? nextPaymentDate;
-  final double? paymentAmount; // Deprecated: usar installmentAmount
-  final String? notes;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  // Nuevos campos para lista de espera
+  final DateTime? scheduledDeliveryDate; // Fecha programada para entrega
+  final int? approvedBy; // Usuario que aprobó el crédito
+  final DateTime? approvedAt; // Fecha de aprobación
+  final int? deliveredBy; // Usuario que entregó el crédito
+  final DateTime? deliveredAt; // Fecha de entrega
+  final String? deliveryNotes; // Notas del proceso de entrega
+  final String? rejectionReason; // Motivo de rechazo
 
   // Relaciones
   final Usuario? client;
   final Usuario? cobrador;
   final Usuario? creator;
+  final Usuario? approver; // Usuario que aprobó
+  final Usuario? deliverer; // Usuario que entregó
   final List<Pago>? payments;
 
   Credito({
     required this.id,
     required this.clientId,
-    this.cobradorId,
     this.createdBy,
     required this.amount,
     required this.balance,
@@ -40,14 +47,22 @@ class Credito {
     required this.status,
     required this.startDate,
     required this.endDate,
-    this.nextPaymentDate,
-    this.paymentAmount,
-    this.notes,
     required this.createdAt,
     required this.updatedAt,
+    // Nuevos campos para lista de espera
+    this.scheduledDeliveryDate,
+    this.approvedBy,
+    this.approvedAt,
+    this.deliveredBy,
+    this.deliveredAt,
+    this.deliveryNotes,
+    this.rejectionReason,
+    // Relaciones
     this.client,
     this.cobrador,
     this.creator,
+    this.approver,
+    this.deliverer,
     this.payments,
   });
 
@@ -55,7 +70,6 @@ class Credito {
     return Credito(
       id: json['id'] ?? 0,
       clientId: json['client_id'] ?? 0,
-      cobradorId: json['cobrador_id'],
       createdBy: json['created_by'] is Map
           ? json['created_by']['id']
           : json['created_by'],
@@ -71,18 +85,26 @@ class Credito {
           ? double.tryParse(json['installment_amount'].toString())
           : null,
       frequency: json['frequency'] ?? 'monthly',
-      status: json['status'] ?? 'active',
+      status: json['status'] ?? 'pending_approval',
       startDate: DateTime.tryParse(json['start_date'] ?? '') ?? DateTime.now(),
       endDate: DateTime.tryParse(json['end_date'] ?? '') ?? DateTime.now(),
-      nextPaymentDate: json['next_payment_date'] != null
-          ? DateTime.tryParse(json['next_payment_date'])
-          : null,
-      paymentAmount: json['payment_amount'] != null
-          ? double.tryParse(json['payment_amount'].toString())
-          : null,
-      notes: json['notes'],
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+      // Nuevos campos para lista de espera
+      scheduledDeliveryDate: json['scheduled_delivery_date'] != null
+          ? DateTime.tryParse(json['scheduled_delivery_date'])
+          : null,
+      approvedBy: json['approved_by'] is Map ? null : json['approved_by'],
+      approvedAt: json['approved_at'] != null
+          ? DateTime.tryParse(json['approved_at'])
+          : null,
+      deliveredBy: json['delivered_by'] is Map ? null : json['delivered_by'],
+      deliveredAt: json['delivered_at'] != null
+          ? DateTime.tryParse(json['delivered_at'])
+          : null,
+      deliveryNotes: json['delivery_notes'],
+      rejectionReason: json['rejection_reason'],
+      // Relaciones
       client: json['client'] != null ? Usuario.fromJson(json['client']) : null,
       cobrador: json['cobrador'] != null
           ? Usuario.fromJson(json['cobrador'])
@@ -92,6 +114,12 @@ class Credito {
           : (json['creator'] != null
                 ? Usuario.fromJson(json['creator'])
                 : null),
+      approver: json['approved_by'] != null && json['approved_by'] is Map
+          ? Usuario.fromJson(json['approved_by'])
+          : null,
+      deliverer: json['delivered_by'] != null && json['delivered_by'] is Map
+          ? Usuario.fromJson(json['delivered_by'])
+          : null,
       payments: json['payments'] != null
           ? (json['payments'] as List).map((p) => Pago.fromJson(p)).toList()
           : null,
@@ -102,7 +130,6 @@ class Credito {
     return {
       'id': id,
       'client_id': clientId,
-      'cobrador_id': cobradorId,
       'created_by': createdBy,
       'amount': amount,
       'balance': balance,
@@ -113,11 +140,16 @@ class Credito {
       'status': status,
       'start_date': startDate.toIso8601String().split('T')[0],
       'end_date': endDate.toIso8601String().split('T')[0],
-      'next_payment_date': nextPaymentDate?.toIso8601String().split('T')[0],
-      'payment_amount': paymentAmount,
-      'notes': notes,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      // Nuevos campos para lista de espera
+      'scheduled_delivery_date': scheduledDeliveryDate?.toIso8601String(),
+      'approved_by': approvedBy,
+      'approved_at': approvedAt?.toIso8601String(),
+      'delivered_by': deliveredBy,
+      'delivered_at': deliveredAt?.toIso8601String(),
+      'delivery_notes': deliveryNotes,
+      'rejection_reason': rejectionReason,
     };
   }
 
@@ -125,6 +157,36 @@ class Credito {
   bool get isActive => status == 'active';
   bool get isCompleted => status == 'completed';
   bool get isDefaulted => status == 'defaulted';
+
+  // Nuevos métodos para lista de espera
+  bool get isPendingApproval => status == 'pending_approval';
+  bool get isWaitingDelivery => status == 'waiting_delivery';
+  bool get isRejected => status == 'rejected';
+  bool get isCancelled => status == 'cancelled';
+
+  // Estado de entrega
+  bool get isReadyForDelivery {
+    if (!isWaitingDelivery || scheduledDeliveryDate == null) return false;
+    return DateTime.now().isAfter(scheduledDeliveryDate!) ||
+        DateTime.now().isAtSameMomentAs(scheduledDeliveryDate!);
+  }
+
+  bool get isOverdueForDelivery {
+    if (!isWaitingDelivery || scheduledDeliveryDate == null) return false;
+    return DateTime.now().isAfter(
+      scheduledDeliveryDate!.add(const Duration(days: 1)),
+    );
+  }
+
+  int get daysUntilDelivery {
+    if (scheduledDeliveryDate == null) return 0;
+    return scheduledDeliveryDate!.difference(DateTime.now()).inDays;
+  }
+
+  int get daysOverdueForDelivery {
+    if (!isOverdueForDelivery) return 0;
+    return DateTime.now().difference(scheduledDeliveryDate!).inDays;
+  }
 
   bool get isOverdue {
     return DateTime.now().isAfter(endDate) && !isCompleted;
@@ -198,12 +260,20 @@ class Credito {
 
   String get statusLabel {
     switch (status) {
+      case 'pending_approval':
+        return 'Pendiente de Aprobación';
+      case 'waiting_delivery':
+        return 'En Lista de Espera';
       case 'active':
         return 'Activo';
       case 'completed':
         return 'Completado';
       case 'defaulted':
         return 'En Mora';
+      case 'rejected':
+        return 'Rechazado';
+      case 'cancelled':
+        return 'Cancelado';
       default:
         return status;
     }
@@ -225,15 +295,25 @@ class Credito {
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    // Nuevos campos para lista de espera
+    DateTime? scheduledDeliveryDate,
+    int? approvedBy,
+    DateTime? approvedAt,
+    int? deliveredBy,
+    DateTime? deliveredAt,
+    String? deliveryNotes,
+    String? rejectionReason,
+    // Relaciones
     Usuario? client,
     Usuario? cobrador,
     Usuario? creator,
+    Usuario? approver,
+    Usuario? deliverer,
     List<Pago>? payments,
   }) {
     return Credito(
       id: id ?? this.id,
       clientId: clientId ?? this.clientId,
-      cobradorId: cobradorId ?? this.cobradorId,
       createdBy: createdBy ?? this.createdBy,
       amount: amount ?? this.amount,
       balance: balance ?? this.balance,
@@ -241,14 +321,23 @@ class Credito {
       status: status ?? this.status,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
-      nextPaymentDate: nextPaymentDate ?? this.nextPaymentDate,
-      paymentAmount: paymentAmount ?? this.paymentAmount,
-      notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      // Nuevos campos para lista de espera
+      scheduledDeliveryDate:
+          scheduledDeliveryDate ?? this.scheduledDeliveryDate,
+      approvedBy: approvedBy ?? this.approvedBy,
+      approvedAt: approvedAt ?? this.approvedAt,
+      deliveredBy: deliveredBy ?? this.deliveredBy,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      deliveryNotes: deliveryNotes ?? this.deliveryNotes,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      // Relaciones
       client: client ?? this.client,
       cobrador: cobrador ?? this.cobrador,
       creator: creator ?? this.creator,
+      approver: approver ?? this.approver,
+      deliverer: deliverer ?? this.deliverer,
       payments: payments ?? this.payments,
     );
   }
@@ -442,4 +531,103 @@ class PaymentSchedule {
   bool get isPaid => status == 'paid';
   bool get isPending => status == 'pending';
   bool get isOverdue => status == 'overdue';
+}
+
+// Estado de entrega para lista de espera
+class DeliveryStatus {
+  final String
+  status; // 'pending_approval', 'waiting_delivery', 'ready_for_delivery', 'overdue_delivery', 'delivered'
+  final bool isReadyForDelivery;
+  final bool isOverdueForDelivery;
+  final int daysUntilDelivery;
+  final int daysOverdueForDelivery;
+  final DateTime? scheduledDeliveryDate;
+  final DateTime? deliveredAt;
+  final String? deliveryNotes;
+  final String? rejectionReason;
+
+  DeliveryStatus({
+    required this.status,
+    required this.isReadyForDelivery,
+    required this.isOverdueForDelivery,
+    required this.daysUntilDelivery,
+    required this.daysOverdueForDelivery,
+    this.scheduledDeliveryDate,
+    this.deliveredAt,
+    this.deliveryNotes,
+    this.rejectionReason,
+  });
+
+  factory DeliveryStatus.fromJson(Map<String, dynamic> json) {
+    return DeliveryStatus(
+      status: json['status'] ?? 'pending_approval',
+      isReadyForDelivery: json['is_ready_for_delivery'] ?? false,
+      isOverdueForDelivery: json['is_overdue_for_delivery'] ?? false,
+      daysUntilDelivery: json['days_until_delivery'] ?? 0,
+      daysOverdueForDelivery: json['days_overdue_for_delivery'] ?? 0,
+      scheduledDeliveryDate: json['scheduled_delivery_date'] != null
+          ? DateTime.tryParse(json['scheduled_delivery_date'])
+          : null,
+      deliveredAt: json['delivered_at'] != null
+          ? DateTime.tryParse(json['delivered_at'])
+          : null,
+      deliveryNotes: json['delivery_notes'],
+      rejectionReason: json['rejection_reason'],
+    );
+  }
+
+  String get statusLabel {
+    switch (status) {
+      case 'pending_approval':
+        return 'Pendiente de Aprobación';
+      case 'waiting_delivery':
+        return 'En Lista de Espera';
+      case 'ready_for_delivery':
+        return 'Listo para Entrega';
+      case 'overdue_delivery':
+        return 'Entrega Atrasada';
+      case 'delivered':
+        return 'Entregado';
+      default:
+        return status;
+    }
+  }
+}
+
+// Resumen de lista de espera
+class WaitingListSummary {
+  final int pendingApproval;
+  final int waitingDelivery;
+  final int readyToday;
+  final int overdueDelivery;
+  final double totalAmountPendingApproval;
+  final double totalAmountWaitingDelivery;
+
+  WaitingListSummary({
+    required this.pendingApproval,
+    required this.waitingDelivery,
+    required this.readyToday,
+    required this.overdueDelivery,
+    required this.totalAmountPendingApproval,
+    required this.totalAmountWaitingDelivery,
+  });
+
+  factory WaitingListSummary.fromJson(Map<String, dynamic> json) {
+    return WaitingListSummary(
+      pendingApproval: json['pending_approval'] ?? 0,
+      waitingDelivery: json['waiting_delivery'] ?? 0,
+      readyToday: json['ready_today'] ?? 0,
+      overdueDelivery: json['overdue_delivery'] ?? 0,
+      totalAmountPendingApproval:
+          double.tryParse(json['total_amount_pending_approval'].toString()) ??
+          0.0,
+      totalAmountWaitingDelivery:
+          double.tryParse(json['total_amount_waiting_delivery'].toString()) ??
+          0.0,
+    );
+  }
+
+  int get totalCreditsInWaitingList => pendingApproval + waitingDelivery;
+  double get totalAmountInWaitingList =>
+      totalAmountPendingApproval + totalAmountWaitingDelivery;
 }

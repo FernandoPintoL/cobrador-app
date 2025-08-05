@@ -28,6 +28,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
   @override
   void initState() {
     super.initState();
+    print('datos del crédito: ${widget.credit.toJson()}');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadPaymentSchedule();
     });
@@ -149,7 +150,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Procesar Pago',
+          'Procesar Pagos',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,

@@ -5,6 +5,7 @@ import 'package:geocoding/geocoding.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/cobrador_assignment_provider.dart';
 import '../../datos/modelos/usuario.dart';
+import '../widgets/validation_error_widgets.dart';
 import 'location_picker_screen.dart';
 
 class UserFormScreen extends ConsumerStatefulWidget {
@@ -212,7 +213,21 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
   Widget build(BuildContext context) {
     final isEditing = widget.usuario != null;
     final title = isEditing ? 'Editar Usuario' : 'Crear Usuario';
-    final userTypeName = widget.userType == 'client' ? 'Cliente' : 'Cobrador';
+    String userTypeName;
+
+    switch (widget.userType) {
+      case 'client':
+        userTypeName = 'Cliente';
+        break;
+      case 'cobrador':
+        userTypeName = 'Cobrador';
+        break;
+      case 'manager':
+        userTypeName = 'Manager';
+        break;
+      default:
+        userTypeName = 'Usuario';
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text('$title - $userTypeName')),
@@ -582,24 +597,43 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
 
       if (success) {
         widget.onUserCreated();
-        Navigator.pop(context);
+        if (mounted) Navigator.pop(context);
       } else {
         final state = ref.read(userManagementProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(state.error ?? 'Error al guardar usuario'),
-            backgroundColor: Colors.red,
-          ),
-        );
+
+        // Usar el nuevo sistema de manejo de errores
+        if (state.fieldErrors != null &&
+            state.fieldErrors!.isNotEmpty &&
+            mounted) {
+          // Si hay errores específicos de campos, mostrar en un diálogo
+          ValidationErrorDialog.show(
+            context,
+            title: 'Error de validación',
+            message: 'Por favor, corrija los siguientes errores:',
+            fieldErrors: state.fieldErrors!,
+          );
+        } else if (mounted) {
+          // Error genérico en snackbar
+          ValidationErrorSnackBar.show(
+            context,
+            message: state.error ?? 'Error al guardar usuario',
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
+      // Manejar errores de excepción
+      if (mounted) {
+        ValidationErrorSnackBar.show(
+          context,
+          message: 'Error inesperado: ${e.toString()}',
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 }

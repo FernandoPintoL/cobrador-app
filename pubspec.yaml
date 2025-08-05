@@ -30,6 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  dropdown_search: ^5.0.6
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -50,6 +51,10 @@ dependencies:
   # GPS y ubicación
   geolocator: ^10.1.0
   geocoding: ^2.1.1
+  
+  # WebSocket y conectividad en tiempo real
+  socket_io_client: ^3.0.0
+  connectivity_plus: ^5.0.2
   
   # Mapas
   google_maps_flutter: ^2.5.3

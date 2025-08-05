@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import '../../negocio/providers/auth_provider.dart';
+import '../../negocio/providers/websocket_provider.dart';
 import '../../negocio/providers/profile_image_provider.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../widgets/profile_image_widget.dart';
+import '../widgets/websocket_widgets.dart';
 import '../pantallas/profile_settings_screen.dart';
+import '../pantallas/notifications_screen.dart';
 import '../cliente/clientes_screen.dart';
 import '../creditos/credits_screen.dart';
 import 'package:intl/intl.dart';
@@ -42,7 +45,12 @@ class _CobradorDashboardScreenState
     ref.listen<ProfileImageState>(profileImageProvider, (previous, next) {
       if (next.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.error!), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? Colors.red[800]
+                : Colors.red,
+          ),
         );
         ref.read(profileImageProvider.notifier).clearError();
       }
@@ -51,7 +59,9 @@ class _CobradorDashboardScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.successMessage!),
-            backgroundColor: Colors.green,
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? Colors.green[800]
+                : Colors.green,
           ),
         );
         ref.read(profileImageProvider.notifier).clearSuccess();
@@ -62,6 +72,30 @@ class _CobradorDashboardScreenState
       appBar: AppBar(
         title: const Text('Panel de Cobrador'),
         actions: [
+          // Botón de notificaciones
+          Consumer(
+            builder: (context, ref, child) {
+              final wsState = ref.watch(webSocketProvider);
+              final unreadCount = wsState.notifications
+                  .where((n) => !(n['isRead'] ?? false))
+                  .length;
+
+              return IconButton(
+                icon: Badge(
+                  label: unreadCount > 0 ? Text('$unreadCount') : null,
+                  child: const Icon(Icons.notifications),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const NotificationsScreen(),
+                  ),
+                ),
+                tooltip: 'Notificaciones',
+              );
+            },
+          ),
+          const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authProvider.notifier).logout(),
@@ -209,7 +243,12 @@ class _CobradorDashboardScreenState
                   );
                 },
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+
+              // Widget de notificaciones
+              const NotificationsSummaryCard(),
+
+              const SizedBox(height: 24),
 
               // Acciones rápidas
               Text(

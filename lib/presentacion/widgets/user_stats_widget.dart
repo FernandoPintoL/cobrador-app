@@ -9,24 +9,25 @@ class UserStatsWidget extends ConsumerWidget {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 2.0,
+      crossAxisCount: 3,
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+      childAspectRatio: 1.5,
       children: [
+        _buildStatCard(context, 'Clientes', '--', Icons.people, Colors.blue),
         _buildStatCard(
           context,
-          'Total Clientes',
-          '--',
-          Icons.people,
-          Colors.blue,
-        ),
-        _buildStatCard(
-          context,
-          'Total Cobradores',
+          'Cobradores',
           '--',
           Icons.person_pin,
           Colors.green,
+        ),
+        _buildStatCard(
+          context,
+          'Managers',
+          '--',
+          Icons.supervisor_account,
+          Colors.orange,
         ),
       ],
     );
@@ -42,18 +43,18 @@ class UserStatsWidget extends ConsumerWidget {
     return Card(
       elevation: 4,
       child: Padding(
-        padding: const EdgeInsets.all(10.0),
+        padding: const EdgeInsets.all(8.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 28, color: color),
-            const SizedBox(height: 4),
+            Icon(icon, size: 24, color: color),
+            const SizedBox(height: 3),
             Flexible(
               child: Text(
                 value,
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: color,
                 ),
@@ -66,8 +67,13 @@ class UserStatsWidget extends ConsumerWidget {
               child: Text(
                 title,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                maxLines: 2,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[400]
+                      : Colors.grey[600],
+                ),
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),

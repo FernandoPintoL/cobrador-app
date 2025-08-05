@@ -1,7 +1,10 @@
+import 'package:cobrador_app/presentacion/cliente/cliente_form_screen.dart';
+import 'package:cobrador_app/presentacion/pantallas/notifications_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'negocio/providers/auth_provider.dart';
+import 'negocio/providers/websocket_provider.dart';
 import 'presentacion/pantallas/splash_screen.dart';
 import 'presentacion/pantallas/login_screen.dart';
 import 'presentacion/pantallas/admin_dashboard_screen.dart';
@@ -28,10 +31,12 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
+  bool _initialized = false;
+
   @override
   void initState() {
     super.initState();
-    // Inicializar la aplicación verificando sesión guardada
+    // Solo inicializar la autenticación aquí
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(authProvider.notifier).initialize();
     });
@@ -41,10 +46,23 @@ class _MyAppState extends ConsumerState<MyApp> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    // Escuchar cambios en el estado de autenticación para manejar logout
+    // Inicializar WebSocket solo una vez y escuchar cambios de autenticación
+    if (!_initialized) {
+      _initialized = true;
+    }
+
+    // Escuchar cambios en el estado de autenticación
     ref.listen<AuthState>(authProvider, (previous, next) {
-      // Si el usuario estaba autenticado y ahora no lo está, es un logout
-      if (previous?.isAuthenticated == true && !next.isAuthenticated) {
+      if (next.isAuthenticated &&
+          next.usuario != null &&
+          (previous == null || !previous.isAuthenticated)) {
+        // Usuario se autenticó, conectar WebSocket
+        print('🔌 Usuario autenticado, conectando WebSocket...');
+        ref.read(webSocketProvider.notifier).connectToWebSocket();
+      } else if (previous?.isAuthenticated == true && !next.isAuthenticated) {
+        // Usuario cerró sesión, desconectar WebSocket
+        print('🔌 Usuario cerró sesión, desconectando WebSocket...');
+        ref.read(webSocketProvider.notifier).disconnect();
         print('🚪 Usuario ha cerrado sesión - Redirigiendo a LoginScreen');
       }
     });
@@ -56,7 +74,11 @@ class _MyAppState extends ConsumerState<MyApp> {
       darkTheme: _buildDarkTheme(),
       themeMode: ThemeMode.system, // Respeta la configuración del sistema
       home: _buildInitialScreen(authState),
-      routes: {'/login': (context) => const LoginScreen()},
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/crear-cliente': (context) => const ClienteFormScreen(),
+        '/notifications': (context) => const NotificationsScreen(),
+      },
     );
   }
 

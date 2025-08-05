@@ -1,18 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
-import '../../datos/servicios/api_service.dart';
+import '../../datos/servicios/api_services.dart';
 
 class UserManagementState {
   final List<Usuario> usuarios;
   final bool isLoading;
   final String? error;
   final String? successMessage;
+  final List<String>? fieldErrors;
 
   UserManagementState({
     this.usuarios = const [],
     this.isLoading = false,
     this.error,
     this.successMessage,
+    this.fieldErrors,
   });
 
   UserManagementState copyWith({
@@ -20,18 +22,20 @@ class UserManagementState {
     bool? isLoading,
     String? error,
     String? successMessage,
+    List<String>? fieldErrors,
   }) {
     return UserManagementState(
       usuarios: usuarios ?? this.usuarios,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
       successMessage: successMessage ?? this.successMessage,
+      fieldErrors: fieldErrors ?? this.fieldErrors,
     );
   }
 }
 
 class UserManagementNotifier extends StateNotifier<UserManagementState> {
-  final ApiService _apiService = ApiService();
+  final UserApiService _userApiService = UserApiService();
 
   UserManagementNotifier() : super(UserManagementState());
 
@@ -47,29 +51,29 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
       if (role != null) queryParams['role'] = role;
       if (search != null) queryParams['search'] = search;
 
-      final response = await _apiService.get(
-        '/users',
-        queryParameters: queryParams,
+      final response = await _userApiService.getUsers(
+        role: role,
+        search: search,
       );
 
       // Debug: imprimir la estructura de la respuesta
       print('🔍 DEBUG: Estructura de respuesta:');
-      print('Response data: ${response.data}');
-      print('Response data type: ${response.data.runtimeType}');
-      if (response.data['data'] != null) {
-        print('Data type: ${response.data['data'].runtimeType}');
-        print('Data content: ${response.data['data']}');
+      print('Response data: $response');
+      print('Response data type: ${response.runtimeType}');
+      if (response['data'] != null) {
+        print('Data type: ${response['data'].runtimeType}');
+        print('Data content: ${response['data']}');
       }
 
-      if (response.data['success'] == true) {
+      if (response['success'] == true) {
         List<dynamic> usuariosData;
 
         // Manejar diferentes estructuras de respuesta
-        if (response.data['data'] is List) {
-          usuariosData = response.data['data'] as List<dynamic>;
-        } else if (response.data['data'] is Map) {
+        if (response['data'] is List) {
+          usuariosData = response['data'] as List<dynamic>;
+        } else if (response['data'] is Map) {
           // Si data es un mapa, buscar la lista de usuarios
-          final dataMap = response.data['data'] as Map<String, dynamic>;
+          final dataMap = response['data'] as Map<String, dynamic>;
           if (dataMap['users'] is List) {
             usuariosData = dataMap['users'] as List<dynamic>;
           } else if (dataMap['data'] is List) {
@@ -91,7 +95,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
       } else {
         state = state.copyWith(
           isLoading: false,
-          error: response.data['message'] ?? 'Error al cargar usuarios',
+          error: response['message'] ?? 'Error al cargar usuarios',
         );
       }
     } catch (e) {
@@ -114,6 +118,13 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
     await cargarUsuarios(role: 'cobrador', search: search);
   }
 
+  // Cargar managers
+  Future<void> cargarManagers({String? search}) async {
+    // Evitar múltiples llamadas simultáneas
+    if (state.isLoading) return;
+    await cargarUsuarios(role: 'manager', search: search);
+  }
+
   // Crear usuario
   Future<bool> crearUsuario({
     required String nombre,
@@ -125,7 +136,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
     double? latitud,
     double? longitud,
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, error: null, fieldErrors: null);
 
     try {
       final data = {
@@ -142,9 +153,9 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
           },
       };
 
-      final response = await _apiService.post('/users', data: data);
+      final response = await _userApiService.createUser(data);
 
-      if (response.data['success'] == true) {
+      if (response['success'] == true) {
         state = state.copyWith(
           isLoading: false,
           successMessage: 'Usuario creado exitosamente',
@@ -153,14 +164,26 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
         await cargarUsuarios();
         return true;
       } else {
+        // Manejar errores específicos de validación
+        List<String>? fieldErrors;
+        if (response['field_errors'] != null &&
+            response['field_errors'] is List) {
+          fieldErrors = List<String>.from(response['field_errors']);
+        }
+
         state = state.copyWith(
           isLoading: false,
-          error: response.data['message'] ?? 'Error al crear usuario',
+          error: response['message'] ?? 'Error al crear usuario',
+          fieldErrors: fieldErrors,
         );
         return false;
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Error de conexión: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Error de conexión: $e',
+        fieldErrors: null,
+      );
       return false;
     }
   }
@@ -177,7 +200,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
     double? latitud,
     double? longitud,
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, error: null, fieldErrors: null);
 
     try {
       final data = {
@@ -194,9 +217,9 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
           },
       };
 
-      final response = await _apiService.put('/users/$id', data: data);
+      final response = await _userApiService.updateUser(id.toString(), data);
 
-      if (response.data['success'] == true) {
+      if (response['success'] == true) {
         state = state.copyWith(
           isLoading: false,
           successMessage: 'Usuario actualizado exitosamente',
@@ -205,14 +228,26 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
         await cargarUsuarios();
         return true;
       } else {
+        // Manejar errores específicos de validación
+        List<String>? fieldErrors;
+        if (response['field_errors'] != null &&
+            response['field_errors'] is List) {
+          fieldErrors = List<String>.from(response['field_errors']);
+        }
+
         state = state.copyWith(
           isLoading: false,
-          error: response.data['message'] ?? 'Error al actualizar usuario',
+          error: response['message'] ?? 'Error al actualizar usuario',
+          fieldErrors: fieldErrors,
         );
         return false;
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Error de conexión: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Error de conexión: $e',
+        fieldErrors: null,
+      );
       return false;
     }
   }
@@ -222,9 +257,9 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.delete('/users/$id');
+      final response = await _userApiService.deleteUser(id.toString());
 
-      if (response.data['success'] == true) {
+      if (response['success'] == true) {
         state = state.copyWith(
           isLoading: false,
           successMessage: 'Usuario eliminado exitosamente',
@@ -235,7 +270,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
       } else {
         state = state.copyWith(
           isLoading: false,
-          error: response.data['message'] ?? 'Error al eliminar usuario',
+          error: response['message'] ?? 'Error al eliminar usuario',
         );
         return false;
       }
