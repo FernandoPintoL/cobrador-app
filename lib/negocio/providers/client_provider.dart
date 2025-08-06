@@ -4,6 +4,8 @@ import '../../datos/servicios/api_services.dart';
 
 class ClientState {
   final List<Usuario> clientes;
+  final List<Usuario> clientesSinAsignar;
+  final List<Usuario> clientesDirectosManager; // Nueva propiedad
   final bool isLoading;
   final String? error;
   final String? successMessage;
@@ -11,6 +13,8 @@ class ClientState {
 
   ClientState({
     this.clientes = const [],
+    this.clientesSinAsignar = const [],
+    this.clientesDirectosManager = const [], // Inicialización
     this.isLoading = false,
     this.error,
     this.successMessage,
@@ -19,6 +23,8 @@ class ClientState {
 
   ClientState copyWith({
     List<Usuario>? clientes,
+    List<Usuario>? clientesSinAsignar,
+    List<Usuario>? clientesDirectosManager,
     bool? isLoading,
     String? error,
     String? successMessage,
@@ -26,6 +32,9 @@ class ClientState {
   }) {
     return ClientState(
       clientes: clientes ?? this.clientes,
+      clientesSinAsignar: clientesSinAsignar ?? this.clientesSinAsignar,
+      clientesDirectosManager:
+          clientesDirectosManager ?? this.clientesDirectosManager,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
       successMessage: successMessage ?? this.successMessage,
@@ -447,6 +456,230 @@ class ClientNotifier extends StateNotifier<ClientState> {
   // Filtrar clientes por estado
   void filtrarPorEstado(String filtro) {
     state = state.copyWith(currentFilter: filtro);
+  }
+
+  // Cargar clientes sin asignar
+  Future<void> cargarClientesSinAsignar({String? search}) async {
+    if (state.isLoading) return;
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final response = await _clientApiService.getUnassignedClients(
+        search: search,
+        perPage: 100, // Cargar más clientes para selección
+      );
+
+      if (response['success'] == true) {
+        List<dynamic> clientesData = [];
+        final data = response['data'];
+
+        if (data is Map<String, dynamic>) {
+          if (data['data'] is List) {
+            clientesData = data['data'] as List<dynamic>;
+          } else if (data['clients'] is List) {
+            clientesData = data['clients'] as List<dynamic>;
+          }
+        } else if (data is List) {
+          clientesData = data;
+        }
+
+        final clientesSinAsignar = clientesData
+            .map((json) => Usuario.fromJson(json))
+            .toList();
+
+        state = state.copyWith(
+          clientesSinAsignar: clientesSinAsignar,
+          isLoading: false,
+        );
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Error al cargar clientes sin asignar',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al cargar clientes sin asignar: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error:
+            'Error al cargar clientes sin asignar: ${e.toString().replaceAll('Exception: ', '')}',
+      );
+    }
+  }
+
+  // Método para asignar múltiples clientes (alias para compatibilidad)
+  Future<bool> asignarClientesACobrador(
+    String cobradorId,
+    List<String> clientIds,
+  ) {
+    return asignarClienteACobrador(
+      cobradorId: cobradorId,
+      clientIds: clientIds,
+    );
+  }
+
+  // ================== MÉTODOS PARA GESTIÓN DIRECTA MANAGER → CLIENTE ==================
+
+  /// Cargar clientes asignados directamente a un manager
+  Future<void> cargarClientesDirectosManager(
+    String managerId, {
+    String? search,
+  }) async {
+    if (state.isLoading) return;
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      print('📋 Cargando clientes directos del manager: $managerId');
+
+      final response = await _clientApiService.getManagerDirectClients(
+        managerId,
+        search: search,
+      );
+
+      if (response['success'] == true) {
+        // Los clientes están en response['data']['data'] por la paginación
+        final Map<String, dynamic> dataResponse = response['data'] ?? {};
+        final List<dynamic> clientesData = dataResponse['data'] ?? [];
+        final List<Usuario> clientesDirectos = clientesData
+            .map((clienteJson) => Usuario.fromJson(clienteJson))
+            .toList();
+
+        state = state.copyWith(
+          clientesDirectosManager: clientesDirectos,
+          isLoading: false,
+          successMessage: 'Clientes directos cargados exitosamente',
+        );
+
+        print('✅ ${clientesDirectos.length} clientes directos cargados');
+      } else {
+        throw Exception(
+          response['message'] ?? 'Error al cargar clientes directos',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al cargar clientes directos: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Error al cargar clientes directos: $e',
+      );
+    }
+  }
+
+  /// Asignar clientes directamente a un manager
+  Future<bool> asignarClientesDirectamenteAManager(
+    String managerId,
+    List<String> clientIds,
+  ) async {
+    if (state.isLoading) return false;
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      print(
+        '📝 Asignando ${clientIds.length} clientes directamente al manager: $managerId',
+      );
+
+      final response = await _clientApiService.assignClientsDirectlyToManager(
+        managerId,
+        clientIds,
+      );
+
+      if (response['success'] == true) {
+        // Recargar la lista de clientes directos
+        await cargarClientesDirectosManager(managerId);
+
+        // También recargar clientes sin asignar para actualizar la lista
+        await cargarClientesSinAsignar();
+
+        state = state.copyWith(
+          isLoading: false,
+          successMessage: 'Clientes asignados directamente exitosamente',
+        );
+
+        print('✅ Clientes asignados directamente al manager exitosamente');
+        return true;
+      } else {
+        throw Exception(
+          response['message'] ?? 'Error al asignar clientes directamente',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al asignar clientes directamente: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Error al asignar clientes directamente: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Remover un cliente específico de la asignación directa del manager
+  Future<bool> removerClienteDirectoDelManager(
+    String managerId,
+    String clientId,
+  ) async {
+    if (state.isLoading) return false;
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      print('🗑️ Removiendo cliente $clientId del manager directo: $managerId');
+
+      final response = await _clientApiService.removeClientFromManagerDirect(
+        managerId,
+        clientId,
+      );
+
+      if (response['success'] == true) {
+        // Recargar la lista de clientes directos
+        await cargarClientesDirectosManager(managerId);
+
+        // También recargar clientes sin asignar para actualizar la lista
+        await cargarClientesSinAsignar();
+
+        state = state.copyWith(
+          isLoading: false,
+          successMessage: 'Cliente removido exitosamente',
+        );
+
+        print('✅ Cliente removido del manager directo exitosamente');
+        return true;
+      } else {
+        throw Exception(
+          response['message'] ?? 'Error al remover cliente directo',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al remover cliente directo: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Error al remover cliente directo: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Obtener el manager directo asignado a un cliente específico
+  Future<Usuario?> obtenerManagerDirectoDelCliente(String clientId) async {
+    try {
+      print('👤 Obteniendo manager directo del cliente: $clientId');
+
+      final response = await _clientApiService.getClientDirectManager(clientId);
+
+      if (response['success'] == true && response['data'] != null) {
+        final Usuario manager = Usuario.fromJson(response['data']);
+        print('✅ Manager directo obtenido: ${manager.nombre}');
+        return manager;
+      } else {
+        print('ℹ️ Cliente no tiene manager directo asignado');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error al obtener manager directo: $e');
+      return null;
+    }
   }
 }
 

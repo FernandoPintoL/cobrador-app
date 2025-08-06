@@ -33,7 +33,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.error!),
+            content: Text(next.error!, style: TextStyle(color: Colors.white)),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
             action: SnackBarAction(

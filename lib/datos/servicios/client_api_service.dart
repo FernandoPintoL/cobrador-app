@@ -281,4 +281,159 @@ class ClientApiService extends BaseApiService {
       throw Exception('Error al obtener cliente: $e');
     }
   }
+
+  /// Obtiene clientes que no están asignados a ningún cobrador
+  Future<Map<String, dynamic>> getUnassignedClients({
+    String? search,
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    try {
+      print('📋 Obteniendo clientes sin asignar...');
+
+      final queryParams = <String, dynamic>{
+        'role': 'client',
+        'unassigned': true,
+        'page': page,
+        'per_page': perPage,
+      };
+
+      if (search != null && search.isNotEmpty) {
+        queryParams['search'] = search;
+      }
+
+      final response = await get('/users', queryParameters: queryParams);
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Clientes sin asignar obtenidos exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al obtener clientes sin asignar: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener clientes sin asignar: $e');
+      throw Exception('Error al obtener clientes sin asignar: $e');
+    }
+  }
+
+  // ================== MÉTODOS PARA GESTIÓN DIRECTA MANAGER → CLIENTE ==================
+
+  /// Obtiene todos los clientes asignados directamente a un manager
+  Future<Map<String, dynamic>> getManagerDirectClients(
+    String managerId, {
+    String? search,
+    int? perPage,
+  }) async {
+    try {
+      print('📋 Obteniendo clientes directos del manager: $managerId');
+
+      final queryParams = <String, dynamic>{};
+      if (search != null && search.isNotEmpty) {
+        queryParams['search'] = search;
+      }
+      if (perPage != null) {
+        queryParams['per_page'] = perPage;
+      }
+
+      final response = await get(
+        '/users/$managerId/clients-direct',
+        queryParameters: queryParams,
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Clientes directos del manager obtenidos exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al obtener clientes directos: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener clientes directos del manager: $e');
+      throw Exception('Error al obtener clientes directos del manager: $e');
+    }
+  }
+
+  /// Asigna múltiples clientes directamente a un manager
+  Future<Map<String, dynamic>> assignClientsDirectlyToManager(
+    String managerId,
+    List<String> clientIds,
+  ) async {
+    try {
+      print(
+        '📝 Asignando ${clientIds.length} clientes directamente al manager: $managerId',
+      );
+
+      final response = await post(
+        '/users/$managerId/assign-clients-direct',
+        data: {'client_ids': clientIds},
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Clientes asignados directamente al manager exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al asignar clientes directamente: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al asignar clientes directamente al manager: $e');
+      throw Exception('Error al asignar clientes directamente al manager: $e');
+    }
+  }
+
+  /// Remueve un cliente específico de la asignación directa del manager
+  Future<Map<String, dynamic>> removeClientFromManagerDirect(
+    String managerId,
+    String clientId,
+  ) async {
+    try {
+      print('🗑️ Removiendo cliente $clientId del manager directo: $managerId');
+
+      final response = await delete(
+        '/users/$managerId/clients-direct/$clientId',
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Cliente removido del manager directo exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al remover cliente directo: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al remover cliente del manager directo: $e');
+      throw Exception('Error al remover cliente del manager directo: $e');
+    }
+  }
+
+  /// Obtiene el manager directo asignado a un cliente específico
+  Future<Map<String, dynamic>> getClientDirectManager(String clientId) async {
+    try {
+      print('👤 Obteniendo manager directo del cliente: $clientId');
+
+      final response = await get('/users/$clientId/manager-direct');
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        print('✅ Manager directo del cliente obtenido exitosamente');
+        return data;
+      } else {
+        throw Exception(
+          'Error al obtener manager directo: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener manager directo del cliente: $e');
+      throw Exception('Error al obtener manager directo del cliente: $e');
+    }
+  }
 }

@@ -1,6 +1,7 @@
 class Usuario {
   final BigInt id;
   final BigInt? assignedCobradorId;
+  final BigInt? assignedManagerId;
   final String nombre;
   final String email;
   final String profileImage;
@@ -15,6 +16,7 @@ class Usuario {
   Usuario({
     required this.id,
     this.assignedCobradorId,
+    this.assignedManagerId,
     required this.nombre,
     required this.email,
     required this.profileImage,
@@ -47,6 +49,13 @@ class Usuario {
         assignedCobradorId = BigInt.parse(json['assigned_cobrador_id']);
       } else if (json['assigned_cobrador_id'] is int) {
         assignedCobradorId = BigInt.from(json['assigned_cobrador_id']);
+      }
+
+      BigInt? assignedManagerId;
+      if (json['assigned_manager_id'] is String) {
+        assignedManagerId = BigInt.parse(json['assigned_manager_id']);
+      } else if (json['assigned_manager_id'] is int) {
+        assignedManagerId = BigInt.from(json['assigned_manager_id']);
       }
 
       // Manejar diferentes formatos de roles
@@ -88,6 +97,7 @@ class Usuario {
       return Usuario(
         id: id,
         assignedCobradorId: assignedCobradorId,
+        assignedManagerId: assignedManagerId,
         nombre: json['name']?.toString() ?? '',
         profileImage: json['profile_image']?.toString() ?? '',
         email: json['email']?.toString() ?? '',
@@ -106,6 +116,7 @@ class Usuario {
       return Usuario(
         id: BigInt.one,
         assignedCobradorId: null,
+        assignedManagerId: null,
         nombre: 'Usuario Error',
         email: 'error@example.com',
         profileImage: '',
@@ -122,6 +133,7 @@ class Usuario {
     return {
       'id': id.toString(),
       'assigned_cobrador_id': assignedCobradorId?.toString(),
+      'assigned_manager_id': assignedManagerId?.toString(),
       'name': nombre,
       'email': email,
       'profile_image': profileImage,
@@ -145,6 +157,7 @@ class Usuario {
     return {
       'id': id.toString(),
       'assigned_cobrador_id': assignedCobradorId?.toString(),
+      'assigned_manager_id': assignedManagerId?.toString(),
       'name': nombre,
       'email': email,
       'profile_image': profileImage,
@@ -179,6 +192,7 @@ class Usuario {
   Usuario copyWith({
     BigInt? id,
     BigInt? assignedCobradorId,
+    BigInt? assignedManagerId,
     String? nombre,
     String? email,
     String? profileImage,
@@ -193,6 +207,7 @@ class Usuario {
     return Usuario(
       id: id ?? this.id,
       assignedCobradorId: assignedCobradorId ?? this.assignedCobradorId,
+      assignedManagerId: assignedManagerId ?? this.assignedManagerId,
       nombre: nombre ?? this.nombre,
       email: email ?? this.email,
       profileImage: profileImage ?? this.profileImage,

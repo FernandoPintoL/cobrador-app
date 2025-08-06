@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
-import '../../negocio/providers/websocket_provider.dart';
 import 'user_management_screen.dart';
 import 'cobrador_assignment_screen.dart';
-import 'notifications_screen.dart';
 import '../widgets/user_stats_widget.dart';
-import '../widgets/websocket_widgets.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -20,35 +17,35 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Panel de Administración'),
         actions: [
-          // Botón de notificaciones
-          Consumer(
-            builder: (context, ref, child) {
-              final wsState = ref.watch(webSocketProvider);
-              final unreadCount = wsState.notifications
-                  .where((n) => !(n['isRead'] ?? false))
-                  .length;
+          // Botón de notificaciones (temporalmente deshabilitado)
+          // Consumer(
+          //   builder: (context, ref, child) {
+          //     final wsState = ref.watch(webSocketProvider);
+          //     final unreadCount = wsState.notifications
+          //         .where((n) => !(n['isRead'] ?? false))
+          //         .length;
 
-              return IconButton(
-                icon: Badge(
-                  label: unreadCount > 0 ? Text('$unreadCount') : null,
-                  child: const Icon(Icons.notifications),
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationsScreen(),
-                  ),
-                ),
-                tooltip: 'Notificaciones',
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-          // Estado WebSocket
-          const WebSocketStatusWidget(),
-          const SizedBox(width: 8),
-          // Botón de pruebas WebSocket
-          const WebSocketTestButton(),
+          //     return IconButton(
+          //       icon: Badge(
+          //         label: unreadCount > 0 ? Text('$unreadCount') : null,
+          //         child: const Icon(Icons.notifications),
+          //       ),
+          //       onPressed: () => Navigator.push(
+          //         context,
+          //         MaterialPageRoute(
+          //           builder: (context) => const NotificationsScreen(),
+          //         ),
+          //       ),
+          //       tooltip: 'Notificaciones',
+          //     );
+          //   },
+          // ),
+          // const SizedBox(width: 8),
+          // // Estado WebSocket (temporalmente deshabilitado)
+          // const WebSocketStatusWidget(),
+          // const SizedBox(width: 8),
+          // // Botón de pruebas WebSocket (temporalmente deshabilitado)
+          // const WebSocketTestButton(),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authProvider.notifier).logout(),
@@ -182,6 +179,15 @@ class AdminDashboardScreen extends ConsumerWidget {
                   Colors.teal,
                   () => _navigateToCobradorAssignment(context),
                 ),
+                const SizedBox(height: 8),
+                _buildAdminFunctionCard(
+                  context,
+                  'Asignaciones Manager-Cobrador',
+                  'Gestionar asignaciones entre managers y cobradores',
+                  Icons.account_tree,
+                  Colors.purple,
+                  () => _navigateToManagerAssignment(context),
+                ),
                 const SizedBox(height: 8), // Reducido de 12 a 8
                 _buildAdminFunctionCard(
                   context,
@@ -228,9 +234,9 @@ class AdminDashboardScreen extends ConsumerWidget {
                   () => _navigateToSystemLogs(context),
                 ),
 
-                // Panel de notificaciones WebSocket
-                const SizedBox(height: 24),
-                const RealtimeNotificationsPanel(),
+                // Panel de notificaciones WebSocket (temporalmente deshabilitado)
+                // const SizedBox(height: 24),
+                // const RealtimeNotificationsPanel(),
               ],
             ),
           ],
@@ -324,6 +330,18 @@ class AdminDashboardScreen extends ConsumerWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CobradorAssignmentScreen()),
+    );
+  }
+
+  void _navigateToManagerAssignment(BuildContext context) {
+    // TODO: Implementar navegación a asignaciones manager-cobrador
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Asignaciones Manager-Cobrador - En desarrollo'),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[800]
+            : Colors.grey[600],
+      ),
     );
   }
 

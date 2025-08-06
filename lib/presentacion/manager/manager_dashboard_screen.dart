@@ -1,23 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/websocket_provider.dart';
-import '../cliente/clientes_screen.dart';
-import '../pantallas/notifications_screen.dart';
+import 'manager_cobradores_screen.dart';
+import 'manager_clientes_screen.dart';
+import 'manager_reportes_screen.dart';
+import 'manager_notifications_screen.dart';
+import 'manager_client_assignment_screen.dart';
+import 'manager_credits_screen.dart';
+import 'manager_direct_clients_screen.dart';
 
-class ManagerDashboardScreen extends ConsumerWidget {
+class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ManagerDashboardScreen> createState() =>
+      _ManagerDashboardScreenState();
+}
+
+class _ManagerDashboardScreenState
+    extends ConsumerState<ManagerDashboardScreen> {
+  bool _hasLoadedInitialData = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargarDatosIniciales();
+    });
+  }
+
+  void _cargarDatosIniciales() {
+    if (_hasLoadedInitialData) return;
+
+    final authState = ref.read(authProvider);
+    final usuario = authState.usuario;
+
+    if (usuario != null) {
+      _hasLoadedInitialData = true;
+      final managerId = usuario.id.toString();
+      ref.read(managerProvider.notifier).establecerManagerActual(usuario);
+      ref.read(managerProvider.notifier).cargarEstadisticasManager(managerId);
+      ref.read(managerProvider.notifier).cargarCobradoresAsignados(managerId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final usuario = authState.usuario;
+    final managerState = ref.watch(managerProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Panel de Gestión'),
+        title: const Text('Panel de Gestión Manager'),
         actions: [
-          // Botón de notificaciones
+          // Botón de notificaciones WebSocket
           Consumer(
             builder: (context, ref, child) {
               final wsState = ref.watch(webSocketProvider);
@@ -33,10 +72,10 @@ class ManagerDashboardScreen extends ConsumerWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const NotificationsScreen(),
+                    builder: (context) => const ManagerNotificationsScreen(),
                   ),
                 ),
-                tooltip: 'Notificaciones',
+                tooltip: 'Notificaciones Manager',
               );
             },
           ),
@@ -145,28 +184,28 @@ class ManagerDashboardScreen extends ConsumerWidget {
                 _buildStatCard(
                   context,
                   'Cobradores Activos',
-                  '12',
+                  '${managerState.estadisticas?['total_cobradores'] ?? managerState.cobradoresAsignados.length}',
                   Icons.person_pin,
                   Colors.blue,
                 ),
                 _buildStatCard(
                   context,
                   'Clientes Asignados',
-                  '156',
+                  '${managerState.estadisticas?['total_clientes'] ?? 0}',
                   Icons.business,
                   Colors.green,
                 ),
                 _buildStatCard(
                   context,
                   'Préstamos Activos',
-                  '89',
+                  '${managerState.estadisticas?['total_creditos'] ?? 0}',
                   Icons.account_balance_wallet,
                   Colors.orange,
                 ),
                 _buildStatCard(
                   context,
                   'Cobros del Mes',
-                  '\$45,230',
+                  '\$${managerState.estadisticas?['cobros_mes'] ?? 0}',
                   Icons.attach_money,
                   Colors.purple,
                 ),
@@ -193,12 +232,30 @@ class ManagerDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
-                  'Gestión de Clientes',
-                  'Crear y gestionar clientes',
+                  'Gestión de Clientes del Equipo',
+                  'Ver y gestionar clientes de todos los cobradores',
                   Icons.business_center,
                   Colors.green,
-                  () => _navigateToClientManagement(context),
+                  () => _navigateToTeamClientManagement(context),
                 ),
+                const SizedBox(height: 12),
+                _buildManagerFunctionCard(
+                  context,
+                  'Mis Clientes Directos',
+                  'Gestionar clientes asignados directamente',
+                  Icons.person_pin,
+                  Colors.indigo,
+                  () => _navigateToDirectClients(context),
+                ),
+                /* const SizedBox(height: 12),
+                _buildManagerFunctionCard(
+                  context,
+                  'Crear Nuevo Cliente',
+                  'Agregar cliente y asignar a cobrador',
+                  Icons.person_add,
+                  Colors.indigo,
+                  () => _navigateToCreateClient(context),
+                ), */
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
@@ -220,12 +277,21 @@ class ManagerDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
+                  'Gestión de Créditos',
+                  'Crear, aprobar y gestionar créditos del equipo',
+                  Icons.credit_card,
+                  Colors.teal,
+                  () => _navigateToCreditManagement(context),
+                ),
+                /* const SizedBox(height: 12),
+                _buildManagerFunctionCard(
+                  context,
                   'Control de Cobros',
                   'Monitorear y controlar cobros',
                   Icons.monetization_on,
                   Colors.red,
                   () => _navigateToCollectionControl(context),
-                ),
+                ), 
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
@@ -234,7 +300,7 @@ class ManagerDashboardScreen extends ConsumerWidget {
                   Icons.location_on,
                   Colors.teal,
                   () => _navigateToZoneConfiguration(context),
-                ),
+                ),*/
               ],
             ),
           ],
@@ -364,45 +430,36 @@ class ManagerDashboardScreen extends ConsumerWidget {
   }
 
   void _navigateToCollectorManagement(BuildContext context) {
-    // TODO: Implementar navegación a gestión de cobradores
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Gestión de cobradores - En desarrollo'),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? Colors.grey[800]
-            : null,
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ManagerCobradoresScreen()),
     );
   }
 
-  void _navigateToClientManagement(BuildContext context) {
+  void _navigateToTeamClientManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ClientesScreen()),
+      MaterialPageRoute(builder: (context) => const ManagerClientesScreen()),
     );
+  }
+
+  void _navigateToCreateClient(BuildContext context) {
+    Navigator.pushNamed(context, '/crear-cliente');
   }
 
   void _navigateToRouteAssignment(BuildContext context) {
-    // TODO: Implementar navegación a asignación de rutas
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Asignación de rutas - En desarrollo'),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? Colors.grey[800]
-            : null,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ManagerClientAssignmentScreen(),
       ),
     );
   }
 
   void _navigateToCollectorReports(BuildContext context) {
-    // TODO: Implementar navegación a reportes de cobradores
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Reportes de cobradores - En desarrollo'),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? Colors.grey[800]
-            : null,
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ManagerReportesScreen()),
     );
   }
 
@@ -426,6 +483,22 @@ class ManagerDashboardScreen extends ConsumerWidget {
         backgroundColor: Theme.of(context).brightness == Brightness.dark
             ? Colors.grey[800]
             : null,
+      ),
+    );
+  }
+
+  void _navigateToCreditManagement(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ManagerCreditsScreen()),
+    );
+  }
+
+  void _navigateToDirectClients(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ManagerDirectClientsScreen(),
       ),
     );
   }

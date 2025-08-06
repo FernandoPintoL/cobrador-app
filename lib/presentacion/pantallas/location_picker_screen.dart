@@ -33,10 +33,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   Future<void> _verificarConectividadYPermisos() async {
     try {
+      print('🔍 Iniciando diagnóstico de ubicación y mapa...');
+
       // Verificar permisos primero
       LocationPermission permission = await Geolocator.checkPermission();
+      print('📍 Permisos de ubicación: $permission');
+
       if (permission == LocationPermission.denied) {
+        print('🔑 Solicitando permisos de ubicación...');
         permission = await Geolocator.requestPermission();
+        print('📍 Permisos después de solicitar: $permission');
       }
 
       if (permission == LocationPermission.denied ||
@@ -47,15 +53,23 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           'Para obtener tu ubicación actual, necesitamos permisos de ubicación.',
           Colors.orange,
         );
+        print('❌ Permisos de ubicación denegados');
+      } else {
+        print('✅ Permisos de ubicación concedidos');
       }
+
+      // Verificar conectividad
+      print('🌐 Verificando conectividad...');
 
       // Intentar obtener ubicación
       await _obtenerUbicacionActual();
+
+      print('✅ Inicialización completada');
     } catch (e) {
-      print('Error al inicializar ubicación: $e');
+      print('❌ Error al inicializar ubicación: $e');
       _mostrarMensaje(
         'Error de inicialización',
-        'No se pudo obtener la ubicación. Puedes seleccionar manualmente en el mapa.',
+        'No se pudo obtener la ubicación. Puedes seleccionar manualmente en el mapa. Error: $e',
         Colors.red,
       );
     }
@@ -63,6 +77,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   Future<void> _obtenerUbicacionActual() async {
     try {
+      print('📍 Intentando obtener ubicación actual...');
+
       // Verificar permisos
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -71,6 +87,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        print('❌ Sin permisos, usando ubicación por defecto');
         // Si no hay permisos, usar ubicación por defecto
         setState(() {
           _selectedLocation = _defaultLocation;
@@ -79,10 +96,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         return;
       }
 
+      print('🔍 Obteniendo posición GPS...');
       // Obtener ubicación actual
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
+
+      print('✅ Posición obtenida: ${position.latitude}, ${position.longitude}');
 
       setState(() {
         _selectedLocation = LatLng(position.latitude, position.longitude);
@@ -90,6 +111,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       });
 
       // Mover mapa a la ubicación actual
+      print('🗺️ Moviendo mapa a ubicación actual...');
       _mapController?.animateCamera(
         CameraUpdate.newLatLngZoom(_selectedLocation!, 15),
       );
@@ -97,11 +119,18 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       // Obtener dirección
       await _obtenerDireccionDesdeCoordenadas();
     } catch (e) {
+      print('❌ Error al obtener ubicación: $e');
       // En caso de error, usar ubicación por defecto
       setState(() {
         _selectedLocation = _defaultLocation;
         _isLoading = false;
       });
+
+      _mostrarMensaje(
+        'Ubicación por defecto',
+        'No se pudo obtener tu ubicación actual. Usando ubicación por defecto. Error: $e',
+        Colors.orange,
+      );
     }
   }
 
@@ -141,10 +170,28 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   void _onMapCreated(GoogleMapController controller) {
+    print('✅ Google Maps cargado correctamente');
+    print('🔑 API Key configurada en AndroidManifest.xml');
     _mapController = controller;
     setState(() {
       _mapError = false;
       _mapErrorMessage = '';
+    });
+
+    // Mover mapa a la ubicación seleccionada si existe
+    if (_selectedLocation != null) {
+      print('📍 Moviendo cámara a ubicación seleccionada');
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(_selectedLocation!, 15),
+      );
+    }
+  }
+
+  void _onMapError(String error) {
+    print('❌ Error del mapa: $error');
+    setState(() {
+      _mapError = true;
+      _mapErrorMessage = error;
     });
   }
 
@@ -271,29 +318,95 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 Expanded(
                   child: Stack(
                     children: [
-                      GoogleMap(
-                        onMapCreated: _onMapCreated,
-                        initialCameraPosition: CameraPosition(
-                          target: _selectedLocation ?? _defaultLocation,
-                          zoom: 15,
-                        ),
-                        onTap: _onMapTap,
-                        markers: _selectedLocation != null
-                            ? {
-                                Marker(
-                                  markerId: const MarkerId('selected_location'),
-                                  position: _selectedLocation!,
-                                  infoWindow: const InfoWindow(
-                                    title: 'Ubicación Seleccionada',
-                                    snippet: 'Toca para cambiar',
+                      // Widget principal del mapa con manejo de errores
+                      Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        child: GoogleMap(
+                          onMapCreated: _onMapCreated,
+                          initialCameraPosition: CameraPosition(
+                            target: _selectedLocation ?? _defaultLocation,
+                            zoom: 15,
+                          ),
+                          onTap: _onMapTap,
+                          markers: _selectedLocation != null
+                              ? {
+                                  Marker(
+                                    markerId: const MarkerId(
+                                      'selected_location',
+                                    ),
+                                    position: _selectedLocation!,
+                                    infoWindow: const InfoWindow(
+                                      title: 'Ubicación Seleccionada',
+                                      snippet: 'Toca para cambiar',
+                                    ),
                                   ),
+                                }
+                              : {},
+                          myLocationEnabled: true,
+                          myLocationButtonEnabled: true,
+                          zoomControlsEnabled: true,
+                          mapToolbarEnabled: false,
+                          // Agregar callbacks para manejo de errores
+                          onCameraMove: (CameraPosition position) {
+                            print('📍 Cámara moviéndose a: ${position.target}');
+                          },
+                          onCameraIdle: () {
+                            print('📍 Cámara detuvo movimiento');
+                          },
+                        ),
+                      ),
+
+                      // Widget de diagnóstico (solo en debug)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                '🔍 Diagnóstico:',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              }
-                            : {},
-                        myLocationEnabled: true,
-                        myLocationButtonEnabled: true,
-                        zoomControlsEnabled: true,
-                        mapToolbarEnabled: false,
+                              ),
+                              Text(
+                                'API Key: ✅ Configurada',
+                                style: TextStyle(
+                                  color: Colors.green[300],
+                                  fontSize: 10,
+                                ),
+                              ),
+                              Text(
+                                'Ubicación: ${_selectedLocation != null ? "✅ Obtenida" : "⏳ Cargando"}',
+                                style: TextStyle(
+                                  color: _selectedLocation != null
+                                      ? Colors.green[300]
+                                      : Colors.orange[300],
+                                  fontSize: 10,
+                                ),
+                              ),
+                              Text(
+                                'Mapa: ${_mapController != null ? "✅ Activo" : "⏳ Cargando"}',
+                                style: TextStyle(
+                                  color: _mapController != null
+                                      ? Colors.green[300]
+                                      : Colors.orange[300],
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       // Indicador de error del mapa
                       if (_mapError)

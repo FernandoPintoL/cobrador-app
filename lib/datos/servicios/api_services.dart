@@ -5,6 +5,7 @@ export 'user_api_service.dart';
 export 'client_api_service.dart';
 export 'credit_api_service.dart';
 export 'payment_api_service.dart';
+export 'manager_api_service.dart';
 
 // Importaciones para uso interno
 import 'auth_api_service.dart';
@@ -12,6 +13,7 @@ import 'user_api_service.dart';
 import 'client_api_service.dart';
 import 'credit_api_service.dart';
 import 'payment_api_service.dart';
+import 'manager_api_service.dart';
 
 // Clase fachada que combina todos los servicios para retrocompatibilidad
 class ApiService {
@@ -21,6 +23,7 @@ class ApiService {
   static final ClientApiService clients = ClientApiService();
   static final CreditApiService credits = CreditApiService();
   static final PaymentApiService payments = PaymentApiService();
+  static final ManagerApiService managers = ManagerApiService();
 
   // Métodos de conveniencia para mantener retrocompatibilidad
   // Autenticación

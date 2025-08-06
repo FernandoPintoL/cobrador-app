@@ -784,7 +784,16 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
       if (response['success'] == true) {
         final data = response['data'];
-        final creditsData = data['data'] as List? ?? [];
+        List<dynamic> creditsData = [];
+
+        // Manejar respuesta paginada o directa
+        if (data is List) {
+          // Respuesta directa como array
+          creditsData = data;
+        } else if (data is Map<String, dynamic>) {
+          // Respuesta paginada
+          creditsData = data['data'] as List? ?? [];
+        }
 
         final credits = creditsData
             .map(
@@ -825,7 +834,16 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
       if (response['success'] == true) {
         final data = response['data'];
-        final creditsData = data['data'] as List? ?? [];
+        List<dynamic> creditsData = [];
+
+        // Manejar respuesta paginada o directa
+        if (data is List) {
+          // Respuesta directa como array
+          creditsData = data;
+        } else if (data is Map<String, dynamic>) {
+          // Respuesta paginada
+          creditsData = data['data'] as List? ?? [];
+        }
 
         final credits = creditsData
             .map(
@@ -907,7 +925,16 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
       if (response['success'] == true) {
         final data = response['data'];
-        final creditsData = data['data'] as List? ?? [];
+        List<dynamic> creditsData = [];
+
+        // Manejar respuesta paginada o directa
+        if (data is List) {
+          // Respuesta directa como array
+          creditsData = data;
+        } else if (data is Map<String, dynamic>) {
+          // Respuesta paginada
+          creditsData = data['data'] as List? ?? [];
+        }
 
         final credits = creditsData
             .map(
