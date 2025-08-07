@@ -5,6 +5,7 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../negocio/providers/profile_image_provider.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../config/role_colors.dart';
 import '../widgets/profile_image_widget.dart';
 import '../widgets/websocket_widgets.dart';
 import '../pantallas/profile_settings_screen.dart';
@@ -71,6 +72,9 @@ class _CobradorDashboardScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Panel de Cobrador'),
+        backgroundColor: RoleColors.cobradorPrimary,
+        foregroundColor: Colors.white,
+        elevation: 4,
         actions: [
           // Botón de notificaciones
           Consumer(

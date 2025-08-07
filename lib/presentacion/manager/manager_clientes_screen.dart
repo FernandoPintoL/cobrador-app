@@ -4,6 +4,12 @@ import '../../datos/modelos/usuario.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/user_management_provider.dart';
+import '../../config/role_colors.dart';
+import '../widgets/role_widgets.dart';
+import '../widgets/contact_actions_widget.dart';
+import 'cliente_creditos_screen.dart';
+import 'cliente_perfil_screen.dart';
+import 'cliente_ubicacion_screen.dart';
 import 'manager_cliente_form_screen.dart';
 
 class ManagerClientesScreen extends ConsumerStatefulWidget {
@@ -16,7 +22,8 @@ class ManagerClientesScreen extends ConsumerStatefulWidget {
 
 class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _filtroActual = 'todos'; // 'todos', 'por_cobrador'
+  String _filtroActual =
+      'todos'; // 'todos', 'por_cobrador', 'directos', 'cobradores'
   List<Usuario> _clientesFiltrados = [];
 
   @override
@@ -63,9 +70,15 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Clientes del Equipo'),
+      appBar: RoleAppBar(
+        title: _obtenerTituloAppBar(),
+        role: 'manager',
         actions: [
+          IconButton(
+            icon: const Icon(Icons.assignment),
+            onPressed: () => _mostrarAsignacionRapida(),
+            tooltip: 'Asignación Rápida',
+          ),
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: () => _mostrarMenuFiltros(),
@@ -104,34 +117,63 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   Widget _buildEstadisticasCard(ManagerState managerState) {
     final totalClientes = managerState.clientesDelManager.length;
     final totalCobradores = managerState.cobradoresAsignados.length;
-    final clientesPorCobrador = totalCobradores > 0
-        ? (totalClientes / totalCobradores).toStringAsFixed(1)
-        : '0';
+
+    // Separar clientes directos de clientes de cobradores
+    final authState = ref.read(authProvider);
+    final managerId = authState.usuario?.id;
+
+    final clientesDirectos = managerState.clientesDelManager
+        .where((cliente) => cliente.assignedCobradorId == managerId)
+        .length;
+
+    final clientesDeCobradores = managerState.clientesDelManager
+        .where(
+          (cliente) =>
+              cliente.assignedCobradorId != managerId &&
+              cliente.assignedCobradorId != null,
+        )
+        .length;
 
     return Card(
       margin: const EdgeInsets.all(16),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+        child: Column(
           children: [
-            _buildStatItem(
-              'Total Clientes',
-              '$totalClientes',
-              Icons.business,
-              Colors.blue,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem(
+                  'Total Clientes',
+                  '$totalClientes',
+                  Icons.business,
+                  Colors.blue,
+                ),
+                _buildStatItem(
+                  'Cobradores',
+                  '$totalCobradores',
+                  Icons.person,
+                  Colors.green,
+                ),
+              ],
             ),
-            _buildStatItem(
-              'Cobradores',
-              '$totalCobradores',
-              Icons.person,
-              Colors.green,
-            ),
-            _buildStatItem(
-              'Promedio',
-              '$clientesPorCobrador/cobrador',
-              Icons.analytics,
-              Colors.orange,
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem(
+                  'Clientes Directos',
+                  '$clientesDirectos',
+                  Icons.person_pin,
+                  Colors.indigo,
+                ),
+                _buildStatItem(
+                  'De Cobradores',
+                  '$clientesDeCobradores',
+                  Icons.group,
+                  Colors.orange,
+                ),
+              ],
             ),
           ],
         ),
@@ -210,8 +252,25 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
     switch (_filtroActual) {
       case 'por_cobrador':
         return 'Agrupados por cobrador';
+      case 'directos':
+        return 'Solo clientes directos';
+      case 'cobradores':
+        return 'Solo clientes de cobradores';
       default:
         return 'Todos';
+    }
+  }
+
+  String _obtenerTituloAppBar() {
+    switch (_filtroActual) {
+      case 'directos':
+        return 'Mis Clientes Directos';
+      case 'cobradores':
+        return 'Clientes de Cobradores';
+      case 'por_cobrador':
+        return 'Clientes por Cobrador';
+      default:
+        return 'Gestión de Clientes';
     }
   }
 
@@ -281,9 +340,10 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
         final clientes = clientesPorCobrador[cobradorId]!;
 
         // Buscar información del cobrador
-        final cobrador = managerState.cobradoresAsignados
-            .where((c) => c.id.toString() == cobradorId)
-            .firstOrNull;
+        final cobradorList = managerState.cobradoresAsignados.where(
+          (c) => c.id.toString() == cobradorId,
+        );
+        final cobrador = cobradorList.isNotEmpty ? cobradorList.first : null;
 
         return _buildGrupoCobrador(cobrador, clientes);
       },
@@ -321,24 +381,73 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   }
 
   Widget _buildClienteCard(Usuario cliente, {bool esEnGrupo = false}) {
+    final authState = ref.read(authProvider);
+    final managerId = authState.usuario?.id;
+    final esClienteDirecto = cliente.assignedCobradorId == managerId;
+
     return Card(
       margin: esEnGrupo
           ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
           : const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.green,
-          child: Text(
-            cliente.nombre.isNotEmpty ? cliente.nombre[0].toUpperCase() : 'C',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
+        leading: Stack(
+          children: [
+            CircleAvatar(
+              backgroundColor: esClienteDirecto ? Colors.indigo : Colors.green,
+              child: Text(
+                cliente.nombre.isNotEmpty
+                    ? cliente.nombre[0].toUpperCase()
+                    : 'C',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-          ),
+            if (esClienteDirecto)
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.orange,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_pin,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
         ),
-        title: Text(
-          cliente.nombre,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                cliente.nombre,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (esClienteDirecto)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Directo',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.indigo,
+                  ),
+                ),
+              ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,7 +455,9 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
             Text(cliente.email),
             if (cliente.telefono.isNotEmpty)
               Text(cliente.telefono, style: TextStyle(color: Colors.grey[600])),
-            if (!esEnGrupo && cliente.assignedCobradorId != null)
+            if (!esEnGrupo &&
+                !esClienteDirecto &&
+                cliente.assignedCobradorId != null)
               Text(
                 'Cobrador: ${_obtenerNombreCobrador(cliente.assignedCobradorId!)}',
                 style: TextStyle(
@@ -356,48 +467,94 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
               ),
           ],
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) => _manejarAccionCliente(value, cliente),
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'ver_creditos',
-              child: ListTile(
-                leading: Icon(Icons.account_balance_wallet),
-                title: Text('Ver Créditos'),
-                contentPadding: EdgeInsets.zero,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Botón de contacto rápido
+            if (cliente.telefono.isNotEmpty)
+              ContactActionsWidget.buildContactButton(
+                context: context,
+                userName: cliente.nombre,
+                phoneNumber: cliente.telefono,
+                userRole: 'cliente',
+                customMessage: ContactActionsWidget.getDefaultMessage(
+                  'cliente',
+                  cliente.nombre,
+                ),
+                color: RoleColors.clientePrimary,
+                tooltip: 'Contactar cliente',
               ),
-            ),
-            const PopupMenuItem(
-              value: 'ver_perfil',
-              child: ListTile(
-                leading: Icon(Icons.person),
-                title: Text('Ver Perfil'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'ver_ubicacion',
-              child: ListTile(
-                leading: Icon(Icons.location_on),
-                title: Text('Ver Ubicación'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'editar',
-              child: ListTile(
-                leading: Icon(Icons.edit, color: Colors.blue),
-                title: Text('Editar Cliente'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'eliminar',
-              child: ListTile(
-                leading: Icon(Icons.delete, color: Colors.red),
-                title: Text('Eliminar Cliente'),
-                contentPadding: EdgeInsets.zero,
-              ),
+            // Menú contextual
+            PopupMenuButton<String>(
+              onSelected: (value) => _manejarAccionCliente(value, cliente),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'ver_creditos',
+                  child: ListTile(
+                    leading: Icon(Icons.account_balance_wallet),
+                    title: Text('Ver Créditos'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                ContactActionsWidget.buildContactMenuItem(
+                  phoneNumber: cliente.telefono,
+                  value: 'contactar',
+                  icon: Icons.phone,
+                  iconColor: Colors.green,
+                  label: 'Llamar / WhatsApp',
+                ),
+                const PopupMenuItem(
+                  value: 'ver_perfil',
+                  child: ListTile(
+                    leading: Icon(Icons.person),
+                    title: Text('Ver Perfil'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'ver_ubicacion',
+                  child: ListTile(
+                    leading: Icon(Icons.location_on),
+                    title: Text('Ver Ubicación'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'editar',
+                  child: ListTile(
+                    leading: Icon(Icons.edit, color: Colors.blue),
+                    title: Text('Editar Cliente'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                if (esClienteDirecto) ...[
+                  const PopupMenuItem(
+                    value: 'asignar_cobrador',
+                    child: ListTile(
+                      leading: Icon(Icons.person_add, color: Colors.orange),
+                      title: Text('Asignar a Cobrador'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ] else if (cliente.assignedCobradorId != null) ...[
+                  const PopupMenuItem(
+                    value: 'asignar_cobrador',
+                    child: ListTile(
+                      leading: Icon(Icons.swap_horiz, color: Colors.purple),
+                      title: Text('Reasignar Cobrador'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+                const PopupMenuItem(
+                  value: 'eliminar',
+                  child: ListTile(
+                    leading: Icon(Icons.delete, color: Colors.red),
+                    title: Text('Eliminar Cliente'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -407,18 +564,23 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
 
   String _obtenerNombreCobrador(BigInt cobradorId) {
     final managerState = ref.read(managerProvider);
-    final cobrador = managerState.cobradoresAsignados
-        .where((c) => c.id == cobradorId)
-        .firstOrNull;
+    final cobradorList = managerState.cobradoresAsignados.where(
+      (c) => c.id == cobradorId,
+    );
+    final cobrador = cobradorList.isNotEmpty ? cobradorList.first : null;
     return cobrador?.nombre ?? 'Desconocido';
   }
 
   void _aplicarFiltros(List<Usuario> clientes) {
     String query = _searchController.text.toLowerCase();
+    final authState = ref.read(authProvider);
+    final managerId = authState.usuario?.id;
 
     _clientesFiltrados = clientes.where((cliente) {
       bool coincideBusqueda = true;
+      bool cumpleFiltroTipo = true;
 
+      // Filtro de búsqueda
       if (query.isNotEmpty) {
         coincideBusqueda =
             cliente.nombre.toLowerCase().contains(query) ||
@@ -426,7 +588,24 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
             cliente.telefono.contains(query);
       }
 
-      return coincideBusqueda;
+      // Filtro por tipo de cliente
+      switch (_filtroActual) {
+        case 'directos':
+          cumpleFiltroTipo = cliente.assignedCobradorId == managerId;
+          break;
+        case 'cobradores':
+          cumpleFiltroTipo =
+              cliente.assignedCobradorId != managerId &&
+              cliente.assignedCobradorId != null;
+          break;
+        case 'todos':
+        case 'por_cobrador':
+        default:
+          cumpleFiltroTipo = true;
+          break;
+      }
+
+      return coincideBusqueda && cumpleFiltroTipo;
     }).toList();
   }
 
@@ -434,6 +613,18 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
     switch (accion) {
       case 'ver_creditos':
         _navegarACreditosCliente(cliente);
+        break;
+      case 'contactar':
+        ContactActionsWidget.showContactDialog(
+          context: context,
+          userName: cliente.nombre,
+          phoneNumber: cliente.telefono,
+          userRole: 'cliente',
+          customMessage: ContactActionsWidget.getDefaultMessage(
+            'cliente',
+            cliente.nombre,
+          ),
+        );
         break;
       case 'ver_perfil':
         _navegarAPerfilCliente(cliente);
@@ -444,6 +635,9 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
       case 'editar':
         _navegarEditarCliente(cliente);
         break;
+      case 'asignar_cobrador':
+        _mostrarDialogoAsignarCobrador(cliente);
+        break;
       case 'eliminar':
         _confirmarEliminarCliente(cliente);
         break;
@@ -451,28 +645,28 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   }
 
   void _navegarACreditosCliente(Usuario cliente) {
-    // TODO: Implementar navegación a créditos del cliente
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Ver créditos de ${cliente.nombre} - En desarrollo'),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClienteCreditosScreen(cliente: cliente),
       ),
     );
   }
 
   void _navegarAPerfilCliente(Usuario cliente) {
-    // TODO: Implementar navegación al perfil del cliente
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Ver perfil de ${cliente.nombre} - En desarrollo'),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClientePerfilScreen(cliente: cliente),
       ),
     );
   }
 
   void _navegarAUbicacionCliente(Usuario cliente) {
-    // TODO: Implementar navegación a la ubicación del cliente
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Ver ubicación de ${cliente.nombre} - En desarrollo'),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClienteUbicacionScreen(cliente: cliente),
       ),
     );
   }
@@ -502,8 +696,36 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
                   Navigator.pop(context);
                 },
               ),
-              title: const Text('Lista completa'),
+              title: const Text('Todos los clientes'),
               subtitle: const Text('Mostrar todos los clientes en una lista'),
+            ),
+            ListTile(
+              leading: Radio<String>(
+                value: 'directos',
+                groupValue: _filtroActual,
+                onChanged: (value) {
+                  setState(() {
+                    _filtroActual = value!;
+                  });
+                  Navigator.pop(context);
+                },
+              ),
+              title: const Text('Clientes directos'),
+              subtitle: const Text('Solo clientes asignados directamente a ti'),
+            ),
+            ListTile(
+              leading: Radio<String>(
+                value: 'cobradores',
+                groupValue: _filtroActual,
+                onChanged: (value) {
+                  setState(() {
+                    _filtroActual = value!;
+                  });
+                  Navigator.pop(context);
+                },
+              ),
+              title: const Text('Clientes de cobradores'),
+              subtitle: const Text('Solo clientes asignados a tus cobradores'),
             ),
             ListTile(
               leading: Radio<String>(
@@ -525,6 +747,263 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
         ),
       ),
     );
+  }
+
+  void _mostrarAsignacionRapida() {
+    final managerState = ref.read(managerProvider);
+    final authState = ref.read(authProvider);
+    final managerId = authState.usuario?.id;
+
+    // Obtener clientes directos sin asignar
+    final clientesDirectos = managerState.clientesDelManager
+        .where((cliente) => cliente.assignedCobradorId == managerId)
+        .toList();
+
+    // Obtener cobradores disponibles
+    final cobradores = managerState.cobradoresAsignados;
+
+    if (cobradores.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No tienes cobradores asignados'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (clientesDirectos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No tienes clientes directos para asignar'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Asignación Rápida'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Tienes ${clientesDirectos.length} clientes directos que puedes asignar a tus ${cobradores.length} cobradores.',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: cobradores.length,
+                  itemBuilder: (context, index) {
+                    final cobrador = cobradores[index];
+                    final clientesDelCobrador = managerState.clientesDelManager
+                        .where((c) => c.assignedCobradorId == cobrador.id)
+                        .length;
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.blue,
+                        child: Text(
+                          cobrador.nombre.isNotEmpty
+                              ? cobrador.nombre[0].toUpperCase()
+                              : 'C',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        cobrador.nombre,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        '$clientesDelCobrador clientes asignados',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _mostrarSeleccionClientesParaCobrador(cobrador);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                        ),
+                        child: const Text(
+                          'Asignar',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _mostrarSeleccionClientesParaCobrador(Usuario cobrador) {
+    final managerState = ref.read(managerProvider);
+    final authState = ref.read(authProvider);
+    final managerId = authState.usuario?.id;
+
+    // Obtener solo clientes directos
+    final clientesDirectos = managerState.clientesDelManager
+        .where((cliente) => cliente.assignedCobradorId == managerId)
+        .toList();
+
+    if (clientesDirectos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay clientes directos para asignar'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    List<Usuario> clientesSeleccionados = [];
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Asignar clientes a ${cobrador.nombre}'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: Column(
+              children: [
+                Text(
+                  'Selecciona los clientes que quieres asignar:',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: clientesDirectos.length,
+                    itemBuilder: (context, index) {
+                      final cliente = clientesDirectos[index];
+                      final isSelected = clientesSeleccionados.contains(
+                        cliente,
+                      );
+
+                      return CheckboxListTile(
+                        value: isSelected,
+                        onChanged: (value) {
+                          setState(() {
+                            if (value == true) {
+                              clientesSeleccionados.add(cliente);
+                            } else {
+                              clientesSeleccionados.remove(cliente);
+                            }
+                          });
+                        },
+                        title: Text(
+                          cliente.nombre,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          cliente.email,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        secondary: CircleAvatar(
+                          backgroundColor: Colors.indigo,
+                          radius: 20,
+                          child: Text(
+                            cliente.nombre.isNotEmpty
+                                ? cliente.nombre[0].toUpperCase()
+                                : 'C',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: clientesSeleccionados.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pop(context);
+                      _asignarClientesSeleccionados(
+                        clientesSeleccionados,
+                        cobrador,
+                      );
+                    },
+              child: Text('Asignar ${clientesSeleccionados.length} cliente(s)'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _asignarClientesSeleccionados(
+    List<Usuario> clientes,
+    Usuario cobrador,
+  ) async {
+    try {
+      for (final cliente in clientes) {
+        await ref
+            .read(managerProvider.notifier)
+            .asignarClienteACobrador(
+              cliente.id.toString(),
+              cobrador.id.toString(),
+            );
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${clientes.length} cliente(s) asignado(s) a ${cobrador.nombre}',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      _cargarDatos(); // Recargar los datos
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al asignar clientes: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _navegarCrearCliente() {
@@ -598,6 +1077,217 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
           ),
         );
       }
+    }
+  }
+
+  void _mostrarDialogoAsignarCobrador(Usuario cliente) {
+    final managerState = ref.read(managerProvider);
+    final cobradores = managerState.cobradoresAsignados;
+    final authState = ref.read(authProvider);
+    final managerId = authState.usuario?.id;
+    final esClienteDirecto = cliente.assignedCobradorId == managerId;
+
+    if (cobradores.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No tienes cobradores asignados para poder asignar clientes',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Asignar ${cliente.nombre}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!esClienteDirecto && cliente.assignedCobradorId != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info, color: Colors.amber),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Este cliente ya está asignado a ${_obtenerNombreCobrador(cliente.assignedCobradorId!)}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              Text(
+                esClienteDirecto
+                    ? 'Selecciona el cobrador al que quieres asignar este cliente:'
+                    : 'Selecciona el nuevo cobrador para este cliente:',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+
+              // Opción para asignar directamente al manager
+              if (!esClienteDirecto)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.indigo,
+                    child: Text(
+                      authState.usuario?.nombre.isNotEmpty == true
+                          ? authState.usuario!.nombre[0].toUpperCase()
+                          : 'M',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  title: Text('${authState.usuario?.nombre ?? 'Manager'} (Yo)'),
+                  subtitle: const Text('Asignar como cliente directo'),
+                  trailing: const Icon(Icons.person_pin, color: Colors.indigo),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _asignarClienteDirectamente(cliente);
+                  },
+                ),
+
+              if (!esClienteDirecto) const Divider(),
+
+              // Lista de cobradores
+              ...cobradores.map(
+                (cobrador) => ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue,
+                    child: Text(
+                      cobrador.nombre.isNotEmpty
+                          ? cobrador.nombre[0].toUpperCase()
+                          : 'C',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  title: Text(cobrador.nombre),
+                  subtitle: Text(cobrador.email),
+                  trailing: cliente.assignedCobradorId == cobrador.id
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: cliente.assignedCobradorId == cobrador.id
+                      ? null // Desactivar si ya está asignado a este cobrador
+                      : () {
+                          Navigator.pop(context);
+                          _asignarClienteACobrador(cliente, cobrador);
+                        },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _asignarClienteACobrador(Usuario cliente, Usuario cobrador) async {
+    try {
+      final success = await ref
+          .read(managerProvider.notifier)
+          .asignarClienteACobrador(
+            cliente.id.toString(),
+            cobrador.id.toString(),
+          );
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${cliente.nombre} ha sido asignado a ${cobrador.nombre}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _cargarDatos(); // Recargar los datos
+      } else {
+        final error = ref.read(managerProvider).error ?? 'Error desconocido';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al asignar cliente: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al asignar cliente: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _asignarClienteDirectamente(Usuario cliente) async {
+    final authState = ref.read(authProvider);
+    final managerId = authState.usuario?.id;
+
+    if (managerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: No se pudo obtener la información del manager'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final success = await ref
+          .read(managerProvider.notifier)
+          .asignarClienteACobrador(cliente.id.toString(), managerId.toString());
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${cliente.nombre} ha sido asignado como cliente directo',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _cargarDatos(); // Recargar los datos
+      } else {
+        final error = ref.read(managerProvider).error ?? 'Error desconocido';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al asignar cliente: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al asignar cliente: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }

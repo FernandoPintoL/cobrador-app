@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../datos/modelos/usuario.dart';
+import '../widgets/role_widgets.dart';
 import 'user_form_screen.dart';
 
 class UserManagementScreen extends ConsumerStatefulWidget {
@@ -68,10 +69,14 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
     final state = ref.watch(userManagementProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gestión de Usuarios'),
+      appBar: RoleAppBar(
+        title: 'Gestión de Usuarios',
+        role: 'admin',
         bottom: TabBar(
           controller: _tabController,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
           tabs: const [
             Tab(text: 'Clientes'),
             Tab(text: 'Cobradores'),
@@ -129,10 +134,12 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: RoleFloatingActionButton(
+        role: 'admin',
         onPressed: () {
           _mostrarFormularioUsuario();
         },
+        tooltip: 'Agregar usuario',
         child: const Icon(Icons.add),
       ),
     );
@@ -221,15 +228,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).primaryColor,
-          child: Text(
-            usuario.nombre.isNotEmpty ? usuario.nombre[0].toUpperCase() : 'U',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+        leading: RoleAvatarWidget(
+          role: usuario.roles.first,
+          userName: usuario.nombre,
+          radius: 25,
         ),
         title: Text(
           usuario.nombre,
@@ -241,21 +243,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
             Text(usuario.email),
             if (usuario.telefono.isNotEmpty) Text('Tel: ${usuario.telefono}'),
             if (usuario.direccion.isNotEmpty) Text('Dir: ${usuario.direccion}'),
-            Container(
-              margin: const EdgeInsets.only(top: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: _getRoleColor(usuario.roles.first),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                usuario.roles.first,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            RoleDisplayWidget(
+              role: usuario.roles.first,
+              useGradient: true,
+              showIcon: true,
             ),
           ],
         ),
@@ -295,21 +286,6 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
         ),
       ),
     );
-  }
-
-  Color _getRoleColor(String role) {
-    switch (role) {
-      case 'client':
-        return Colors.blue;
-      case 'cobrador':
-        return Colors.green;
-      case 'manager':
-        return Colors.orange;
-      case 'admin':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
   }
 
   void _mostrarFormularioUsuario() {

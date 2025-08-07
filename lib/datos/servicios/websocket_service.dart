@@ -61,12 +61,19 @@ class WebSocketService {
   }) {
     _serverUrl = url;
 
+    // Detectar automáticamente si es una conexión segura
+    final isSecure =
+        url.startsWith('wss://') ||
+        url.startsWith('https://') ||
+        url.contains('railway.app');
+
     if (reconnectAttempts != null) {
       // _maxReconnectAttempts = reconnectAttempts; // No se puede modificar final
     }
 
     print('🔧 WebSocket configurado para: $url');
     print('🏭 Modo: ${isProduction ? 'Producción' : 'Desarrollo'}');
+    print('🔒 Conexión segura: ${isSecure ? 'Sí (WSS)' : 'No (WS)'}');
   }
 
   /// Conecta al servidor WebSocket
@@ -94,12 +101,27 @@ class WebSocketService {
       print('🔌 Conectando a WebSocket: $_serverUrl');
 
       // Configurar opciones de Socket.IO
+      final isSecure =
+          _serverUrl!.startsWith('wss://') ||
+          _serverUrl!.startsWith('https://');
+
       final options = IO.OptionBuilder()
-          .setTransports(['websocket']) // Solo WebSocket
+          .setTransports([
+            'websocket',
+            'polling',
+          ]) // WebSocket con polling como fallback
           .setTimeout(15000) // 15 segundos timeout
           .enableAutoConnect()
           .enableForceNew()
+          .enableReconnection()
+          .setReconnectionAttempts(_maxReconnectAttempts)
+          .setReconnectionDelay(3000)
+          .setPath('/socket.io/')
           .build();
+
+      if (isSecure) {
+        print('🔒 Conexión segura (WSS) detectada');
+      }
 
       // Crear socket
       _socket = IO.io(_serverUrl!, options);

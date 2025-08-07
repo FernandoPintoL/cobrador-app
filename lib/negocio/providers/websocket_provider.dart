@@ -101,7 +101,7 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
   /// Configura y conecta al WebSocket
   Future<bool> connectToWebSocket({
     String? customUrl,
-    bool isProduction = false,
+    bool? isProduction,
   }) async {
     try {
       state = state.copyWith(isConnecting: true, lastError: null);
@@ -109,9 +109,22 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
       // Configurar URL del servidor
       final serverUrl = customUrl ?? _getDefaultServerUrl();
 
-      _wsService.configureServer(url: serverUrl, isProduction: isProduction);
+      // Detectar entorno automáticamente si no se especifica
+      final autoDetectProduction =
+          isProduction ??
+          (serverUrl.startsWith('wss://') || serverUrl.contains('railway.app'));
+
+      _wsService.configureServer(
+        url: serverUrl,
+        isProduction: autoDetectProduction,
+      );
 
       state = state.copyWith(serverUrl: serverUrl);
+
+      print('🔌 Conectando a WebSocket: $serverUrl');
+      print(
+        '🏭 Entorno detectado: ${autoDetectProduction ? 'Producción' : 'Desarrollo'}',
+      );
 
       // Conectar
       final connected = await _wsService.connect();
@@ -170,7 +183,17 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
   /// Obtiene la URL por defecto del servidor según la plataforma
   String _getDefaultServerUrl() {
     // Leer la URL del WebSocket desde .env, con fallback
-    return dotenv.env['WEBSOCKET_URL'] ?? 'ws://localhost:3001';
+    final envUrl = dotenv.env['WEBSOCKET_URL'] ?? 'ws://localhost:3001';
+
+    // Configurar URL del servidor WebSocket
+    print('🔧 WebSocket configurado para: $envUrl');
+
+    // Detectar entorno automáticamente
+    final isProduction =
+        envUrl.startsWith('wss://') || envUrl.contains('railway.app');
+    print('🏭 Modo: ${isProduction ? 'Producción' : 'Desarrollo'}');
+
+    return envUrl;
   }
 
   /// Desconecta del WebSocket

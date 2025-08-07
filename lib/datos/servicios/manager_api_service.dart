@@ -33,10 +33,45 @@ class ManagerApiService extends BaseApiService {
         final data = response.data as Map<String, dynamic>;
         print('✅ Cobradores del manager obtenidos exitosamente');
         return data;
+      } else if (response.statusCode == 400) {
+        // Manejo específico para error 400
+        final data = response.data as Map<String, dynamic>?;
+        final message = data?['message'] ?? 'Error 400: Solicitud inválida';
+
+        print('❌ Error 400: $message');
+
+        // Si el error es porque el usuario no es un manager, dar mensaje más claro
+        if (message.contains('no es un cobrador') ||
+            message.contains('no válido')) {
+          return {
+            'success': false,
+            'message':
+                'El usuario con ID $managerId no tiene rol de manager o no existe',
+            'data': {'current_page': 1, 'data': [], 'total': 0},
+          };
+        }
+
+        return {
+          'success': false,
+          'message': message,
+          'data': {'current_page': 1, 'data': [], 'total': 0},
+        };
       } else {
         return _handleErrorResponse(response);
       }
     } catch (e) {
+      print('❌ Excepción al obtener cobradores del manager: $e');
+
+      // Si es un DioException con status 400, manejar específicamente
+      if (e.toString().contains('400') &&
+          e.toString().contains('bad response')) {
+        return {
+          'success': false,
+          'message': 'El usuario no tiene permisos de manager o no existe',
+          'data': {'current_page': 1, 'data': [], 'total': 0},
+        };
+      }
+
       return _handleException(e, 'obtener cobradores del manager');
     }
   }
@@ -110,7 +145,7 @@ class ManagerApiService extends BaseApiService {
 
   // ===== MÉTODOS AUXILIARES PARA JERARQUÍA COMPLETA =====
 
-  /// Obtiene todos los clientes de un manager específico (a través de sus cobradores)
+  /// Obtiene todos los clientes de un manager específico usando la nueva ruta directa
   Future<Map<String, dynamic>> getClientesByManager(
     String managerId, {
     int page = 1,
@@ -119,57 +154,117 @@ class ManagerApiService extends BaseApiService {
     try {
       print('🏢 Obteniendo clientes del manager: $managerId');
 
-      // Primero obtener los cobradores del manager
-      final cobradoresResponse = await getCobradoresByManager(managerId);
+      // Usar la nueva ruta directa del backend
+      final response = await get(
+        '/users/$managerId/manager-clients?page=$page&per_page=$perPage',
+      );
 
-      if (cobradoresResponse['success'] != true) {
-        return cobradoresResponse;
-      }
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
 
-      final cobradoresData = cobradoresResponse['data']?['data'] as List?;
-      if (cobradoresData == null || cobradoresData.isEmpty) {
+        if (data['success'] == true) {
+          print('✅ Clientes del manager obtenidos exitosamente');
+          return data;
+        } else {
+          print('❌ Error en respuesta: ${data['message']}');
+          return {
+            'success': false,
+            'message':
+                data['message'] ?? 'Error al obtener clientes del manager',
+            'data': {'current_page': 1, 'data': [], 'total': 0},
+          };
+        }
+      } else if (response.statusCode == 400) {
+        // Manejo específico para error 400
+        final data = response.data as Map<String, dynamic>?;
+        final message = data?['message'] ?? 'Error 400: Solicitud inválida';
+
+        print('❌ Error 400 al obtener clientes: $message');
+
+        // Si el error es porque el usuario no es un manager, dar mensaje más claro
+        if (message.contains('no es un cobrador') ||
+            message.contains('no válido')) {
+          return {
+            'success': false,
+            'message':
+                'El usuario con ID $managerId no tiene rol de manager o no existe',
+            'data': {'current_page': 1, 'data': [], 'total': 0},
+          };
+        }
+
         return {
-          'success': true,
-          'message': 'El manager no tiene cobradores asignados',
+          'success': false,
+          'message': message,
+          'data': {'current_page': 1, 'data': [], 'total': 0},
+        };
+      } else {
+        print('❌ Error HTTP: ${response.statusCode}');
+        return {
+          'success': false,
+          'message':
+              'Error en la comunicación con el servidor (${response.statusCode})',
+          'data': {'current_page': 1, 'data': [], 'total': 0},
+        };
+      }
+    } catch (e) {
+      print('❌ Excepción al obtener clientes del manager: $e');
+
+      // Si es un DioException con status 400, manejar específicamente
+      if (e.toString().contains('400') &&
+          e.toString().contains('bad response')) {
+        return {
+          'success': false,
+          'message': 'El usuario no tiene permisos de manager o no existe',
           'data': {'current_page': 1, 'data': [], 'total': 0},
         };
       }
 
-      // Obtener clientes de cada cobrador
-      List<Map<String, dynamic>> todosLosClientes = [];
-
-      for (final cobradorData in cobradoresData) {
-        final cobradorId = cobradorData['id'].toString();
-
-        // Usar el servicio de clientes para obtener clientes del cobrador
-        final clientesResponse = await get('/users/$cobradorId/clients');
-
-        if (clientesResponse.statusCode == 200) {
-          final clientesData = clientesResponse.data as Map<String, dynamic>;
-          if (clientesData['success'] == true && clientesData['data'] != null) {
-            final clientes = clientesData['data']['data'] as List?;
-            if (clientes != null) {
-              // Agregar información del cobrador a cada cliente
-              for (final cliente in clientes) {
-                cliente['assigned_cobrador'] = cobradorData;
-              }
-              todosLosClientes.addAll(clientes.cast<Map<String, dynamic>>());
-            }
-          }
-        }
-      }
-
-      return {
-        'success': true,
-        'message': 'Clientes del manager obtenidos exitosamente',
-        'data': {
-          'current_page': page,
-          'data': todosLosClientes,
-          'total': todosLosClientes.length,
-        },
-      };
-    } catch (e) {
       return _handleException(e, 'obtener clientes del manager');
+    }
+  }
+
+  /// Obtiene solo los clientes asignados directamente al manager (sin pasar por cobradores)
+  Future<Map<String, dynamic>> getClientesDirectosManager(
+    String managerId, {
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    try {
+      print('👥 Obteniendo clientes directos del manager: $managerId');
+
+      // Usar la ruta para clientes directos
+      final response = await get(
+        '/users/$managerId/clients-direct?page=$page&per_page=$perPage',
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+
+        if (data['success'] == true) {
+          print('✅ Clientes directos del manager obtenidos exitosamente');
+          return data;
+        } else {
+          print('❌ Error en respuesta: ${data['message']}');
+          return {
+            'success': false,
+            'message':
+                data['message'] ??
+                'Error al obtener clientes directos del manager',
+            'data': {'current_page': 1, 'data': [], 'total': 0},
+          };
+        }
+      } else {
+        print('❌ Error HTTP: ${response.statusCode}');
+        return {
+          'success': false,
+          'message':
+              'Error en la comunicación con el servidor (${response.statusCode})',
+          'data': {'current_page': 1, 'data': [], 'total': 0},
+        };
+      }
+    } catch (e) {
+      print('❌ Excepción al obtener clientes directos del manager: $e');
+      return _handleException(e, 'obtener clientes directos del manager');
     }
   }
 

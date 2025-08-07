@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../../config/role_colors.dart';
 import '../pantallas/location_picker_screen.dart';
 
 class ManagerClienteFormScreen extends ConsumerStatefulWidget {
@@ -72,8 +73,9 @@ class _ManagerClienteFormScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(_esEdicion ? 'Editar Cliente' : 'Crear Cliente'),
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: RoleColors.managerPrimary,
         foregroundColor: Colors.white,
+        elevation: 4,
         actions: [
           if (_esEdicion)
             IconButton(
@@ -123,19 +125,19 @@ class _ManagerClienteFormScreenState
                             TextFormField(
                               controller: _emailController,
                               decoration: const InputDecoration(
-                                labelText: 'Email *',
+                                labelText: 'Email (opcional)',
                                 border: OutlineInputBorder(),
                                 prefixIcon: Icon(Icons.email),
                               ),
                               keyboardType: TextInputType.emailAddress,
                               validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'El email es obligatorio';
-                                }
-                                if (!RegExp(
-                                  r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                                ).hasMatch(value)) {
-                                  return 'Ingrese un email válido';
+                                // Email es opcional, solo validar formato si se proporciona
+                                if (value != null && value.trim().isNotEmpty) {
+                                  if (!RegExp(
+                                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                  ).hasMatch(value)) {
+                                    return 'Ingrese un email válido';
+                                  }
                                 }
                                 return null;
                               },
@@ -188,7 +190,7 @@ class _ManagerClienteFormScreenState
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    /* const SizedBox(height: 16),
                     if (!_esEdicion) // Solo mostrar contraseña para nuevos clientes
                       Card(
                         child: Padding(
@@ -197,25 +199,31 @@ class _ManagerClienteFormScreenState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Credenciales de Acceso',
+                                'Credenciales de Acceso (Opcional)',
                                 style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Solo necesario si el cliente tendrá acceso al sistema',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: Colors.grey[600]),
                               ),
                               const SizedBox(height: 16),
                               TextFormField(
                                 controller: _contrasenaController,
                                 decoration: const InputDecoration(
-                                  labelText: 'Contraseña *',
+                                  labelText: 'Contraseña (opcional)',
                                   border: OutlineInputBorder(),
                                   prefixIcon: Icon(Icons.lock),
+                                  helperText:
+                                      'Dejar vacío si el cliente no necesita acceso al sistema',
                                 ),
                                 obscureText: true,
                                 validator: (value) {
-                                  if (!_esEdicion) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'La contraseña es obligatoria';
-                                    }
+                                  // Contraseña es opcional para clientes
+                                  if (value != null && value.isNotEmpty) {
                                     if (value.length < 6) {
-                                      return 'La contraseña debe tener al menos 6 caracteres';
+                                      return 'Si establece contraseña, debe tener al menos 6 caracteres';
                                     }
                                   }
                                   return null;
@@ -224,7 +232,7 @@ class _ManagerClienteFormScreenState
                             ],
                           ),
                         ),
-                      ),
+                      ), */
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -332,7 +340,7 @@ class _ManagerClienteFormScreenState
             .crearUsuario(
               nombre: _nombreController.text.trim(),
               email: _emailController.text.trim(),
-              roles: ['cliente'],
+              roles: ['client'],
               telefono: _telefonoController.text.trim(),
               direccion: _direccionController.text.trim(),
               password: _contrasenaController.text.isNotEmpty

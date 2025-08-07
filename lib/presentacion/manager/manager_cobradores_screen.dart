@@ -5,9 +5,12 @@ import '../../datos/modelos/usuario.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/user_management_provider.dart';
+import '../../config/role_colors.dart';
+import '../widgets/role_widgets.dart';
+import '../widgets/contact_actions_widget.dart';
 import 'manager_cobrador_form_screen.dart';
 import 'manager_client_assignment_screen.dart';
-import 'manager_direct_clients_screen.dart';
+import 'cobrador_clientes_screen.dart';
 
 class ManagerCobradoresScreen extends ConsumerStatefulWidget {
   const ManagerCobradoresScreen({super.key});
@@ -101,19 +104,20 @@ class _ManagerCobradoresScreenState
     });
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gestión de Cobradores'),
+      appBar: RoleAppBar(
+        title: 'Gestión de Cobradores',
+        role: 'manager',
         actions: [
           IconButton(
             icon: const Icon(Icons.person_add),
             onPressed: () => _navegarCrearCobrador(),
             tooltip: 'Crear Cobrador',
           ),
-          IconButton(
+          /* IconButton(
             icon: const Icon(Icons.business_center),
             onPressed: () => _navegarAClientesDirectos(),
             tooltip: 'Mis Clientes Directos',
-          ),
+          ), */
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _cargarDatos,
@@ -152,12 +156,12 @@ class _ManagerCobradoresScreenState
               Icons.person,
               Colors.blue,
             ),
-            _buildStatItem(
+            /* _buildStatItem(
               'Clientes',
               '${stats?['total_clientes'] ?? 0}',
               Icons.business,
               Colors.green,
-            ),
+            ), */
             _buildStatItem(
               'Activos',
               '${stats?['cobradores_activos'] ?? managerState.cobradoresAsignados.length}',
@@ -266,15 +270,10 @@ class _ManagerCobradoresScreenState
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).primaryColor,
-          child: Text(
-            cobrador.nombre.isNotEmpty ? cobrador.nombre[0].toUpperCase() : 'C',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+        leading: RoleAvatarWidget(
+          role: 'cobrador',
+          userName: cobrador.nombre,
+          radius: 25,
         ),
         title: Text(
           cobrador.nombre,
@@ -285,63 +284,80 @@ class _ManagerCobradoresScreenState
           children: [
             Text(cobrador.email),
             if (cobrador.telefono.isNotEmpty)
-              Text(
-                cobrador.telefono,
-                style: TextStyle(color: Colors.grey[600]),
+              ContactActionsWidget.buildPhoneDisplay(
+                context: context,
+                userName: cobrador.nombre,
+                phoneNumber: cobrador.telefono,
+                userRole: 'cobrador',
+                customMessage: ContactActionsWidget.getDefaultMessage(
+                  'cobrador',
+                  cobrador.nombre,
+                ),
               ),
           ],
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) => _manejarAccionCobrador(value, cobrador),
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'ver_clientes',
-              child: ListTile(
-                leading: Icon(Icons.business),
-                title: Text('Ver Clientes'),
-                contentPadding: EdgeInsets.zero,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Botón de contacto rápido
+            if (cobrador.telefono.isNotEmpty)
+              ContactActionsWidget.buildContactButton(
+                context: context,
+                userName: cobrador.nombre,
+                phoneNumber: cobrador.telefono,
+                userRole: 'cobrador',
+                customMessage: ContactActionsWidget.getDefaultMessage(
+                  'cobrador',
+                  cobrador.nombre,
+                ),
+                color: RoleColors.cobradorPrimary,
+                tooltip: 'Contactar cobrador',
               ),
+            // Menú contextual
+            PopupMenuButton<String>(
+              onSelected: (value) => _manejarAccionCobrador(value, cobrador),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'ver_clientes',
+                  child: ListTile(
+                    leading: Icon(Icons.business),
+                    title: Text('Ver Clientes'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                ContactActionsWidget.buildContactMenuItem(
+                  phoneNumber: cobrador.telefono,
+                  value: 'contactar',
+                  icon: Icons.phone,
+                  iconColor: Colors.green,
+                  label: 'Llamar / WhatsApp',
+                ),
+                const PopupMenuItem(
+                  value: 'asignar_clientes',
+                  child: ListTile(
+                    leading: Icon(Icons.person_add, color: Colors.green),
+                    title: Text('Asignar Clientes'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'editar',
+                  child: ListTile(
+                    leading: Icon(Icons.edit, color: Colors.blue),
+                    title: Text('Editar Cobrador'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'eliminar',
+                  child: ListTile(
+                    leading: Icon(Icons.delete, color: Colors.red),
+                    title: Text('Eliminar Cobrador'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
             ),
-            const PopupMenuItem(
-              value: 'asignar_clientes',
-              child: ListTile(
-                leading: Icon(Icons.person_add, color: Colors.green),
-                title: Text('Asignar Clientes'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-            /* const PopupMenuItem(
-              value: 'ver_perfil',
-              child: ListTile(
-                leading: Icon(Icons.person),
-                title: Text('Ver Perfil'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ), */
-            const PopupMenuItem(
-              value: 'editar',
-              child: ListTile(
-                leading: Icon(Icons.edit, color: Colors.blue),
-                title: Text('Editar Cobrador'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'eliminar',
-              child: ListTile(
-                leading: Icon(Icons.delete, color: Colors.red),
-                title: Text('Eliminar Cobrador'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-            /* const PopupMenuItem(
-              value: 'remover',
-              child: ListTile(
-                leading: Icon(Icons.remove_circle, color: Colors.orange),
-                title: Text('Remover Asignación'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ), */
           ],
         ),
       ),
@@ -355,6 +371,18 @@ class _ManagerCobradoresScreenState
         break;
       case 'asignar_clientes':
         _navegarAAsignarClientes(cobrador);
+        break;
+      case 'contactar':
+        ContactActionsWidget.showContactDialog(
+          context: context,
+          userName: cobrador.nombre,
+          phoneNumber: cobrador.telefono,
+          userRole: 'cobrador',
+          customMessage: ContactActionsWidget.getDefaultMessage(
+            'cobrador',
+            cobrador.nombre,
+          ),
+        );
         break;
       case 'ver_perfil':
         _navegarAPerfilCobrador(cobrador);
@@ -448,10 +476,10 @@ class _ManagerCobradoresScreenState
   }
 
   void _navegarAClientesCobrador(Usuario cobrador) {
-    // TODO: Implementar navegación a clientes del cobrador
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Ver clientes de ${cobrador.nombre} - En desarrollo'),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CobradorClientesScreen(cobrador: cobrador),
       ),
     );
   }
@@ -462,15 +490,6 @@ class _ManagerCobradoresScreenState
       MaterialPageRoute(
         builder: (context) =>
             ManagerClientAssignmentScreen(cobradorPreseleccionado: cobrador),
-      ),
-    );
-  }
-
-  void _navegarAClientesDirectos() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ManagerDirectClientsScreen(),
       ),
     );
   }
@@ -641,14 +660,10 @@ class _AsignacionCobradoresDialogState
                               Text(cobrador.telefono),
                           ],
                         ),
-                        secondary: CircleAvatar(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          child: Text(
-                            cobrador.nombre.isNotEmpty
-                                ? cobrador.nombre[0].toUpperCase()
-                                : 'C',
-                            style: const TextStyle(color: Colors.white),
-                          ),
+                        secondary: RoleAvatarWidget(
+                          role: 'cobrador',
+                          userName: cobrador.nombre,
+                          radius: 20,
                         ),
                       );
                     },

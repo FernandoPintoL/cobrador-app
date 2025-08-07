@@ -22,46 +22,99 @@ class _ManagerCreditsScreenState extends ConsumerState<ManagerCreditsScreen>
   late TabController _tabController;
   String _searchText = '';
   final TextEditingController _searchController = TextEditingController();
+  bool _isDisposed = false; // Agregar flag para controlar el estado
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _cargarDatosIniciales();
+      if (!_isDisposed && mounted) {
+        // Verificar antes de cargar datos
+        _cargarDatosIniciales();
+      }
     });
   }
 
   @override
   void dispose() {
+    _isDisposed = true; // Marcar como disposed
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _cargarDatosIniciales() async {
+    // Verificar si el widget aún está montado antes de continuar
+    if (!mounted || _isDisposed) return;
+
     final authState = ref.read(authProvider);
     final usuario = authState.usuario;
 
     if (usuario != null) {
       final managerId = usuario.id.toString();
 
-      // Cargar datos del manager
-      await ref
-          .read(managerProvider.notifier)
-          .cargarCobradoresAsignados(managerId);
-      await ref
-          .read(managerProvider.notifier)
-          .cargarClientesDelManager(managerId);
+      try {
+        // Cargar datos del manager con verificaciones de montado
+        if (mounted && !_isDisposed) {
+          await ref
+              .read(managerProvider.notifier)
+              .cargarCobradoresAsignados(managerId);
+        }
 
-      // Cargar datos de créditos
-      await ref.read(creditProvider.notifier).loadCredits();
-      await ref.read(creditProvider.notifier).loadAllWaitingListData();
+        if (mounted && !_isDisposed) {
+          await ref
+              .read(managerProvider.notifier)
+              .cargarClientesDelManager(managerId);
+        }
+
+        // Cargar datos de créditos con verificaciones de montado
+        if (mounted && !_isDisposed) {
+          await ref.read(creditProvider.notifier).loadCredits();
+        }
+
+        if (mounted && !_isDisposed) {
+          await ref.read(creditProvider.notifier).loadAllWaitingListData();
+        }
+      } catch (e) {
+        // Capturar errores para evitar crashes
+        if (mounted && !_isDisposed) {
+          print('Error cargando datos iniciales: $e');
+        }
+      }
+    }
+  }
+
+  /// Función helper para ejecutar operaciones con ref de forma segura
+  Future<T?> _safeRefOperation<T>(Future<T> Function() operation) async {
+    if (!mounted || _isDisposed) return null;
+
+    try {
+      return await operation();
+    } catch (e) {
+      if (mounted && !_isDisposed) {
+        print('Error en operación ref: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Versión segura de mostrar SnackBar
+  void _showSafeSnackBar(String message, {Color? backgroundColor}) {
+    if (mounted && !_isDisposed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: backgroundColor),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Verificar si el widget está montado antes de usar ref
+    if (!mounted || _isDisposed) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final creditState = ref.watch(creditProvider);
     final managerState = ref.watch(managerProvider);
 
@@ -384,7 +437,11 @@ class _ManagerCreditsScreenState extends ConsumerState<ManagerCreditsScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: _cargarDatosIniciales,
+      onRefresh: () async {
+        if (mounted && !_isDisposed) {
+          await _cargarDatosIniciales();
+        }
+      },
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: filteredCredits.length,
@@ -816,25 +873,27 @@ class _ManagerCreditsScreenState extends ConsumerState<ManagerCreditsScreen>
   }
 
   Future<void> _aprobarCredito(Credito credit) async {
+    if (!mounted || _isDisposed) return;
+
     final result = await showDialog<DateTime>(
       context: context,
       builder: (context) => _FechaEntregaDialog(),
     );
 
-    if (result != null) {
-      final success = await ref
-          .read(creditProvider.notifier)
-          .approveCreditForDelivery(
-            creditId: credit.id,
-            scheduledDeliveryDate: result,
-          );
+    if (result != null && mounted && !_isDisposed) {
+      final success = await _safeRefOperation(
+        () => ref
+            .read(creditProvider.notifier)
+            .approveCreditForDelivery(
+              creditId: credit.id,
+              scheduledDeliveryDate: result,
+            ),
+      );
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Crédito aprobado exitosamente'),
-            backgroundColor: Colors.green,
-          ),
+      if (success == true) {
+        _showSafeSnackBar(
+          'Crédito aprobado exitosamente',
+          backgroundColor: Colors.green,
         );
         await _cargarDatosIniciales();
       }
@@ -842,45 +901,46 @@ class _ManagerCreditsScreenState extends ConsumerState<ManagerCreditsScreen>
   }
 
   Future<void> _rechazarCredito(Credito credit) async {
+    if (!mounted || _isDisposed) return;
+
     final result = await showDialog<String>(
       context: context,
       builder: (context) => _MotivoRechazoDialog(),
     );
 
-    if (result != null && result.isNotEmpty) {
-      final success = await ref
-          .read(creditProvider.notifier)
-          .rejectCredit(creditId: credit.id, reason: result);
+    if (result != null && result.isNotEmpty && mounted && !_isDisposed) {
+      final success = await _safeRefOperation(
+        () => ref
+            .read(creditProvider.notifier)
+            .rejectCredit(creditId: credit.id, reason: result),
+      );
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Crédito rechazado'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (success == true) {
+        _showSafeSnackBar('Crédito rechazado', backgroundColor: Colors.red);
         await _cargarDatosIniciales();
       }
     }
   }
 
   Future<void> _entregarCredito(Credito credit) async {
+    if (!mounted || _isDisposed) return;
+
     final result = await showDialog<String>(
       context: context,
       builder: (context) => _NotasEntregaDialog(),
     );
 
-    if (result != null) {
-      final success = await ref
-          .read(creditProvider.notifier)
-          .deliverCreditToClient(creditId: credit.id, notes: result);
+    if (result != null && mounted && !_isDisposed) {
+      final success = await _safeRefOperation(
+        () => ref
+            .read(creditProvider.notifier)
+            .deliverCreditToClient(creditId: credit.id, notes: result),
+      );
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Crédito entregado exitosamente'),
-            backgroundColor: Colors.green,
-          ),
+      if (success == true) {
+        _showSafeSnackBar(
+          'Crédito entregado exitosamente',
+          backgroundColor: Colors.green,
         );
         await _cargarDatosIniciales();
       }
@@ -888,6 +948,8 @@ class _ManagerCreditsScreenState extends ConsumerState<ManagerCreditsScreen>
   }
 
   Future<void> _reprogramarEntrega(Credito credit) async {
+    if (!mounted || _isDisposed) return;
+
     final result = await showDialog<DateTime>(
       context: context,
       builder: (context) => _ReprogramarEntregaDialog(
@@ -895,20 +957,20 @@ class _ManagerCreditsScreenState extends ConsumerState<ManagerCreditsScreen>
       ),
     );
 
-    if (result != null) {
-      final success = await ref
-          .read(creditProvider.notifier)
-          .rescheduleCreditDelivery(
-            creditId: credit.id,
-            newScheduledDate: result,
-          );
+    if (result != null && mounted && !_isDisposed) {
+      final success = await _safeRefOperation(
+        () => ref
+            .read(creditProvider.notifier)
+            .rescheduleCreditDelivery(
+              creditId: credit.id,
+              newScheduledDate: result,
+            ),
+      );
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Entrega reprogramada exitosamente'),
-            backgroundColor: Colors.blue,
-          ),
+      if (success == true) {
+        _showSafeSnackBar(
+          'Entrega reprogramada exitosamente',
+          backgroundColor: Colors.blue,
         );
         await _cargarDatosIniciales();
       }
@@ -985,37 +1047,51 @@ class _ManagerCreditsScreenState extends ConsumerState<ManagerCreditsScreen>
   }
 
   Future<void> _cancelarCredito(Credito credit) async {
-    // Implementar cancelación de crédito
-    final success = await ref
-        .read(creditProvider.notifier)
-        .deleteCredit(credit.id);
+    if (!mounted || _isDisposed) return;
 
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Crédito cancelado exitosamente'),
-          backgroundColor: Colors.orange,
-        ),
+    // Implementar cancelación de crédito
+    final success = await _safeRefOperation(
+      () => ref.read(creditProvider.notifier).deleteCredit(credit.id),
+    );
+
+    if (success == true) {
+      _showSafeSnackBar(
+        'Crédito cancelado exitosamente',
+        backgroundColor: Colors.orange,
       );
       await _cargarDatosIniciales();
     }
   }
 
   void _navegarACrearCredito() {
+    if (!mounted || _isDisposed) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CreditFormScreen()),
-    ).then((_) => _cargarDatosIniciales());
+    ).then((_) {
+      if (mounted && !_isDisposed) {
+        _cargarDatosIniciales();
+      }
+    });
   }
 
   void _navegarAEditarCredito(Credito credit) {
+    if (!mounted || _isDisposed) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => CreditFormScreen(credit: credit)),
-    ).then((_) => _cargarDatosIniciales());
+    ).then((_) {
+      if (mounted && !_isDisposed) {
+        _cargarDatosIniciales();
+      }
+    });
   }
 
   void _navegarADetalleCredito(Credito credit) {
+    if (!mounted || _isDisposed) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1025,10 +1101,16 @@ class _ManagerCreditsScreenState extends ConsumerState<ManagerCreditsScreen>
   }
 
   void _navegarAListaEspera() {
+    if (!mounted || _isDisposed) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const WaitingListScreen()),
-    ).then((_) => _cargarDatosIniciales());
+    ).then((_) {
+      if (mounted && !_isDisposed) {
+        _cargarDatosIniciales();
+      }
+    });
   }
 }
 

@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/websocket_provider.dart';
+import '../../config/role_colors.dart';
 import 'manager_cobradores_screen.dart';
 import 'manager_clientes_screen.dart';
 import 'manager_reportes_screen.dart';
 import 'manager_notifications_screen.dart';
 import 'manager_client_assignment_screen.dart';
 import 'manager_credits_screen.dart';
-import 'manager_direct_clients_screen.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -55,6 +55,9 @@ class _ManagerDashboardScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Panel de Gestión Manager'),
+        backgroundColor: RoleColors.managerPrimary,
+        foregroundColor: Colors.white,
+        elevation: 4,
         actions: [
           // Botón de notificaciones WebSocket
           Consumer(
@@ -232,31 +235,13 @@ class _ManagerDashboardScreenState
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
-                  'Gestión de Clientes del Equipo',
-                  'Ver y gestionar clientes de todos los cobradores',
+                  'Gestión de Clientes',
+                  'Gestionar todos los clientes: directos y de cobradores',
                   Icons.business_center,
                   Colors.green,
                   () => _navigateToTeamClientManagement(context),
                 ),
-                const SizedBox(height: 12),
-                _buildManagerFunctionCard(
-                  context,
-                  'Mis Clientes Directos',
-                  'Gestionar clientes asignados directamente',
-                  Icons.person_pin,
-                  Colors.indigo,
-                  () => _navigateToDirectClients(context),
-                ),
                 /* const SizedBox(height: 12),
-                _buildManagerFunctionCard(
-                  context,
-                  'Crear Nuevo Cliente',
-                  'Agregar cliente y asignar a cobrador',
-                  Icons.person_add,
-                  Colors.indigo,
-                  () => _navigateToCreateClient(context),
-                ), */
-                const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
                   'Asignación de Rutas',
@@ -264,7 +249,7 @@ class _ManagerDashboardScreenState
                   Icons.map,
                   Colors.orange,
                   () => _navigateToRouteAssignment(context),
-                ),
+                ), */
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
@@ -443,10 +428,6 @@ class _ManagerDashboardScreenState
     );
   }
 
-  void _navigateToCreateClient(BuildContext context) {
-    Navigator.pushNamed(context, '/crear-cliente');
-  }
-
   void _navigateToRouteAssignment(BuildContext context) {
     Navigator.push(
       context,
@@ -463,43 +444,10 @@ class _ManagerDashboardScreenState
     );
   }
 
-  void _navigateToCollectionControl(BuildContext context) {
-    // TODO: Implementar navegación a control de cobros
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Control de cobros - En desarrollo'),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? Colors.grey[800]
-            : null,
-      ),
-    );
-  }
-
-  void _navigateToZoneConfiguration(BuildContext context) {
-    // TODO: Implementar navegación a configuración de zonas
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Configuración de zonas - En desarrollo'),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? Colors.grey[800]
-            : null,
-      ),
-    );
-  }
-
   void _navigateToCreditManagement(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const ManagerCreditsScreen()),
-    );
-  }
-
-  void _navigateToDirectClients(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ManagerDirectClientsScreen(),
-      ),
     );
   }
 }

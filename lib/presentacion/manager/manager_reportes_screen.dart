@@ -15,26 +15,100 @@ class ManagerReportesScreen extends ConsumerStatefulWidget {
 class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isLoadingData = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _cargarDatos();
+      if (mounted) {
+        _cargarDatos();
+      }
     });
   }
 
-  void _cargarDatos() {
-    final authState = ref.read(authProvider);
-    if (authState.usuario != null) {
+  void _cargarDatos() async {
+    // Evitar llamadas duplicadas
+    if (_isLoadingData) {
+      debugPrint('⚠️ Ya se está cargando datos, ignorando llamada duplicada');
+      return;
+    }
+
+    _isLoadingData = true;
+
+    try {
+      final authState = ref.read(authProvider);
+      if (authState.usuario == null) {
+        debugPrint('❌ Usuario no autenticado en _cargarDatos');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Usuario no autenticado'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
       final managerId = authState.usuario!.id.toString();
+      debugPrint('🔄 Iniciando carga de datos para manager ID: $managerId');
+      debugPrint(
+        '👤 Usuario: ${authState.usuario!.nombre} (${authState.usuario!.email})',
+      );
+      debugPrint('🎭 Roles: ${authState.usuario!.roles}');
+
+      // Verificar que el usuario es realmente un manager
+      if (!authState.isManager) {
+        debugPrint('❌ ERROR: El usuario no tiene rol de manager');
+        debugPrint('   Roles disponibles: ${authState.usuario!.roles}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error: El usuario no tiene permisos de manager'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Establecer el manager actual primero
       ref
           .read(managerProvider.notifier)
           .establecerManagerActual(authState.usuario!);
-      ref.read(managerProvider.notifier).cargarEstadisticasManager(managerId);
-      ref.read(managerProvider.notifier).cargarCobradoresAsignados(managerId);
-      ref.read(managerProvider.notifier).cargarClientesDelManager(managerId);
+
+      // Cargar datos de forma secuencial para evitar sobrecarga
+      debugPrint('📊 Cargando estadísticas del manager...');
+      await ref
+          .read(managerProvider.notifier)
+          .cargarEstadisticasManager(managerId);
+
+      debugPrint('👥 Cargando cobradores asignados...');
+      await ref
+          .read(managerProvider.notifier)
+          .cargarCobradoresAsignados(managerId);
+
+      debugPrint('🏢 Cargando clientes del manager...');
+      await ref
+          .read(managerProvider.notifier)
+          .cargarClientesDelManager(managerId);
+
+      debugPrint('✅ Carga de datos completada exitosamente');
+    } catch (e) {
+      debugPrint('❌ Error cargando datos del manager: $e');
+      // Mostrar un SnackBar con el error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar datos: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      _isLoadingData = false;
     }
   }
 
@@ -48,6 +122,32 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
   Widget build(BuildContext context) {
     final managerState = ref.watch(managerProvider);
 
+    // Verificar si hay errores en el estado
+    if (managerState.error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Reportes del Equipo')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                'Error: ${managerState.error}',
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _cargarDatos,
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reportes del Equipo'),
@@ -60,10 +160,21 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
           tabs: const [
-            Tab(icon: Icon(Icons.dashboard), text: 'Resumen'),
-            Tab(icon: Icon(Icons.person), text: 'Cobradores'),
-            Tab(icon: Icon(Icons.business), text: 'Clientes'),
+            Tab(
+              icon: Icon(Icons.dashboard, color: Colors.white),
+              text: 'Resumen',
+            ),
+            Tab(
+              icon: Icon(Icons.person, color: Colors.white),
+              text: 'Cobradores',
+            ),
+            Tab(
+              icon: Icon(Icons.business, color: Colors.white),
+              text: 'Clientes',
+            ),
           ],
         ),
       ),
@@ -224,9 +335,10 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
         final cobradorId = clientesPorCobrador.keys.elementAt(index);
         final clientes = clientesPorCobrador[cobradorId]!;
 
-        final cobrador = managerState.cobradoresAsignados
-            .where((c) => c.id.toString() == cobradorId)
-            .firstOrNull;
+        final cobradorList = managerState.cobradoresAsignados.where(
+          (c) => c.id.toString() == cobradorId,
+        );
+        final cobrador = cobradorList.isNotEmpty ? cobradorList.first : null;
 
         return _buildClientesGroupCard(cobrador, clientes);
       },
@@ -296,9 +408,12 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
                 final cobradorId = entry.key;
                 final clienteCount = entry.value;
 
-                final cobrador = managerState.cobradoresAsignados
-                    .where((c) => c.id.toString() == cobradorId)
-                    .firstOrNull;
+                final cobradorList = managerState.cobradoresAsignados.where(
+                  (c) => c.id.toString() == cobradorId,
+                );
+                final cobrador = cobradorList.isNotEmpty
+                    ? cobradorList.first
+                    : null;
 
                 final nombreCobrador = cobrador?.nombre ?? 'Sin asignar';
                 final total = managerState.clientesDelManager.length;

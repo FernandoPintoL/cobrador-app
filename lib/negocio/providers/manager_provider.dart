@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../datos/servicios/api_services.dart';
+import '../../datos/servicios/client_api_service.dart';
 
 /// Estado para la gestión de managers y sus cobradores asignados
 class ManagerState {
@@ -47,6 +48,7 @@ class ManagerState {
 class ManagerNotifier extends StateNotifier<ManagerState> {
   final ManagerApiService _managerApiService = ManagerApiService();
   final UserApiService _userApiService = UserApiService();
+  final ClientApiService _clientApiService = ClientApiService();
 
   ManagerNotifier() : super(ManagerState());
 
@@ -288,6 +290,45 @@ class ManagerNotifier extends StateNotifier<ManagerState> {
     } catch (e) {
       print('Error al obtener manager del cobrador: $e');
       return null;
+    }
+  }
+
+  /// Asigna un cliente específico a un cobrador
+  Future<bool> asignarClienteACobrador(
+    String clienteId,
+    String cobradorId,
+  ) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final response = await _clientApiService.assignClientsToCollector(
+        cobradorId,
+        [clienteId],
+      );
+
+      if (response['success'] == true) {
+        state = state.copyWith(
+          isLoading: false,
+          successMessage: 'Cliente asignado exitosamente',
+        );
+
+        // Recargar la lista de clientes
+        final authState = state.managerActual;
+        if (authState?.id != null) {
+          await cargarClientesDelManager(authState!.id.toString());
+        }
+
+        return true;
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Error al asignar cliente',
+        );
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: 'Error de conexión: $e');
+      return false;
     }
   }
 

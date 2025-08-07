@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../../config/role_colors.dart';
 import 'user_management_screen.dart';
 import 'cobrador_assignment_screen.dart';
 import '../widgets/user_stats_widget.dart';
@@ -16,6 +17,9 @@ class AdminDashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Panel de Administración'),
+        backgroundColor: RoleColors.adminPrimary,
+        foregroundColor: Colors.white,
+        elevation: 4,
         actions: [
           // Botón de notificaciones (temporalmente deshabilitado)
           // Consumer(
@@ -58,14 +62,18 @@ class AdminDashboardScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header con información del usuario
-            Card(
+            Container(
+              decoration: BoxDecoration(
+                gradient: RoleColors.getGradient('admin'),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: [
                     CircleAvatar(
                       radius: 30,
-                      backgroundColor: Theme.of(context).primaryColor,
+                      backgroundColor: Colors.white.withOpacity(0.2),
                       child: Text(
                         usuario?.nombre.substring(0, 1).toUpperCase() ?? 'A',
                         style: const TextStyle(
@@ -85,16 +93,13 @@ class AdminDashboardScreen extends ConsumerWidget {
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                           Text(
                             usuario?.email ?? '',
-                            style: TextStyle(
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Colors.grey[300]
-                                  : Colors.grey[600],
+                            style: const TextStyle(
+                              color: Colors.white70,
                               fontSize: 14,
                             ),
                           ),
@@ -104,24 +109,27 @@ class AdminDashboardScreen extends ConsumerWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Colors.red[900]!.withOpacity(0.3)
-                                  : Colors.red[100],
+                              color: Colors.white.withOpacity(0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(
-                              'Administrador',
-                              style: TextStyle(
-                                color:
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? Colors.red[300]
-                                    : Colors.red[700],
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  RoleColors.getRoleIcon('admin'),
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Administrador',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
