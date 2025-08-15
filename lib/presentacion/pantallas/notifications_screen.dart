@@ -145,8 +145,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       ),
       floatingActionButton: !wsState.isConnected
           ? FloatingActionButton(
-              onPressed: () =>
-                  ref.read(webSocketProvider.notifier).connectToWebSocket(),
+              onPressed: () async {
+                await ref.read(authProvider.notifier).initialize();
+              },
               backgroundColor: Colors.green,
               child: const Icon(Icons.wifi, color: Colors.white),
               tooltip: 'Reconectar WebSocket',
@@ -155,29 +156,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     );
   }
 
-  List<Map<String, dynamic>> _getFilteredNotifications(
+  List<AppNotification> _getFilteredNotifications(
     WebSocketState wsState,
     String filter,
   ) {
     switch (filter) {
       case 'unread':
-        return wsState.notifications
-            .where((n) => !(n['isRead'] ?? false))
-            .toList();
+        return wsState.notifications.where((n) => !n.isRead).toList();
       case 'payment':
         return wsState.notifications
             .where(
-              (n) =>
-                  (n['type']?.toString().contains('payment') ?? false) ||
-                  (n['type']?.toString().contains('pago') ?? false),
+              (n) => n.type.contains('payment') || n.type.contains('credit'),
             )
             .toList();
       case 'system':
         return wsState.notifications
             .where(
-              (n) =>
-                  (n['type']?.toString().contains('system') ?? false) ||
-                  (n['type']?.toString().contains('connection') ?? false),
+              (n) => n.type.contains('general') || n.type.contains('message'),
             )
             .toList();
       default:
@@ -197,9 +192,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
         return RefreshIndicator(
           onRefresh: () async {
-            // Reconectar WebSocket si está desconectado
+            // Intentar reconexión si está desconectado
             if (!wsState.isConnected) {
-              ref.read(webSocketProvider.notifier).connectToWebSocket();
+              await ref.read(authProvider.notifier).initialize();
             }
           },
           child: ListView.builder(
@@ -278,15 +273,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     );
   }
 
-  Widget _buildNotificationCard(Map<String, dynamic> notification) {
-    final isUnread = !(notification['isRead'] ?? false);
-    final timestamp =
-        DateTime.tryParse(notification['timestamp']?.toString() ?? '') ??
-        DateTime.now();
-    final timeAgo = _getTimeAgo(timestamp);
-    final title = notification['title']?.toString() ?? 'Notificación';
-    final message = notification['message']?.toString() ?? '';
-    final type = notification['type']?.toString() ?? '';
+  Widget _buildNotificationCard(AppNotification notification) {
+    final isUnread = !notification.isRead;
+    final timeAgo = _getTimeAgo(notification.timestamp);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -312,15 +301,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 children: [
                   // Icono según el tipo
                   Icon(
-                    _getNotificationIcon(type),
-                    color: _getNotificationColor(type),
+                    _getNotificationIcon(notification.type),
+                    color: _getNotificationColor(notification.type),
                     size: 20,
                   ),
                   const SizedBox(width: 8),
                   // Título
                   Expanded(
                     child: Text(
-                      title,
+                      notification.title,
                       style: TextStyle(
                         fontWeight: isUnread
                             ? FontWeight.bold
@@ -345,7 +334,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
               const SizedBox(height: 8),
               // Mensaje
               Text(
-                message,
+                notification.message,
                 style: TextStyle(
                   color: Theme.of(context).brightness == Brightness.dark
                       ? Colors.grey[400]
@@ -367,24 +356,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                           : Colors.grey[500],
                     ),
                   ),
-                  if (type.isNotEmpty)
+                  if (notification.type.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: _getNotificationColor(type).withOpacity(0.1),
+                        color: _getNotificationColor(
+                          notification.type,
+                        ).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _getNotificationColor(type).withOpacity(0.3),
+                          color: _getNotificationColor(
+                            notification.type,
+                          ).withOpacity(0.3),
                         ),
                       ),
                       child: Text(
-                        _getTypeLabel(type),
+                        _getTypeLabel(notification.type),
                         style: TextStyle(
                           fontSize: 10,
-                          color: _getNotificationColor(type),
+                          color: _getNotificationColor(notification.type),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -452,25 +445,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     }
   }
 
-  void _markAsRead(Map<String, dynamic> notification) {
-    // Por ahora solo simularemos marcar como leído localmente
-    // En el futuro se puede implementar la funcionalidad en el provider
-    if (!(notification['isRead'] ?? false)) {
-      setState(() {
-        notification['isRead'] = true;
-      });
+  void _markAsRead(AppNotification notification) {
+    if (!notification.isRead) {
+      ref.read(webSocketProvider.notifier).markAsRead(notification.id);
     }
   }
 
   void _handleMenuAction(String action) {
     switch (action) {
       case 'mark_all_read':
-        // Simular marcar todas como leídas
-        final wsState = ref.read(webSocketProvider);
-        for (var notification in wsState.notifications) {
-          notification['isRead'] = true;
-        }
-        setState(() {});
+        ref.read(webSocketProvider.notifier).markAllAsRead();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Todas las notificaciones marcadas como leídas'),
@@ -504,10 +488,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           ),
           ElevatedButton(
             onPressed: () {
-              // Simular limpiar todas las notificaciones
-              final wsState = ref.read(webSocketProvider);
-              wsState.notifications.clear();
-              setState(() {});
+              ref.read(webSocketProvider.notifier).clearNotifications();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

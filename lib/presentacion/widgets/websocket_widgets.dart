@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/websocket_provider.dart';
+import '../../negocio/providers/auth_provider.dart';
 
 /// Widget que muestra el estado de conexión WebSocket
 class WebSocketStatusWidget extends ConsumerWidget {
@@ -97,7 +98,7 @@ class WebSocketStatusWidget extends ConsumerWidget {
 /// Provider para verificar si hay notificaciones no leídas
 final unreadNotificationsProvider = Provider<int>((ref) {
   final wsState = ref.watch(webSocketProvider);
-  return wsState.notifications.where((n) => !(n['isRead'] ?? false)).length;
+  return wsState.notifications.where((n) => !n.isRead).length;
 });
 
 /// Widget de notificaciones en tiempo real
@@ -151,9 +152,7 @@ class NotificationsSummaryCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final wsState = ref.watch(webSocketProvider);
-    final unreadCount = wsState.notifications
-        .where((n) => !(n['isRead'] ?? false))
-        .length;
+    final unreadCount = wsState.notifications.where((n) => !n.isRead).length;
     final totalCount = wsState.notifications.length;
 
     return Card(
@@ -179,7 +178,7 @@ class NotificationsSummaryCard extends ConsumerWidget {
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'Notificaciones',
+                      'Notificacioness',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -242,8 +241,7 @@ class NotificationsSummaryCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  wsState.notifications.first['title']?.toString() ??
-                      'Sin título',
+                  wsState.notifications.first.title,
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
@@ -252,7 +250,7 @@ class NotificationsSummaryCard extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  wsState.notifications.first['message']?.toString() ?? '',
+                  wsState.notifications.first.message,
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -333,22 +331,20 @@ class _RealtimeNotificationsPanelState
                   final notification = wsState.notifications[index];
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: _getNotificationColor(
-                        notification['type'],
-                      ),
+                      backgroundColor: _getNotificationColor(notification.type),
                       child: Icon(
-                        _getNotificationIcon(notification['type']),
+                        _getNotificationIcon(notification.type),
                         color: Colors.white,
                         size: 16,
                       ),
                     ),
                     title: Text(
-                      notification['title'] ?? 'Sin título',
+                      notification.title,
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
-                    subtitle: Text(notification['message'] ?? 'Sin mensaje'),
+                    subtitle: Text(notification.message),
                     trailing: Text(
-                      _formatTimestamp(notification['timestamp']),
+                      _formatTimestamp(notification.timestamp),
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                     dense: true,
@@ -373,47 +369,40 @@ class _RealtimeNotificationsPanelState
     );
   }
 
-  Color _getNotificationColor(String? type) {
-    switch (type) {
-      case 'credit':
-        return Colors.green;
-      case 'payment':
-        return Colors.blue;
-      case 'urgent':
-        return Colors.red;
-      case 'route':
-        return Colors.orange;
-      case 'message':
-        return Colors.purple;
-      default:
-        return Colors.grey;
+  Color _getNotificationColor(String type) {
+    if (type.contains('credit')) {
+      return Colors.green;
+    } else if (type.contains('payment')) {
+      return Colors.blue;
+    } else if (type.contains('urgent')) {
+      return Colors.red;
+    } else if (type.contains('route')) {
+      return Colors.orange;
+    } else if (type.contains('message')) {
+      return Colors.purple;
     }
+    return Colors.grey;
   }
 
-  IconData _getNotificationIcon(String? type) {
-    switch (type) {
-      case 'credit':
-        return Icons.attach_money;
-      case 'payment':
-        return Icons.payment;
-      case 'urgent':
-        return Icons.warning;
-      case 'route':
-        return Icons.map;
-      case 'message':
-        return Icons.message;
-      default:
-        return Icons.notifications;
+  IconData _getNotificationIcon(String type) {
+    if (type.contains('credit')) {
+      return Icons.attach_money;
+    } else if (type.contains('payment')) {
+      return Icons.payment;
+    } else if (type.contains('urgent')) {
+      return Icons.warning;
+    } else if (type.contains('route')) {
+      return Icons.map;
+    } else if (type.contains('message')) {
+      return Icons.message;
     }
+    return Icons.notifications;
   }
 
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return '';
-
+  String _formatTimestamp(DateTime timestamp) {
     try {
-      final dateTime = DateTime.parse(timestamp.toString());
       final now = DateTime.now();
-      final difference = now.difference(dateTime);
+      final difference = now.difference(timestamp);
 
       if (difference.inMinutes < 1) {
         return 'Ahora';
@@ -495,7 +484,8 @@ class WebSocketTestButton extends ConsumerWidget {
 
     switch (action) {
       case 'connect':
-        wsNotifier.connectToWebSocket();
+        // Reconectar a través del auth provider
+        ref.read(authProvider.notifier).initialize();
         break;
       case 'disconnect':
         wsNotifier.disconnect();

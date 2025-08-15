@@ -1,26 +1,64 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import '../../datos/servicios/websocket_service.dart';
-import 'auth_provider.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../datos/servicios/notification_service.dart';
 
-/// Estado del WebSocket
+// Modelo para notificaciones
+class AppNotification {
+  final String id;
+  final String type;
+  final String title;
+  final String message;
+  final Map<String, dynamic>? data;
+  final DateTime timestamp;
+  final bool isRead;
+
+  const AppNotification({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.message,
+    this.data,
+    required this.timestamp,
+    this.isRead = false,
+  });
+
+  AppNotification copyWith({
+    String? id,
+    String? type,
+    String? title,
+    String? message,
+    Map<String, dynamic>? data,
+    DateTime? timestamp,
+    bool? isRead,
+  }) {
+    return AppNotification(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      message: message ?? this.message,
+      data: data ?? this.data,
+      timestamp: timestamp ?? this.timestamp,
+      isRead: isRead ?? this.isRead,
+    );
+  }
+}
+
+/// Estado del WebSocket con notificaciones mejoradas
 class WebSocketState {
   final bool isConnected;
   final bool isConnecting;
-  final String? serverUrl;
   final String? lastError;
-  final List<Map<String, dynamic>> notifications;
-  final List<Map<String, dynamic>> recentMessages;
+  final List<AppNotification> notifications;
   final Map<String, dynamic>? lastPaymentUpdate;
   final Map<String, dynamic>? lastLocationUpdate;
 
   const WebSocketState({
     this.isConnected = false,
     this.isConnecting = false,
-    this.serverUrl,
     this.lastError,
     this.notifications = const [],
-    this.recentMessages = const [],
     this.lastPaymentUpdate,
     this.lastLocationUpdate,
   });
@@ -28,239 +66,384 @@ class WebSocketState {
   WebSocketState copyWith({
     bool? isConnected,
     bool? isConnecting,
-    String? serverUrl,
     String? lastError,
-    List<Map<String, dynamic>>? notifications,
-    List<Map<String, dynamic>>? recentMessages,
+    List<AppNotification>? notifications,
     Map<String, dynamic>? lastPaymentUpdate,
     Map<String, dynamic>? lastLocationUpdate,
   }) {
     return WebSocketState(
       isConnected: isConnected ?? this.isConnected,
       isConnecting: isConnecting ?? this.isConnecting,
-      serverUrl: serverUrl ?? this.serverUrl,
       lastError: lastError,
       notifications: notifications ?? this.notifications,
-      recentMessages: recentMessages ?? this.recentMessages,
       lastPaymentUpdate: lastPaymentUpdate ?? this.lastPaymentUpdate,
       lastLocationUpdate: lastLocationUpdate ?? this.lastLocationUpdate,
     );
   }
 }
 
-/// Notifier para gestionar WebSocket
+/// Provider para WebSocket mejorado
 class WebSocketNotifier extends StateNotifier<WebSocketState> {
-  final WebSocketService _wsService;
-  final Ref _ref;
+  final WebSocketService _wsService = WebSocketService();
+  final NotificationService _notificationService = NotificationService();
 
-  WebSocketNotifier(this._wsService, this._ref)
-    : super(const WebSocketState()) {
-    _initializeListeners();
+  // Subscriptions
+  StreamSubscription<bool>? _connSub;
+  StreamSubscription<Map<String, dynamic>>? _notifSub;
+  StreamSubscription<Map<String, dynamic>>? _paymentSub;
+  StreamSubscription<Map<String, dynamic>>? _messageSub;
+  StreamSubscription<Map<String, dynamic>>? _locationSub;
+  StreamSubscription<Map<String, dynamic>>? _routeSub;
+
+  WebSocketNotifier() : super(const WebSocketState()) {
+    _initializeNotifications();
+    _setupWebSocketListeners();
   }
 
-  /// Inicializa los listeners del WebSocket
-  void _initializeListeners() {
-    // Escuchar estado de conexión
-    _wsService.connectionStream.listen((isConnected) {
-      state = state.copyWith(
-        isConnected: isConnected,
-        isConnecting: false,
-        lastError: isConnected ? null : state.lastError,
-      );
-    });
-
-    // Escuchar notificaciones
-    _wsService.notificationStream.listen((notification) {
-      final updatedNotifications = [notification, ...state.notifications];
-      // Mantener solo las últimas 50 notificaciones
-      final trimmedNotifications = updatedNotifications.take(50).toList();
-
-      state = state.copyWith(notifications: trimmedNotifications);
-    });
-
-    // Escuchar actualizaciones de pagos
-    _wsService.paymentStream.listen((payment) {
-      state = state.copyWith(lastPaymentUpdate: payment);
-    });
-
-    // Escuchar mensajes
-    _wsService.messageStream.listen((message) {
-      final updatedMessages = [message, ...state.recentMessages];
-      // Mantener solo los últimos 20 mensajes
-      final trimmedMessages = updatedMessages.take(20).toList();
-
-      state = state.copyWith(recentMessages: trimmedMessages);
-    });
-
-    // Escuchar actualizaciones de ubicación
-    _wsService.locationStream.listen((location) {
-      state = state.copyWith(lastLocationUpdate: location);
-    });
-  }
-
-  /// Configura y conecta al WebSocket
-  Future<bool> connectToWebSocket({
-    String? customUrl,
-    bool? isProduction,
-  }) async {
+  /// Inicializa el servicio de notificaciones
+  Future<void> _initializeNotifications() async {
     try {
-      state = state.copyWith(isConnecting: true, lastError: null);
+      await _notificationService.initialize();
+      print('✅ Servicio de notificaciones inicializado');
+    } catch (e) {
+      print('⚠️ Error inicializando notificaciones: $e');
+    }
+  }
 
-      // Configurar URL del servidor
-      final serverUrl = customUrl ?? _getDefaultServerUrl();
+  /// Conectar WebSocket con datos del usuario (evita dependencia a authProvider)
+  Future<void> connectWithUser({
+    required String userId,
+    required String userType,
+    String? userName,
+  }) async {
+    state = state.copyWith(isConnecting: true, lastError: null);
 
-      // Detectar entorno automáticamente si no se especifica
-      final autoDetectProduction =
-          isProduction ??
-          (serverUrl.startsWith('wss://') || serverUrl.contains('railway.app'));
-
-      _wsService.configureServer(
-        url: serverUrl,
-        isProduction: autoDetectProduction,
-      );
-
-      state = state.copyWith(serverUrl: serverUrl);
-
-      print('🔌 Conectando a WebSocket: $serverUrl');
-      print(
-        '🏭 Entorno detectado: ${autoDetectProduction ? 'Producción' : 'Desarrollo'}',
-      );
-
-      // Conectar
+    try {
+      // Conectar al servidor (la URL debe haberse configurado previamente desde la app)
       final connected = await _wsService.connect();
 
       if (connected) {
-        // Autenticar usuario si está logueado
-        final authState = _ref.read(authProvider);
-        if (authState.usuario != null) {
-          await _authenticateCurrentUser();
-        }
-
-        print('✅ WebSocket conectado exitosamente');
-        return true;
-      } else {
-        state = state.copyWith(
-          isConnecting: false,
-          lastError: 'No se pudo conectar al servidor WebSocket',
+        // Autenticar usuario en el canal WS
+        await _wsService.authenticate(
+          userId: userId,
+          userName: userName ?? userId,
+          userType: userType,
         );
-        print('❌ Falló la conexión WebSocket');
-        return false;
+      }
+
+      // Verificar conexión después de un breve delay
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      state = state.copyWith(
+        isConnected: _wsService.isConnected,
+        isConnecting: false,
+        lastError: null,
+      );
+
+      if (kDebugMode) {
+        print('🔌 WebSocket conectado: ${_wsService.isConnected} como $userType');
       }
     } catch (e) {
       state = state.copyWith(
+        isConnected: false,
         isConnecting: false,
-        lastError: 'Error conectando: $e',
+        lastError: 'Error conectando WebSocket: $e',
       );
-      print('❌ Error en connectToWebSocket: $e');
-      return false;
+
+      if (kDebugMode) {
+        print('❌ Error en WebSocket connect: $e');
+      }
     }
   }
 
-  /// Autentica el usuario actual
-  Future<bool> _authenticateCurrentUser() async {
-    final authState = _ref.read(authProvider);
-    if (authState.usuario == null) return false;
+  /// Configurar listeners de WebSocket mediante streams
+  void _setupWebSocketListeners() {
+    // Estado de conexión
+    _connSub = _wsService.connectionStream.listen((connected) {
+      state = state.copyWith(isConnected: connected, isConnecting: false);
+    });
 
-    final user = authState.usuario!;
+    // Notificaciones generales/crediticias
+    _notifSub = _wsService.notificationStream.listen((data) {
+      if (data.isEmpty) return;
 
-    // Determinar tipo de usuario basado en roles
-    String userType = 'client';
-    if (user.roles.contains('admin')) {
-      userType = 'admin';
-    } else if (user.roles.contains('cobrador')) {
-      userType = 'cobrador';
-    } else if (user.roles.contains('manager')) {
-      userType = 'manager';
+      // Determinar el tipo de notificación
+      final type = (data['type'] ?? data['action'] ?? 'general').toString();
+
+      if (type.contains('credit') || data.containsKey('credit') || data.containsKey('action')) {
+        final action = data['action'] ?? 'actualizado';
+        final clientName = data['credit']?['client_name'] ?? data['credit']?['client']?['name'] ?? 'Cliente';
+        final creditId = data['credit']?['id']?.toString() ?? data['creditId']?.toString() ?? 'N/A';
+        final amount = data['credit']?['amount']?.toString() ?? '';
+
+        String actionText;
+        String title;
+        String message;
+
+        switch (action) {
+          case 'created':
+            actionText = 'creado';
+            title = '📄 Nuevo Crédito Creado';
+            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+            break;
+          case 'approved':
+            actionText = 'aprobado';
+            title = '✅ Crédito Aprobado';
+            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+            break;
+          case 'delivered':
+            actionText = 'entregado';
+            title = '🚚 Crédito Entregado';
+            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+            break;
+          case 'completed':
+            actionText = 'completado';
+            title = '🎉 Crédito Completado';
+            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+            break;
+          case 'defaulted':
+            actionText = 'en mora';
+            title = '⚠️ Crédito en Mora';
+            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+            break;
+          case 'requires_attention':
+            actionText = 'requiere atención';
+            title = '🔔 Atención Requerida';
+            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+            break;
+          default:
+            actionText = action.toString();
+            title = '📄 Actualización de Crédito';
+            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+        }
+
+        // Mostrar notificación local
+        _notificationService.showCreditNotification(
+          title: title,
+          body: message,
+          creditId: creditId,
+          action: action,
+        );
+
+        _addNotification(
+          AppNotification(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            type: 'credit',
+            title: title,
+            message: message,
+            data: data,
+            timestamp: DateTime.now(),
+          ),
+        );
+      } else {
+        final title = data['title'] ?? 'Notificación';
+        final message = data['message'] ?? 'Nueva notificación';
+
+        // Mostrar notificación local general
+        _notificationService.showGeneralNotification(
+          title: '🔔 $title',
+          body: message,
+          type: type,
+          payload: data.toString(),
+        );
+
+        _addNotification(
+          AppNotification(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            type: 'general',
+            title: '🔔 $title',
+            message: message,
+            data: data,
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+    });
+
+    // Actualizaciones de pagos
+    _paymentSub = _wsService.paymentStream.listen((data) {
+      final paymentAmount = data['amount']?.toString() ?? data['payment']?['amount']?.toString() ?? 'N/A';
+      final clientName = data['client']?['name'] ?? data['payment']?['client_name'] ?? 'Cliente';
+      final paymentId = data['id']?.toString() ?? data['payment']?['id']?.toString();
+
+      final title = '💰 Pago Recibido';
+      final message = 'Pago de $paymentAmount Bs de $clientName';
+
+      // Mostrar notificación local de pago
+      _notificationService.showPaymentNotification(
+        title: title,
+        body: message,
+        paymentId: paymentId,
+        amount: double.tryParse(paymentAmount),
+      );
+
+      _addNotification(
+        AppNotification(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: 'payment',
+          title: title,
+          message: message,
+          data: data,
+          timestamp: DateTime.now(),
+        ),
+      );
+
+      state = state.copyWith(lastPaymentUpdate: data);
+    });
+
+    // Mensajes
+    _messageSub = _wsService.messageStream.listen((data) {
+      final fromUser = data['fromUserName'] ?? data['from_user_name'] ?? data['senderId'] ?? 'Usuario';
+      final message = data['message'] ?? 'Mensaje recibido';
+      final messageId = data['id']?.toString() ?? data['messageId']?.toString();
+      final senderId = data['senderId']?.toString();
+
+      final title = '💬 Nuevo Mensaje';
+      final body = '$fromUser: $message';
+
+      // Mostrar notificación local de mensaje
+      _notificationService.showMessageNotification(
+        title: title,
+        body: body,
+        messageId: messageId,
+        senderId: senderId,
+      );
+
+      _addNotification(
+        AppNotification(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: 'message',
+          title: title,
+          message: body,
+          data: data,
+          timestamp: DateTime.now(),
+        ),
+      );
+    });
+
+    // Ubicación
+    _locationSub = _wsService.locationStream.listen((data) {
+      state = state.copyWith(lastLocationUpdate: data);
+      if (kDebugMode) {
+        print('📍 Actualización de ubicación recibida: $data');
+      }
+    });
+
+    // Rutas (opcional): crear notificación informativa
+    _routeSub = _wsService.routeStream.listen((data) {
+      final title = '🛣️ Ruta Actualizada';
+      final message = 'Se ha actualizado una ruta';
+
+      // Mostrar notificación local de ruta (opcional, puede ser silenciosa)
+      _notificationService.showGeneralNotification(
+        title: title,
+        body: message,
+        type: 'route',
+        payload: 'route:${data['id'] ?? 'general'}',
+      );
+
+      _addNotification(
+        AppNotification(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: 'route',
+          title: title,
+          message: message,
+          data: data,
+          timestamp: DateTime.now(),
+        ),
+      );
+    });
+  }
+
+  /// Agregar notificación
+  void _addNotification(AppNotification notification) {
+    final newNotifications = [notification, ...state.notifications];
+    // Mantener solo las últimas 100 notificaciones
+    if (newNotifications.length > 100) {
+      newNotifications.removeRange(100, newNotifications.length);
     }
 
-    return await _wsService.authenticate(
-      userId: user.id.toString(),
-      userName: user.nombre,
-      userType: userType,
-    );
+    state = state.copyWith(notifications: newNotifications);
+
+    if (kDebugMode) {
+      print(
+        '🔔 Nueva notificación: ${notification.title} - ${notification.message}',
+      );
+    }
   }
 
-  /// Obtiene la URL por defecto del servidor según la plataforma
-  String _getDefaultServerUrl() {
-    // Leer la URL del WebSocket desde .env, con fallback
-    final envUrl = dotenv.env['WEBSOCKET_URL'] ?? 'ws://localhost:3001';
+  /// Marcar notificación como leída
+  void markAsRead(String notificationId) {
+    final updatedNotifications = state.notifications.map((notification) {
+      if (notification.id == notificationId) {
+        return notification.copyWith(isRead: true);
+      }
+      return notification;
+    }).toList();
 
-    // Configurar URL del servidor WebSocket
-    print('🔧 WebSocket configurado para: $envUrl');
-
-    // Detectar entorno automáticamente
-    final isProduction =
-        envUrl.startsWith('wss://') || envUrl.contains('railway.app');
-    print('🏭 Modo: ${isProduction ? 'Producción' : 'Desarrollo'}');
-
-    return envUrl;
+    state = state.copyWith(notifications: updatedNotifications);
   }
 
-  /// Desconecta del WebSocket
-  void disconnect() {
-    _wsService.disconnect();
-    state = state.copyWith(
-      isConnected: false,
-      isConnecting: false,
-      lastError: null,
-    );
+  /// Marcar todas como leídas
+  void markAllAsRead() {
+    final updatedNotifications = state.notifications.map((notification) {
+      return notification.copyWith(isRead: true);
+    }).toList();
+
+    state = state.copyWith(notifications: updatedNotifications);
   }
 
-  /// Envía una notificación de crédito
-  void sendCreditNotification({
-    required String targetUserId,
-    required String title,
-    required String message,
-    String type = 'credit',
-    Map<String, dynamic>? additionalData,
-  }) {
-    if (!state.isConnected) {
-      print('❌ No conectado para enviar notificación');
+  /// Limpiar notificaciones
+  void clearNotifications() {
+    state = state.copyWith(notifications: []);
+  }
+
+  /// Enviar ubicación
+  void sendLocationUpdate(double latitude, double longitude) {
+    _wsService.updateLocation(latitude, longitude);
+  }
+
+  /// Enviar mensaje
+  void sendMessage(String toUserId, String message) {
+    _wsService.sendMessage(recipientId: toUserId, message: message);
+  }
+
+  /// Notificar creación de crédito (compatibilidad)
+  void notifyCreditCreated(Map<String, dynamic> creditData) {
+    final targetUserId = (creditData['targetUserId'] ?? creditData['userId'] ?? creditData['managerId'] ?? creditData['cobradorId'])?.toString();
+    if (targetUserId == null) {
+      if (kDebugMode) {
+        print('⚠️ notifyCreditCreated requiere targetUserId, userId, managerId o cobradorId en creditData');
+      }
       return;
     }
-
+    final title = (creditData['title'] ?? 'Crédito creado').toString();
+    final message = (creditData['message'] ?? 'Se ha creado un crédito').toString();
     _wsService.sendCreditNotification(
       targetUserId: targetUserId,
       title: title,
       message: message,
-      type: type,
-      additionalData: additionalData,
+      additionalData: creditData,
     );
   }
 
-  /// Actualiza la ubicación del usuario
-  void updateLocation(
-    double latitude,
-    double longitude, {
-    String? address,
-    double? accuracy,
-  }) {
-    if (!state.isConnected) {
-      print('❌ No conectado para actualizar ubicación');
+  /// Notificar pago realizado (compatibilidad)
+  void notifyPaymentMade(Map<String, dynamic> paymentData) {
+    final paymentId = (paymentData['paymentId'] ?? paymentData['id'])?.toString();
+    final cobradorId = (paymentData['cobradorId'] ?? paymentData['collectorId'] ?? paymentData['userId'])?.toString();
+    final clientId = (paymentData['clientId'] ?? paymentData['clienteId'])?.toString();
+    final amountDynamic = paymentData['amount'] ?? paymentData['monto'] ?? paymentData['payment']?['amount'];
+    final status = (paymentData['status'] ?? 'completed').toString();
+    final notes = paymentData['notes']?.toString();
+
+    if (paymentId == null || cobradorId == null || clientId == null || amountDynamic == null) {
+      if (kDebugMode) {
+        print('⚠️ notifyPaymentMade requiere paymentId, cobradorId, clientId y amount');
+      }
       return;
     }
 
-    _wsService.updateLocation(
-      latitude,
-      longitude,
-      address: address,
-      accuracy: accuracy,
-    );
-  }
-
-  /// Notifica una actualización de pago
-  void notifyPaymentUpdate({
-    required String paymentId,
-    required String cobradorId,
-    required String clientId,
-    required double amount,
-    required String status,
-    String? notes,
-  }) {
-    if (!state.isConnected) {
-      print('❌ No conectado para notificar pago');
-      return;
-    }
+    final double amount = amountDynamic is num ? amountDynamic.toDouble() : double.tryParse(amountDynamic.toString()) ?? 0.0;
 
     _wsService.updatePayment(
       paymentId: paymentId,
@@ -269,100 +452,97 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
       amount: amount,
       status: status,
       notes: notes,
+      additionalData: paymentData,
     );
   }
 
-  /// Envía un mensaje directo
-  void sendMessage({
-    required String recipientId,
-    required String message,
-    String? messageType,
-  }) {
-    if (!state.isConnected) {
-      print('❌ No conectado para enviar mensaje');
-      return;
-    }
-
-    _wsService.sendMessage(
-      recipientId: recipientId,
-      message: message,
-      messageType: messageType,
+  /// Desconectar
+  void disconnect() {
+    _wsService.disconnect();
+    state = state.copyWith(
+      isConnected: false,
+      isConnecting: false,
+      notifications: [],
+      lastError: null,
     );
   }
 
-  /// Limpia las notificaciones
-  void clearNotifications() {
-    state = state.copyWith(notifications: []);
-  }
+  /// Obtener número de notificaciones no leídas
+  int get unreadCount => state.notifications.where((n) => !n.isRead).length;
 
-  /// Agrega una notificación de prueba
+  /// Verificar conexión
+  bool get isConnected => _wsService.isConnected;
+
+  /// Agregar notificación de prueba
   void addTestNotification({
     required String title,
     required String message,
     required String type,
   }) {
-    final notification = {
-      'id': 'test_${DateTime.now().millisecondsSinceEpoch}',
-      'title': title,
-      'message': message,
-      'type': type,
-      'timestamp': DateTime.now().toIso8601String(),
-      'isRead': false,
-    };
-
-    final updatedNotifications = [notification, ...state.notifications];
-    final trimmedNotifications = updatedNotifications.take(50).toList();
-
-    state = state.copyWith(notifications: trimmedNotifications);
+    _addNotification(
+      AppNotification(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        type: type,
+        title: title,
+        message: message,
+        timestamp: DateTime.now(),
+      ),
+    );
   }
 
-  /// Limpia los mensajes
-  void clearMessages() {
-    state = state.copyWith(recentMessages: []);
+  /// Limpiar notificaciones locales
+  void clearLocalNotifications() {
+    _notificationService.cancelAllNotifications();
   }
 
-  /// Limpia errores
-  void clearError() {
-    state = state.copyWith(lastError: null);
+  /// Verificar si las notificaciones están habilitadas
+  Future<bool> areNotificationsEnabled() async {
+    return await _notificationService.areNotificationsEnabled();
   }
 
-  /// Reconecta automáticamente
-  Future<void> reconnect() async {
-    disconnect();
-    await Future.delayed(const Duration(seconds: 2));
-    await connectToWebSocket();
+  /// Abrir configuración de notificaciones
+  Future<void> openNotificationSettings() async {
+    await _notificationService.openNotificationSettings();
   }
 
   @override
   void dispose() {
-    _wsService.dispose();
+    // Cancelar suscripciones
+    _connSub?.cancel();
+    _notifSub?.cancel();
+    _paymentSub?.cancel();
+    _messageSub?.cancel();
+    _locationSub?.cancel();
+    _routeSub?.cancel();
+
+    _wsService.disconnect();
     super.dispose();
   }
 }
 
-/// Provider del WebSocket
+// Provider principal
 final webSocketProvider =
     StateNotifierProvider<WebSocketNotifier, WebSocketState>((ref) {
-      final wsService = WebSocketService();
-      return WebSocketNotifier(wsService, ref);
+      return WebSocketNotifier();
     });
 
-/// Provider para verificar si hay notificaciones no leídas
-final unreadNotificationsProvider = Provider<int>((ref) {
-  final wsState = ref.watch(webSocketProvider);
-  // Por simplicidad, todas las notificaciones se consideran no leídas
-  // En una implementación real, tendrías un campo 'isRead' en cada notificación
-  return wsState.notifications.length;
+// Providers derivados
+final isWebSocketConnectedProvider = Provider<bool>((ref) {
+  return ref.watch(webSocketProvider).isConnected;
 });
 
-/// Provider para obtener la última actualización de pago
+final notificationsProvider = Provider<List<AppNotification>>((ref) {
+  return ref.watch(webSocketProvider).notifications;
+});
+
+final unreadNotificationsCountProvider = Provider<int>((ref) {
+  return ref.watch(webSocketProvider.notifier).unreadCount;
+});
+
 final lastPaymentUpdateProvider = Provider<Map<String, dynamic>?>((ref) {
-  final wsState = ref.watch(webSocketProvider);
-  return wsState.lastPaymentUpdate;
+  return ref.watch(webSocketProvider).lastPaymentUpdate;
 });
 
-/// Provider para verificar el estado de conexión
-final connectionStatusProvider = Provider<bool>((ref) {
-  final wsState = ref.watch(webSocketProvider);
-  return wsState.isConnected;
+final lastLocationUpdateProvider = Provider<Map<String, dynamic>?>((ref) {
+  return ref.watch(webSocketProvider).lastLocationUpdate;
 });

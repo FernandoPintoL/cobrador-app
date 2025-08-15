@@ -10,7 +10,7 @@ import '../widgets/profile_image_widget.dart';
 import '../widgets/websocket_widgets.dart';
 import '../pantallas/profile_settings_screen.dart';
 import '../pantallas/notifications_screen.dart';
-import '../cliente/clientes_screen.dart';
+import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import '../creditos/credits_screen.dart';
 import 'package:intl/intl.dart';
 
@@ -71,7 +71,7 @@ class _CobradorDashboardScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Panel de Cobrador'),
+        title: const Text('Paneles de Cobrador'),
         backgroundColor: RoleColors.cobradorPrimary,
         foregroundColor: Colors.white,
         elevation: 4,
@@ -81,7 +81,7 @@ class _CobradorDashboardScreenState
             builder: (context, ref, child) {
               final wsState = ref.watch(webSocketProvider);
               final unreadCount = wsState.notifications
-                  .where((n) => !(n['isRead'] ?? false))
+                  .where((n) => !n.isRead)
                   .length;
 
               return IconButton(
@@ -250,13 +250,11 @@ class _CobradorDashboardScreenState
               const SizedBox(height: 24),
 
               // Widget de notificaciones
-              const NotificationsSummaryCard(),
-
-              const SizedBox(height: 24),
+              // const NotificationsSummaryCard(),
 
               // Acciones rápidas
               Text(
-                'Acciones Rápidas',
+                'Funciones de Gestión',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -270,38 +268,20 @@ class _CobradorDashboardScreenState
                 children: [
                   _buildCobradorActionCard(
                     context,
+                    'Gestionar Créditos',
+                    'Ver y gestionar créditos de clientes',
+                    Icons.credit_card,
+                    Colors.green,
+                        () => _navigateToCreditManagement(context),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildCobradorActionCard(
+                    context,
                     'Gestionar Clientes',
                     'Ver y gestionar mis clientes asignados',
                     Icons.people_alt,
                     Colors.blue,
                     () => _navigateToClientManagement(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Gestionar Créditos',
-                    'Ver y gestionar créditos de clientes',
-                    Icons.credit_card,
-                    Colors.green,
-                    () => _navigateToCreditManagement(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Ruta del Día',
-                    'Ver mi ruta de cobro para hoy',
-                    Icons.map,
-                    Colors.orange,
-                    () => _navigateToDailyRoute(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Registrar Cobro',
-                    'Registrar un nuevo cobro',
-                    Icons.payment,
-                    Colors.purple,
-                    () => _navigateToRecordPayment(context),
                   ),
                   const SizedBox(height: 12),
                   _buildCobradorActionCard(
@@ -449,7 +429,9 @@ class _CobradorDashboardScreenState
   void _navigateToClientManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ClientesScreen()),
+      MaterialPageRoute(
+        builder: (context) => const ClientesScreen(userRole: 'cobrador'),
+      ),
     );
   }
 

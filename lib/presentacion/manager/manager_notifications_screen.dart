@@ -166,8 +166,9 @@ class _ManagerNotificationsScreenState
       ),
       floatingActionButton: !wsState.isConnected
           ? FloatingActionButton(
-              onPressed: () =>
-                  ref.read(webSocketProvider.notifier).connectToWebSocket(),
+              onPressed: () async {
+                await ref.read(authProvider.notifier).initialize();
+              },
               backgroundColor: Colors.green,
               child: const Icon(Icons.wifi, color: Colors.white),
               tooltip: 'Reconectar WebSocket',
@@ -179,7 +180,7 @@ class _ManagerNotificationsScreenState
   Widget _buildStatsPanel(ManagerState managerState, WebSocketState wsState) {
     final totalNotifications = wsState.notifications.length;
     final unreadNotifications = wsState.notifications
-        .where((n) => !(n['isRead'] ?? false))
+        .where((n) => !n.isRead)
         .length;
     final totalCobradores = managerState.cobradoresAsignados.length;
     final totalClientes = managerState.clientesDelManager.length;
@@ -283,44 +284,34 @@ class _ManagerNotificationsScreenState
     );
   }
 
-  List<Map<String, dynamic>> _getFilteredNotifications(
+  List<AppNotification> _getFilteredNotifications(
     WebSocketState wsState,
     String filter,
   ) {
     switch (filter) {
       case 'unread':
-        return wsState.notifications
-            .where((n) => !(n['isRead'] ?? false))
-            .toList();
+        return wsState.notifications.where((n) => !n.isRead).toList();
       case 'cobrador':
         return wsState.notifications
             .where(
               (n) =>
-                  (n['type']?.toString().contains('cobrador') ?? false) ||
-                  (n['type']?.toString().contains('collector') ?? false) ||
-                  (n['message']?.toString().toLowerCase().contains(
-                        'cobrador',
-                      ) ??
-                      false),
+                  n.type.contains('cobrador') ||
+                  n.type.contains('collector') ||
+                  n.message.toLowerCase().contains('cobrador'),
             )
             .toList();
       case 'cliente':
         return wsState.notifications
             .where(
               (n) =>
-                  (n['type']?.toString().contains('client') ?? false) ||
-                  (n['type']?.toString().contains('customer') ?? false) ||
-                  (n['message']?.toString().toLowerCase().contains('cliente') ??
-                      false),
+                  n.type.contains('client') ||
+                  n.type.contains('customer') ||
+                  n.message.toLowerCase().contains('cliente'),
             )
             .toList();
       case 'payment':
         return wsState.notifications
-            .where(
-              (n) =>
-                  (n['type']?.toString().contains('payment') ?? false) ||
-                  (n['type']?.toString().contains('pago') ?? false),
-            )
+            .where((n) => n.type.contains('payment') || n.type.contains('pago'))
             .toList();
       default:
         return wsState.notifications;
@@ -341,7 +332,7 @@ class _ManagerNotificationsScreenState
           onRefresh: () async {
             // Reconectar WebSocket si está desconectado
             if (!wsState.isConnected) {
-              ref.read(webSocketProvider.notifier).connectToWebSocket();
+              await ref.read(authProvider.notifier).initialize();
             }
 
             // Recargar datos del manager
@@ -440,16 +431,10 @@ class _ManagerNotificationsScreenState
     );
   }
 
-  Widget _buildNotificationCard(Map<String, dynamic> notification) {
-    final isUnread = !(notification['isRead'] ?? false);
-    final timestamp =
-        DateTime.tryParse(notification['timestamp']?.toString() ?? '') ??
-        DateTime.now();
-    final timeAgo = _getTimeAgo(timestamp);
-    final title = notification['title']?.toString() ?? 'Notificación';
-    final message = notification['message']?.toString() ?? '';
-    final type = notification['type']?.toString() ?? '';
-    final priority = notification['priority']?.toString() ?? 'normal';
+  Widget _buildNotificationCard(AppNotification notification) {
+    final isUnread = !notification.isRead;
+    final timeAgo = _getTimeAgo(notification.timestamp);
+    final priority = notification.data?['priority']?.toString() ?? 'normal';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -473,15 +458,15 @@ class _ManagerNotificationsScreenState
                 children: [
                   // Icono según el tipo
                   Icon(
-                    _getNotificationIcon(type),
-                    color: _getNotificationColor(type),
+                    _getNotificationIcon(notification.type),
+                    color: _getNotificationColor(notification.type),
                     size: 20,
                   ),
                   const SizedBox(width: 8),
                   // Título
                   Expanded(
                     child: Text(
-                      title,
+                      notification.title,
                       style: TextStyle(
                         fontWeight: isUnread
                             ? FontWeight.bold
@@ -528,7 +513,7 @@ class _ManagerNotificationsScreenState
               const SizedBox(height: 8),
               // Mensaje
               Text(
-                message,
+                notification.message,
                 style: TextStyle(
                   color: Theme.of(context).brightness == Brightness.dark
                       ? Colors.grey[400]
@@ -550,24 +535,28 @@ class _ManagerNotificationsScreenState
                           : Colors.grey[500],
                     ),
                   ),
-                  if (type.isNotEmpty)
+                  if (notification.type.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: _getNotificationColor(type).withOpacity(0.1),
+                        color: _getNotificationColor(
+                          notification.type,
+                        ).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _getNotificationColor(type).withOpacity(0.3),
+                          color: _getNotificationColor(
+                            notification.type,
+                          ).withOpacity(0.3),
                         ),
                       ),
                       child: Text(
-                        _getTypeLabel(type),
+                        _getTypeLabel(notification.type),
                         style: TextStyle(
                           fontSize: 10,
-                          color: _getNotificationColor(type),
+                          color: _getNotificationColor(notification.type),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -658,11 +647,9 @@ class _ManagerNotificationsScreenState
     }
   }
 
-  void _markAsRead(Map<String, dynamic> notification) {
-    if (!(notification['isRead'] ?? false)) {
-      setState(() {
-        notification['isRead'] = true;
-      });
+  void _markAsRead(AppNotification notification) {
+    if (!notification.isRead) {
+      ref.read(webSocketProvider.notifier).markAsRead(notification.id);
 
       // Mostrar feedback visual
       ScaffoldMessenger.of(context).showSnackBar(
@@ -675,7 +662,7 @@ class _ManagerNotificationsScreenState
     }
   }
 
-  void _showNotificationActions(Map<String, dynamic> notification) {
+  void _showNotificationActions(AppNotification notification) {
     showModalBottomSheet(
       context: context,
       builder: (context) => Container(
@@ -686,23 +673,15 @@ class _ManagerNotificationsScreenState
             ListTile(
               leading: const Icon(Icons.mark_email_read),
               title: Text(
-                notification['isRead'] == true
+                notification.isRead
                     ? 'Marcar como no leída'
                     : 'Marcar como leída',
               ),
               onTap: () {
                 Navigator.pop(context);
-                setState(() {
-                  notification['isRead'] = !(notification['isRead'] ?? false);
-                });
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Eliminar notificación'),
-              onTap: () {
-                Navigator.pop(context);
-                _deleteNotification(notification);
+                ref
+                    .read(webSocketProvider.notifier)
+                    .markAsRead(notification.id);
               },
             ),
             ListTile(
@@ -719,45 +698,29 @@ class _ManagerNotificationsScreenState
     );
   }
 
-  void _deleteNotification(Map<String, dynamic> notification) {
-    final wsState = ref.read(webSocketProvider);
-    setState(() {
-      wsState.notifications.remove(notification);
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Notificación eliminada'),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
-  void _showNotificationDetails(Map<String, dynamic> notification) {
+  void _showNotificationDetails(AppNotification notification) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(notification['title']?.toString() ?? 'Notificación'),
+        title: Text(notification.title),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('Mensaje:'),
-              Text(notification['message']?.toString() ?? 'Sin mensaje'),
+              Text(notification.message),
               const SizedBox(height: 8),
               Text('Tipo:'),
-              Text(notification['type']?.toString() ?? 'No especificado'),
+              Text(notification.type),
               const SizedBox(height: 8),
               Text('Fecha:'),
-              Text(
-                _getTimeAgo(
-                  DateTime.tryParse(
-                        notification['timestamp']?.toString() ?? '',
-                      ) ??
-                      DateTime.now(),
-                ),
-              ),
+              Text(_getTimeAgo(notification.timestamp)),
+              if (notification.data != null) ...[
+                const SizedBox(height: 8),
+                Text('Datos adicionales:'),
+                Text(notification.data.toString()),
+              ],
             ],
           ),
         ),
@@ -774,11 +737,7 @@ class _ManagerNotificationsScreenState
   void _handleMenuAction(String action) {
     switch (action) {
       case 'mark_all_read':
-        final wsState = ref.read(webSocketProvider);
-        for (var notification in wsState.notifications) {
-          notification['isRead'] = true;
-        }
-        setState(() {});
+        ref.read(webSocketProvider.notifier).markAllAsRead();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Todas las notificaciones marcadas como leídas'),
@@ -810,9 +769,7 @@ class _ManagerNotificationsScreenState
           ),
           ElevatedButton(
             onPressed: () {
-              final wsState = ref.read(webSocketProvider);
-              wsState.notifications.clear();
-              setState(() {});
+              ref.read(webSocketProvider.notifier).clearNotifications();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

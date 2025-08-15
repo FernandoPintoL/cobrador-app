@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
-import '../../datos/servicios/api_services.dart';
 import '../../datos/servicios/client_api_service.dart';
+import '../../datos/servicios/manager_api_service.dart';
+import '../../datos/servicios/user_api_service.dart';
 
 /// Estado para la gestión de managers y sus cobradores asignados
 class ManagerState {

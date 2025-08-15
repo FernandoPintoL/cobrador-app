@@ -4,12 +4,12 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../config/role_colors.dart';
+import '../creditos/credits_screen.dart';
 import 'manager_cobradores_screen.dart';
-import 'manager_clientes_screen.dart';
+import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import 'manager_reportes_screen.dart';
 import 'manager_notifications_screen.dart';
 import 'manager_client_assignment_screen.dart';
-import 'manager_credits_screen.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -64,7 +64,7 @@ class _ManagerDashboardScreenState
             builder: (context, ref, child) {
               final wsState = ref.watch(webSocketProvider);
               final unreadCount = wsState.notifications
-                  .where((n) => !(n['isRead'] ?? false))
+                  .where((n) => !n.isRead)
                   .length;
 
               return IconButton(
@@ -172,7 +172,7 @@ class _ManagerDashboardScreenState
 
             // Estadísticas del equipo
             const Text(
-              'Estadísticas del Equipo',
+              'Mis estadísticas',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -226,6 +226,15 @@ class _ManagerDashboardScreenState
               children: [
                 _buildManagerFunctionCard(
                   context,
+                  'Gestión de Créditos',
+                  'Crear, aprobar y gestionar créditos del equipo',
+                  Icons.credit_card,
+                  Colors.teal,
+                      () => _navigateToCreditManagement(context),
+                ),
+                const SizedBox(height: 12),
+                _buildManagerFunctionCard(
+                  context,
                   'Gestión de Cobradores',
                   'Crear, editar y asignar cobradores',
                   Icons.person_add,
@@ -241,15 +250,6 @@ class _ManagerDashboardScreenState
                   Colors.green,
                   () => _navigateToTeamClientManagement(context),
                 ),
-                /* const SizedBox(height: 12),
-                _buildManagerFunctionCard(
-                  context,
-                  'Asignación de Rutas',
-                  'Asignar rutas y territorios',
-                  Icons.map,
-                  Colors.orange,
-                  () => _navigateToRouteAssignment(context),
-                ), */
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
@@ -259,33 +259,6 @@ class _ManagerDashboardScreenState
                   Colors.purple,
                   () => _navigateToCollectorReports(context),
                 ),
-                const SizedBox(height: 12),
-                _buildManagerFunctionCard(
-                  context,
-                  'Gestión de Créditos',
-                  'Crear, aprobar y gestionar créditos del equipo',
-                  Icons.credit_card,
-                  Colors.teal,
-                  () => _navigateToCreditManagement(context),
-                ),
-                /* const SizedBox(height: 12),
-                _buildManagerFunctionCard(
-                  context,
-                  'Control de Cobros',
-                  'Monitorear y controlar cobros',
-                  Icons.monetization_on,
-                  Colors.red,
-                  () => _navigateToCollectionControl(context),
-                ), 
-                const SizedBox(height: 12),
-                _buildManagerFunctionCard(
-                  context,
-                  'Configuración de Zonas',
-                  'Definir zonas de cobro',
-                  Icons.location_on,
-                  Colors.teal,
-                  () => _navigateToZoneConfiguration(context),
-                ),*/
               ],
             ),
           ],
@@ -424,7 +397,9 @@ class _ManagerDashboardScreenState
   void _navigateToTeamClientManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ManagerClientesScreen()),
+      MaterialPageRoute(
+        builder: (context) => const ClientesScreen(userRole: 'manager'),
+      ),
     );
   }
 
@@ -447,7 +422,7 @@ class _ManagerDashboardScreenState
   void _navigateToCreditManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ManagerCreditsScreen()),
+      MaterialPageRoute(builder: (context) => const CreditsScreen()),
     );
   }
 }

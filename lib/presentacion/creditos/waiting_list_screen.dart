@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
+import '../../ui/widgets/validation_error_display.dart'; // Importar widget de errores
 import 'credit_detail_screen.dart';
 
 class WaitingListScreen extends ConsumerStatefulWidget {
@@ -664,52 +665,126 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
   }
 
   Future<void> _showQuickApprovalDialog(Credito credit) async {
-    DateTime selectedDate = DateTime.now().add(const Duration(hours: 2));
+    final DateTime now = DateTime.now();
+    DateTime selectedDate = DateTime(now.year, now.month, now.day, now.hour, now.minute);
 
-    final result = await showDialog<bool>(
+    // Agregar una hora para evitar errores de validación de fecha
+    selectedDate = selectedDate.add(const Duration(hours: 1));
+
+    final creditState = ref.watch(creditProvider);
+
+    // Usamos StatefulBuilder para poder actualizar el diálogo cuando cambian los errores
+    await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Aprobación Rápida'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Aprobar para Entrega'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+              ),
+              Text(
+                'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+              ),
+              const SizedBox(height: 16),
+              const Text('Fecha y hora de entrega programada:'),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () async {
+                  final DateTime? pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: now,
+                    lastDate: DateTime(now.year + 1),
+                  );
+                  if (pickedDate != null) {
+                    final TimeOfDay? pickedTime = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(selectedDate),
+                    );
+                    if (pickedTime != null) {
+                      setState(() {
+                        selectedDate = DateTime(
+                          pickedDate.year,
+                          pickedDate.month,
+                          pickedDate.day,
+                          pickedTime.hour,
+                          pickedTime.minute,
+                        );
+                      });
+                    }
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_today, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        DateFormat('dd/MM/yyyy HH:mm').format(selectedDate),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('¿Aprobar para entrega inmediata?'),
+
+              // Mostrar errores de validación si existen
+              if (creditState.validationErrors.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: ValidationErrorDisplay(
+                    errors: creditState.validationErrors,
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
             ),
-            Text(
-              'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+            ElevatedButton(
+              onPressed: () async {
+                final result = await ref
+                    .read(creditProvider.notifier)
+                    .approveCreditForDelivery(
+                      creditId: credit.id,
+                      scheduledDeliveryDate: selectedDate,
+                      notes: 'Aprobación rápida para entrega inmediata',
+                    );
+
+                if (result) {
+                  Navigator.pop(context, true);
+                  _loadInitialData();
+                } else {
+                  // Actualizar el diálogo para mostrar los errores
+                  setState(() {});
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Aprobar'),
             ),
-            const SizedBox(height: 16),
-            const Text('¿Aprobar para entrega inmediata?'),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Aprobar'),
-          ),
-        ],
       ),
     );
-
-    if (result == true) {
-      await ref
-          .read(creditProvider.notifier)
-          .approveCreditForDelivery(
-            creditId: credit.id,
-            scheduledDeliveryDate: selectedDate,
-            notes: 'Aprobación rápida para entrega inmediata',
-          );
-      _loadInitialData();
-    }
   }
 
   Future<void> _showQuickRejectionDialog(Credito credit) async {

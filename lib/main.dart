@@ -4,20 +4,58 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'negocio/providers/auth_provider.dart';
-import 'negocio/providers/websocket_provider.dart';
+import 'datos/servicios/websocket_service.dart';
+import 'datos/servicios/notification_service.dart';
 import 'presentacion/pantallas/splash_screen.dart';
 import 'presentacion/pantallas/login_screen.dart';
-import 'presentacion/pantallas/admin_dashboard_screen.dart';
+import 'presentacion/superadmin/admin_dashboard_screen.dart';
 import 'presentacion/manager/manager_dashboard_screen.dart';
 import 'presentacion/cobrador/cobrador_dashboard_screen.dart';
 
 Future<void> main() async {
+  // Asegurarse de que Flutter esté inicializado
+  WidgetsFlutterBinding.ensureInitialized();
+
   // Cargar variables de entorno con manejo de errores
   try {
     await dotenv.load(fileName: ".env");
+    print("✅ Variables de entorno cargadas correctamente");
   } catch (e) {
     print("Error cargando .env: $e");
     // Continuar sin variables de entorno
+  }
+
+  // Configurar WebSocket con la URL del .env
+  try {
+    final websocketUrl = dotenv.env['WEBSOCKET_URL'];
+    if (websocketUrl != null && websocketUrl.isNotEmpty) {
+      final wsService = WebSocketService();
+      // Determinar si es producción basándose en la URL
+      final isProduction = websocketUrl.contains('railway.app') ||
+                          websocketUrl.startsWith('wss://');
+
+      wsService.configureServer(
+        url: websocketUrl,
+        isProduction: isProduction,
+        enableSSL: websocketUrl.startsWith('wss://'),
+      );
+
+      print("🔧 WebSocket configurado con URL: $websocketUrl");
+      print("🏭 Modo: ${isProduction ? 'Producción' : 'Desarrollo'}");
+    } else {
+      print("⚠️ WEBSOCKET_URL no encontrada en .env");
+    }
+  } catch (e) {
+    print("❌ Error configurando WebSocket: $e");
+  }
+
+  // Inicializar el servicio de notificaciones
+  try {
+    final notificationService = NotificationService();
+    await notificationService.initialize();
+    print("🔔 Servicio de notificaciones inicializado");
+  } catch (e) {
+    print("⚠️ Error inicializando notificaciones: $e");
   }
 
   runApp(const ProviderScope(child: MyApp()));
@@ -56,13 +94,15 @@ class _MyAppState extends ConsumerState<MyApp> {
       if (next.isAuthenticated &&
           next.usuario != null &&
           (previous == null || !previous.isAuthenticated)) {
-        // Usuario se autenticó, conectar WebSocket
-        print('🔌 Usuario autenticado, conectando WebSocket...');
-        ref.read(webSocketProvider.notifier).connectToWebSocket();
+        // Usuario se autenticó, WebSocket se conecta automáticamente
+        print(
+          '🔌 Usuario autenticado, WebSocket se conectará automáticamente...',
+        );
       } else if (previous?.isAuthenticated == true && !next.isAuthenticated) {
-        // Usuario cerró sesión, desconectar WebSocket
-        print('🔌 Usuario cerró sesión, desconectando WebSocket...');
-        ref.read(webSocketProvider.notifier).disconnect();
+        // Usuario cerró sesión, WebSocket se desconecta automáticamente
+        print(
+          '🔌 Usuario cerró sesión, WebSocket se desconectará automáticamente...',
+        );
         print('🚪 Usuario ha cerrado sesión - Redirigiendo a LoginScreen');
       }
     });

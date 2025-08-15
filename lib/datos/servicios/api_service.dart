@@ -6,11 +6,10 @@
 // - credit_api_service.dart - Para gestión de créditos
 // - payment_api_service.dart - Para gestión de pagos
 
-// Re-exporta el servicio principal para retrocompatibilidad
-export 'api_services.dart';
-
-// Clase principal que mantiene la compatibilidad con el código existente
-import 'api_services.dart';
+import 'auth_api_service.dart';
+import 'client_api_service.dart';
+import 'credit_api_service.dart';
+import 'user_api_service.dart';
 
 /// DEPRECADO: Usar los servicios específicos en su lugar
 /// Esta clase se mantiene solo para retrocompatibilidad

@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../datos/servicios/api_services.dart';
+import '../../datos/modelos/api_exception.dart';
+import '../../datos/servicios/credit_api_service.dart';
+import '../../datos/servicios/payment_api_service.dart';
+import '../../datos/servicios/websocket_service.dart';
 import '../../datos/modelos/credito.dart';
 import 'auth_provider.dart';
 import 'websocket_provider.dart';
@@ -20,6 +23,7 @@ class CreditState {
   final int currentPage;
   final int totalPages;
   final int totalItems;
+  final Map<String, dynamic> validationErrors; // Errores de validación
 
   CreditState({
     this.credits = const [],
@@ -36,6 +40,7 @@ class CreditState {
     this.currentPage = 1,
     this.totalPages = 1,
     this.totalItems = 0,
+    this.validationErrors = const {}, // Inicializar como vacío
   });
 
   CreditState copyWith({
@@ -53,6 +58,7 @@ class CreditState {
     int? currentPage,
     int? totalPages,
     int? totalItems,
+    Map<String, dynamic>? validationErrors, // Agregar parámetros de copia
   }) {
     return CreditState(
       credits: credits ?? this.credits,
@@ -73,6 +79,7 @@ class CreditState {
       currentPage: currentPage ?? this.currentPage,
       totalPages: totalPages ?? this.totalPages,
       totalItems: totalItems ?? this.totalItems,
+      validationErrors: validationErrors ?? this.validationErrors, // Copiar errores de validación
     );
   }
 }
@@ -199,6 +206,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
           isLoading: false,
           successMessage: 'Crédito creado exitosamente',
         );
+
+        // 🔔 NOTIFICAR AL MANAGER VÍA WEBSOCKET
+        _notifyCreditCreated(nuevoCredito);
 
         print('✅ Crédito creado exitosamente');
         return true;
@@ -543,28 +553,25 @@ class CreditNotifier extends StateNotifier<CreditState> {
       final wsNotifier = _ref.read(webSocketProvider.notifier);
 
       if (authState.usuario != null) {
-        wsNotifier.notifyPaymentUpdate(
-          paymentId: paymentResult['payment']?['id']?.toString() ?? 'unknown',
-          cobradorId: authState.usuario!.id.toString(),
-          clientId: credit.clientId.toString(),
-          amount: paymentResult['payment']?['amount']?.toDouble() ?? 0.0,
-          status: 'completed',
-          notes: paymentResult['payment']?['notes'],
-        );
-
-        // También enviar notificación al cliente
-        wsNotifier.sendCreditNotification(
-          targetUserId: credit.clientId.toString(),
-          title: 'Pago Procesado',
-          message:
-              'Se ha registrado un pago de Bs. ${paymentResult['payment']?['amount']?.toStringAsFixed(2) ?? '0.00'}',
-          type: 'payment',
-          additionalData: {
-            'creditId': credit.id,
-            'paymentId': paymentResult['payment']?['id'],
+        // Enviar notificación de pago realizado
+        wsNotifier.notifyPaymentMade({
+          'payment': {
+            'id': paymentResult['payment']?['id'],
             'amount': paymentResult['payment']?['amount'],
+            'notes': paymentResult['payment']?['notes'],
+            'credit_id': credit.id,
+            'cobrador_id': authState.usuario!.id,
+            'client_id': credit.clientId,
+            'client_name': credit.client?.nombre ?? 'Cliente',
           },
-        );
+          'credit': {
+            'id': credit.id,
+            'client_name': credit.client?.nombre ?? 'Cliente',
+            'balance': credit.balance,
+          },
+          'action': 'payment_made',
+          'timestamp': DateTime.now().toIso8601String(),
+        });
 
         print('🔔 Notificación WebSocket enviada para pago');
       }
@@ -999,11 +1006,12 @@ class CreditNotifier extends StateNotifier<CreditState> {
         isLoading: true,
         errorMessage: null,
         successMessage: null,
+        validationErrors: {}, // Limpiar errores de validación anteriores
       );
       print('✅ Aprobando crédito para entrega: $creditId');
 
       final response = await _creditApiService.approveCreditForDelivery(
-        creditId,
+        creditId: creditId.toString(),
         scheduledDeliveryDate: scheduledDeliveryDate,
         notes: notes,
       );
@@ -1019,22 +1027,36 @@ class CreditNotifier extends StateNotifier<CreditState> {
           successMessage: 'Crédito aprobado para entrega exitosamente',
         );
 
-        print('✅ Crédito aprobado para entrega exitosamente');
         return true;
-      } else {
-        throw Exception(response['message'] ?? 'Error al aprobar crédito');
       }
+
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'No se pudo aprobar el crédito',
+      );
+      return false;
+    } on ApiException catch (e) {
+      print('❌ ApiException: ${e.message}');
+
+      // Capturar errores de validación específicamente
+      Map<String, dynamic> validationErrors = {};
+      if (e.hasValidationErrors) {
+        validationErrors = e.validationErrors;
+        print('❌ Errores de validación: $validationErrors');
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: e.toString(),
+        validationErrors: validationErrors, // Almacenar errores de validación
+      );
+      return false;
     } catch (e) {
-      print('❌ Error al aprobar crédito para entrega: $e');
-
-      String errorMessage = 'Error al aprobar crédito';
-      if (e.toString().contains('403')) {
-        errorMessage = 'No tienes permisos para aprobar créditos';
-      } else if (e.toString().contains('404')) {
-        errorMessage = 'Crédito no encontrado';
-      }
-
-      state = state.copyWith(isLoading: false, errorMessage: errorMessage);
+      print('❌ Error general al aprobar crédito: $e');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Error al aprobar crédito para entrega: $e',
+      );
       return false;
     }
   }
@@ -1262,6 +1284,69 @@ class CreditNotifier extends StateNotifier<CreditState> {
       loadOverdueDeliveryCredits(),
       loadWaitingListSummary(),
     ]);
+  }
+
+  /// Notifica la creación de un crédito a través de WebSocket
+  void _notifyCreditCreated(Credito credit) {
+    try {
+      final authState = _ref.read(authProvider);
+      final wsNotifier = _ref.read(webSocketProvider.notifier);
+
+      if (authState.usuario != null) {
+        final cobrador = authState.usuario!;
+
+        // Obtener información del cliente
+        final clientName = credit.client?.nombre ?? 'Cliente';
+
+        // Preparar datos del crédito para la notificación
+        final creditData = {
+          'id': credit.id,
+          'amount': credit.amount,
+          'balance': credit.balance,
+          'frequency': credit.frequency,
+          'status': credit.status,
+          'client_id': credit.clientId,
+          'client_name': clientName,
+          'start_date': credit.startDate.toIso8601String(),
+          'end_date': credit.endDate.toIso8601String(),
+          'created_at': DateTime.now().toIso8601String(),
+        };
+
+        // Usar el WebSocketService directamente para enviar el evento de ciclo de vida
+        final wsServiceInstance = WebSocketService();
+        wsServiceInstance.sendCreditLifecycle(
+          action: 'created',
+          creditId: credit.id.toString(),
+          credit: creditData,
+          message: 'El cobrador ${cobrador.nombre} ha creado un crédito de ${credit.amount} Bs para $clientName que requiere aprobación',
+        );
+
+        // También enviar notificación usando el método existente del websocket_provider
+        wsNotifier.notifyCreditCreated({
+          'creditId': credit.id.toString(),
+          'title': 'Nuevo Crédito Creado',
+          'message': 'El cobrador ${cobrador.nombre} ha creado un crédito de ${credit.amount} Bs para $clientName',
+          'credit': creditData,
+          'cobrador': {
+            'id': cobrador.id,
+            'name': cobrador.nombre,
+            'email': cobrador.email,
+          },
+          'action': 'created',
+          'timestamp': DateTime.now().toIso8601String(),
+        });
+
+        print('🔔 Notificación WebSocket enviada para nuevo crédito ID: ${credit.id}');
+        print('   - Cobrador: ${cobrador.nombre}');
+        print('   - Cliente: $clientName');
+        print('   - Monto: ${credit.amount} Bs');
+      } else {
+        print('⚠️ No se puede enviar notificación: usuario no autenticado');
+      }
+    } catch (e) {
+      print('⚠️ Error enviando notificación WebSocket para crédito: $e');
+      // No fallar el proceso de creación por error en notificación
+    }
   }
 }
 

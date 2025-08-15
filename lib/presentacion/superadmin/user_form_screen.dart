@@ -6,7 +6,7 @@ import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/cobrador_assignment_provider.dart';
 import '../../datos/modelos/usuario.dart';
 import '../widgets/validation_error_widgets.dart';
-import 'location_picker_screen.dart';
+import '../pantallas/location_picker_screen.dart';
 
 class UserFormScreen extends ConsumerStatefulWidget {
   final String userType;

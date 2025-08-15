@@ -57,7 +57,7 @@ class _CobradorAssignmentScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestión de Asignaciones'),
+        title: const Text('Gestión de Asignacionessss'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [

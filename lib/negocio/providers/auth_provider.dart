@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../datos/servicios/api_service.dart';
 import '../../datos/servicios/storage_service.dart';
+import 'websocket_provider.dart';
 
 class AuthState {
   final Usuario? usuario;
@@ -42,8 +43,9 @@ class AuthState {
 class AuthNotifier extends StateNotifier<AuthState> {
   final ApiService _apiService = ApiService();
   final StorageService _storageService = StorageService();
+  Ref? _ref;
 
-  AuthNotifier() : super(const AuthState());
+  AuthNotifier([this._ref]) : super(const AuthState());
 
   // Inicializar la aplicación verificando si hay sesión guardada
   Future<void> initialize() async {
@@ -56,10 +58,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (hasSession) {
         // Obtener usuario desde almacenamiento local primero
         final usuario = await _storageService.getUser();
-        print('🔍 DEBUG: Usuario recuperado del almacenamiento:');
+        /*print('🔍 DEBUG: Usuario recuperado del almacenamiento:');
         print('  - Usuario: ${usuario?.nombre}');
         print('  - Email: ${usuario?.email}');
-        print('  - Roles: ${usuario?.roles}');
+        print('  - Roles: ${usuario?.roles}');*/
 
         if (usuario != null && usuario.roles.isNotEmpty) {
           // Intentar restaurar sesión con el servidor
@@ -86,6 +88,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
           // Validar la sesión restaurada
           await validateAndFixSession();
+
+          // Conectar WebSocket para sesión restaurada
+          _connectWebSocketIfAvailable();
 
           print('✅ Usuario restaurado exitosamente');
           return;
@@ -143,6 +148,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (usuario != null) {
         print('✅ Login exitoso, guardando usuario en el estado');
         state = state.copyWith(usuario: usuario, isLoading: false);
+
+        // Conectar WebSocket después del login exitoso
+        _connectWebSocketIfAvailable();
       } else {
         throw Exception('No se pudo obtener información del usuario');
       }
@@ -168,6 +176,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true);
 
     try {
+      // Desconectar WebSocket antes del logout
+      _disconnectWebSocket();
+
       // Llamar al endpoint de logout si hay conexión
       print('📡 Llamando al endpoint de logout...');
       await _apiService.logout();
@@ -244,7 +255,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // Método para validar y corregir sesión si es necesario
   Future<void> validateAndFixSession() async {
     if (state.usuario != null) {
-      print('🔍 Validando sesión actual...');
+      print('⁉️ Validando sesión actual...');
       print('  - Usuario: ${state.usuario!.nombre}');
       print('  - Roles: ${state.usuario!.roles}');
 
@@ -270,8 +281,51 @@ class AuthNotifier extends StateNotifier<AuthState> {
       print('✅ Sesión válida');
     }
   }
+
+  /// Conectar WebSocket si está disponible
+  void _connectWebSocketIfAvailable() {
+    if (_ref != null && state.usuario != null) {
+      try {
+        final wsNotifier = _ref!.read(webSocketProvider.notifier);
+        final user = state.usuario!;
+        // Determinar tipo de usuario según roles
+        String userType = 'client';
+        if (user.roles.contains('admin')) {
+          userType = 'admin';
+        } else if (user.roles.contains('manager')) {
+          userType = 'manager';
+        } else if (user.roles.contains('cobrador')) {
+          userType = 'cobrador';
+        }
+
+        wsNotifier.connectWithUser(
+          userId: user.id.toString(),
+          userType: userType,
+          userName: user.nombre ?? 'Usuario'
+        );
+        print('🔌 Iniciando conexión WebSocket para $userType: ${user.nombre}');
+      } catch (e) {
+        print('⚠️ Error al conectar WebSocket: $e');
+      }
+    } else {
+      print('⚠️ No se puede conectar WebSocket: ref o usuario es null');
+    }
+  }
+
+  /// Desconectar WebSocket
+  void _disconnectWebSocket() {
+    if (_ref != null) {
+      try {
+        final wsNotifier = _ref!.read(webSocketProvider.notifier);
+        wsNotifier.disconnect();
+        print('🔌 WebSocket desconectado');
+      } catch (e) {
+        print('⚠️ Error al desconectar WebSocket: $e');
+      }
+    }
+  }
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier();
+  return AuthNotifier(ref);
 });

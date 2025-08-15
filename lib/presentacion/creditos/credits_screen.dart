@@ -31,7 +31,7 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
   void _loadInitialData() {
     ref.read(creditProvider.notifier).loadCredits();
     ref.read(creditProvider.notifier).loadCreditsRequiringAttention();
-    ref.read(creditProvider.notifier).loadCobradorStats();
+    //ref.read(creditProvider.notifier).loadCobradorStats();
   }
 
   @override
@@ -133,7 +133,7 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
       body: Column(
         children: [
           // Estadísticas
-          if (creditState.stats != null) _buildStatsCard(creditState.stats!),
+          //if (creditState.stats != null) _buildStatsCard(creditState.stats!),
 
           // Banner de lista de espera
           Consumer(
@@ -447,7 +447,7 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
                       },
                     ),
                     const SizedBox(height: 8),
-                    SizedBox(
+                    /*SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () {
@@ -474,7 +474,7 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
                               : null,
                         ),
                       ),
-                    ),
+                    ),*/
                   ],
                 );
               }
@@ -536,7 +536,7 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
+                  /*Expanded(
                     flex: 2,
                     child: ElevatedButton.icon(
                       onPressed: () {
@@ -566,7 +566,7 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
                         ),
                       ),
                     ),
-                  ),
+                  ),*/
                 ],
               );
             },

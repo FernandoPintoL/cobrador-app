@@ -409,22 +409,28 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.grey.shade400),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '${installment.installmentNumber}',
-              style: TextStyle(
-                color: textColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+        padding: const EdgeInsets.all(2),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${installment.installmentNumber}',
+                style: TextStyle(
+                  color: textColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
-            ),
-            Text(
-              DateFormat('dd/MM').format(installment.dueDate),
-              style: TextStyle(color: textColor, fontSize: 10),
-            ),
-          ],
+              Text(
+                DateFormat('dd/MM').format(installment.dueDate),
+                style: TextStyle(color: textColor, fontSize: 10),
+              ),
+            ],
+          ),
         ),
       ),
     );

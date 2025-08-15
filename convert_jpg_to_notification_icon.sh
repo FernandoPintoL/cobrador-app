@@ -1,0 +1,20 @@
+#!/bin/bash
+# Script para ayudar a convertir imagen jpg a icono de notificación
+
+echo "=== CONVERSIÓN DE IMAGEN JPG A ICONO DE NOTIFICACIÓN ==="
+echo ""
+echo "1. Tu imagen .jpg debe convertirse a .png con fondo transparente"
+echo "2. Herramientas recomendadas:"
+echo "   - Online: https://www.remove.bg (para quitar fondo)"
+echo "   - Online: https://romannurik.github.io/AndroidAssetStudio/icons-notification.html"
+echo "   - GIMP (gratuito)"
+echo ""
+echo "3. Especificaciones técnicas:"
+echo "   - Formato: PNG con transparencia"
+echo "   - Colores: Preferiblemente blanco/gris"
+echo "   - Tamaño base: 24x24dp"
+echo ""
+echo "4. Ubicación final:"
+echo "   android/app/src/main/res/drawable/ic_notification.png"
+echo ""
+echo "5. NO USAR ARCHIVOS .JPG - Android los rechaza automáticamente"

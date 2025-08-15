@@ -8,9 +8,9 @@ import '../../negocio/providers/user_management_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
+import '../cliente/clientes_screen.dart'; // Nueva pantalla genérica
 import 'manager_cobrador_form_screen.dart';
 import 'manager_client_assignment_screen.dart';
-import 'cobrador_clientes_screen.dart';
 
 class ManagerCobradoresScreen extends ConsumerStatefulWidget {
   const ManagerCobradoresScreen({super.key});
@@ -479,7 +479,8 @@ class _ManagerCobradoresScreenState
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CobradorClientesScreen(cobrador: cobrador),
+        builder: (context) =>
+            ClientesScreen(userRole: 'manager', cobrador: cobrador),
       ),
     );
   }

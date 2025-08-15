@@ -21,35 +21,6 @@ class AdminDashboardScreen extends ConsumerWidget {
         foregroundColor: Colors.white,
         elevation: 4,
         actions: [
-          // Botón de notificaciones (temporalmente deshabilitado)
-          // Consumer(
-          //   builder: (context, ref, child) {
-          //     final wsState = ref.watch(webSocketProvider);
-          //     final unreadCount = wsState.notifications
-          //         .where((n) => !(n['isRead'] ?? false))
-          //         .length;
-
-          //     return IconButton(
-          //       icon: Badge(
-          //         label: unreadCount > 0 ? Text('$unreadCount') : null,
-          //         child: const Icon(Icons.notifications),
-          //       ),
-          //       onPressed: () => Navigator.push(
-          //         context,
-          //         MaterialPageRoute(
-          //           builder: (context) => const NotificationsScreen(),
-          //         ),
-          //       ),
-          //       tooltip: 'Notificaciones',
-          //     );
-          //   },
-          // ),
-          // const SizedBox(width: 8),
-          // // Estado WebSocket (temporalmente deshabilitado)
-          // const WebSocketStatusWidget(),
-          // const SizedBox(width: 8),
-          // // Botón de pruebas WebSocket (temporalmente deshabilitado)
-          // const WebSocketTestButton(),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authProvider.notifier).logout(),

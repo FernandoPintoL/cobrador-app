@@ -1,3 +1,6 @@
+import 'package:dio/dio.dart';
+
+import '../modelos/api_exception.dart';
 import 'base_api_service.dart';
 
 /// Servicio API para gestión de créditos
@@ -446,8 +449,8 @@ class CreditApiService extends BaseApiService {
   }
 
   /// Aprueba un crédito para entrega
-  Future<Map<String, dynamic>> approveCreditForDelivery(
-    int creditId, {
+  Future<Map<String, dynamic>> approveCreditForDelivery({
+    required String creditId,
     required DateTime scheduledDeliveryDate,
     String? notes,
   }) async {
@@ -473,6 +476,17 @@ class CreditApiService extends BaseApiService {
           'Error al aprobar crédito para entrega: ${response.statusCode}',
         );
       }
+    } on DioException catch (e) {
+      final errorMessage = handleDioError(e);
+      print('❌ Error al aprobar crédito para entrega: $errorMessage');
+
+      // Lanzamos una excepción con los detalles del error para poder mostrarlos en la UI
+      throw ApiException(
+        message: 'Error al aprobar crédito para entrega',
+        statusCode: e.response?.statusCode,
+        errorData: e.response?.data,
+        originalError: e,
+      );
     } catch (e) {
       print('❌ Error al aprobar crédito para entrega: $e');
       throw Exception('Error al aprobar crédito para entrega: $e');

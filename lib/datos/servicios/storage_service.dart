@@ -47,7 +47,7 @@ class StorageService {
     if (userJson != null) {
       try {
         final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        print('  - Map decodificado: $userMap');
+        // print('  - Map decodificado: $userMap');
 
         final usuario = Usuario.fromJson(userMap);
         print('  - Usuario recuperado:');

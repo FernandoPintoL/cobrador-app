@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
-import '../../datos/servicios/api_services.dart';
+import '../../datos/servicios/user_api_service.dart';
 
 class UserManagementState {
   final List<Usuario> usuarios;

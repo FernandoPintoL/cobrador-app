@@ -189,23 +189,30 @@ abstract class BaseApiService {
       final statusCode = e.response!.statusCode;
       final responseData = e.response!.data;
 
-      print('📡 Status Code: $statusCode');
-      print('📄 Response Data: $responseData');
+      print('❌ Error Response Status: $statusCode');
+      print('❌ Error Response Data: $responseData');
 
       // Intentar extraer mensaje de error del servidor
       String errorMessage = 'Error de conexión';
 
       if (responseData is Map<String, dynamic>) {
+        // Primero intentamos obtener el mensaje principal
         if (responseData['message'] != null) {
           errorMessage = responseData['message'].toString();
         } else if (responseData['error'] != null) {
           errorMessage = responseData['error'].toString();
-        } else if (responseData['errors'] != null) {
-          // Manejar errores de validación
+        }
+
+        // Para errores de validación (422), formateamos mejor el mensaje
+        if (statusCode == 422 && responseData['errors'] != null) {
           final errors = responseData['errors'];
-          if (errors is Map<String, dynamic>) {
-            final firstError = errors.values.first;
+          if (errors is Map<String, dynamic> && errors.isNotEmpty) {
+            final firstErrorField = errors.keys.first;
+            final firstError = errors[firstErrorField];
+
             if (firstError is List && firstError.isNotEmpty) {
+              // Agregamos el nombre del campo para más contexto
+              final fieldName = firstErrorField.replaceAll('_', ' ');
               errorMessage = firstError.first.toString();
             } else if (firstError is String) {
               errorMessage = firstError;
@@ -217,9 +224,13 @@ abstract class BaseApiService {
       // Mensajes específicos según el código de estado
       switch (statusCode) {
         case 401:
-          errorMessage = 'Credenciales incorrectas';
+          errorMessage = 'Credenciales incorrectas o sesión expirada';
+          break;
+        case 403:
+          errorMessage = 'No tiene permisos para realizar esta acción';
           break;
         case 422:
+          // Ya manejado arriba, pero mantenemos esto como respaldo
           errorMessage = errorMessage.isNotEmpty
               ? errorMessage
               : 'Datos de entrada inválidos';

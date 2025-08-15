@@ -47,7 +47,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Crédito #${currentCredit.id}',
+          'Créditosss #${currentCredit.id}',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -132,14 +132,15 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       Text(
                         'Estado del Crédito',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       _buildStatusChip(credit.status),
                     ],
@@ -174,55 +175,107 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                   const SizedBox(height: 16),
 
                   // Información de montos
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildInfoCard(
-                          'Monto Total',
-                          'Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
-                          Icons.attach_money,
-                          Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildInfoCard(
-                          'Saldo Pendiente',
-                          'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}',
-                          Icons.account_balance_wallet,
-                          credit.balance > 0 ? Colors.orange : Colors.green,
-                        ),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 500;
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            _buildInfoCard(
+                              'Monto Total',
+                              'Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+                              Icons.attach_money,
+                              Colors.blue,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildInfoCard(
+                              'Saldo Pendiente',
+                              'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}',
+                              Icons.account_balance_wallet,
+                              credit.balance > 0 ? Colors.orange : Colors.green,
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: _buildInfoCard(
+                              'Monto Total',
+                              'Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+                              Icons.attach_money,
+                              Colors.blue,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildInfoCard(
+                              'Saldo Pendiente',
+                              'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}',
+                              Icons.account_balance_wallet,
+                              credit.balance > 0 ? Colors.orange : Colors.green,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 16),
 
                   // Información de fechas
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildInfoCard(
-                          'Días Restantes',
-                          daysRemaining > 0 ? '$daysRemaining días' : 'Vencido',
-                          Icons.calendar_today,
-                          daysRemaining > 7
-                              ? Colors.green
-                              : daysRemaining > 0
-                              ? Colors.orange
-                              : Colors.red,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildInfoCard(
-                          'Frecuencia',
-                          credit.frequencyLabel,
-                          Icons.schedule,
-                          Colors.purple,
-                        ),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 500;
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            _buildInfoCard(
+                              'Días Restantes',
+                              daysRemaining > 0 ? '$daysRemaining días' : 'Vencido',
+                              Icons.calendar_today,
+                              daysRemaining > 7
+                                  ? Colors.green
+                                  : daysRemaining > 0
+                                      ? Colors.orange
+                                      : Colors.red,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildInfoCard(
+                              'Frecuencia',
+                              credit.frequencyLabel,
+                              Icons.schedule,
+                              Colors.purple,
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: _buildInfoCard(
+                              'Días Restantes',
+                              daysRemaining > 0 ? '$daysRemaining días' : 'Vencido',
+                              Icons.calendar_today,
+                              daysRemaining > 7
+                                  ? Colors.green
+                                  : daysRemaining > 0
+                                      ? Colors.orange
+                                      : Colors.red,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildInfoCard(
+                              'Frecuencia',
+                              credit.frequencyLabel,
+                              Icons.schedule,
+                              Colors.purple,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   // Alertas de atención
@@ -395,29 +448,53 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
         Container(
           padding: const EdgeInsets.all(16),
           color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildPaymentSummary(
-                'Total Pagado',
-                'Bs. ${NumberFormat('#,##0.00').format(credit.amount - credit.balance)}',
-                Icons.payment,
-                Colors.green,
-              ),
-              _buildPaymentSummary(
-                'Número de Pagos',
-                '${payments.length}',
-                Icons.receipt,
-                Colors.blue,
-              ),
-              if (credit.installmentAmount != null)
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final items = <Widget>[
                 _buildPaymentSummary(
-                  'Cuota Sugerida',
-                  'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount!)}',
-                  Icons.schedule,
-                  Colors.orange,
+                  'Total Pagado',
+                  'Bs. ${NumberFormat('#,##0.00').format(credit.amount - credit.balance)}',
+                  Icons.payment,
+                  Colors.green,
                 ),
-            ],
+                _buildPaymentSummary(
+                  'Número de Pagos',
+                  '${payments.length}',
+                  Icons.receipt,
+                  Colors.blue,
+                ),
+                if (credit.installmentAmount != null)
+                  _buildPaymentSummary(
+                    'Cuota Sugerida',
+                    'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount!)}',
+                    Icons.schedule,
+                    Colors.orange,
+                  ),
+              ];
+
+              // En pantallas angostas, usar Wrap para que los ítems fluyan a múltiples filas
+              if (constraints.maxWidth < 500) {
+                return Center(
+                  child: Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.center,
+                    children: items
+                        .map((w) => ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 120),
+                              child: w,
+                            ))
+                        .toList(),
+                  ),
+                );
+              }
+
+              // En pantallas anchas, mantener distribución horizontal
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: items,
+              );
+            },
           ),
         ),
 
@@ -612,10 +689,23 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
 
   Widget _buildDateInfo(String label, DateTime date) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500)),
-        Text(DateFormat('dd/MM/yyyy').format(date)),
+        Expanded(
+          child: Text(
+            '$label:',
+            style: const TextStyle(fontWeight: FontWeight.w500),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            DateFormat('dd/MM/yyyy').format(date),
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
@@ -698,14 +788,16 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 Text(
                   'Estado de Lista de Espera',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 _buildWaitingListStatusChip(credit.status),
               ],
@@ -922,15 +1014,17 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       children: [
         Icon(icon, color: color, size: 16),
         const SizedBox(width: 8),
-        Expanded(
+        Flexible(
           child: RichText(
+            overflow: TextOverflow.ellipsis,
+            maxLines: 3,
             text: TextSpan(
               children: [
                 TextSpan(
                   text: '$label ',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w500,
-                    color: Colors.black87,
+                    color: Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black87,
                   ),
                 ),
                 TextSpan(
@@ -955,48 +1049,42 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       return const SizedBox.shrink();
     }
 
-    List<Widget> actions = [];
+    // Construimos los botones sin Expanded; luego decidimos el layout
+    List<Widget> buttons = [];
 
     // Acciones para managers/admins
     if (isManager) {
       if (credit.isPendingApproval) {
-        actions.addAll([
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _showApprovalDialog(credit),
-              icon: const Icon(Icons.check, size: 18),
-              label: const Text('Aprobar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-              ),
+        buttons.addAll([
+          ElevatedButton.icon(
+            onPressed: () => _showApprovalDialog(credit),
+            icon: const Icon(Icons.check, size: 18),
+            label: const Text('Aprobar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 8),
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _showRejectionDialog(credit),
-              icon: const Icon(Icons.cancel, size: 18),
-              label: const Text('Rechazar'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-              ),
+          OutlinedButton.icon(
+            onPressed: () => _showRejectionDialog(credit),
+            icon: const Icon(Icons.cancel, size: 18),
+            label: const Text('Rechazar'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red,
+              side: const BorderSide(color: Colors.red),
+              padding: const EdgeInsets.symmetric(vertical: 8),
             ),
           ),
         ]);
       } else if (credit.isWaitingDelivery) {
-        actions.addAll([
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _showRescheduleDialog(credit),
-              icon: const Icon(Icons.schedule, size: 18),
-              label: const Text('Reprogramar'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-              ),
+        buttons.addAll([
+          OutlinedButton.icon(
+            onPressed: () => _showRescheduleDialog(credit),
+            icon: const Icon(Icons.schedule, size: 18),
+            label: const Text('Reprogramar'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 8),
             ),
           ),
         ]);
@@ -1007,28 +1095,54 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     if ((isCobrador || isManager) &&
         credit.isWaitingDelivery &&
         credit.isReadyForDelivery) {
-      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
-      actions.add(
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () => _showDeliveryDialog(credit),
-            icon: const Icon(Icons.local_shipping, size: 18),
-            label: const Text('Entregar'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-            ),
+      buttons.add(
+        ElevatedButton.icon(
+          onPressed: () => _showDeliveryDialog(credit),
+          icon: const Icon(Icons.local_shipping, size: 18),
+          label: const Text('Entregar'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 8),
           ),
         ),
       );
     }
 
-    if (actions.isEmpty) {
+    if (buttons.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    return Row(children: actions);
+    // Distribuir acciones de forma responsiva segun el ancho disponible
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 420;
+        if (isNarrow) {
+          // En columnas (dentro de un scroll con altura no acotada), evitar Expanded
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < buttons.length; i++) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: buttons[i],
+                ),
+                if (i != buttons.length - 1) const SizedBox(height: 8),
+              ],
+            ],
+          );
+        }
+        // En pantallas anchas, repartir con Expanded para ocupar el ancho
+        final rowChildren = <Widget>[];
+        for (int i = 0; i < buttons.length; i++) {
+          rowChildren.add(Expanded(child: buttons[i]));
+          if (i != buttons.length - 1) {
+            rowChildren.add(const SizedBox(width: 8));
+          }
+        }
+        return Row(children: rowChildren);
+      },
+    );
   }
 
   Future<void> _showApprovalDialog(Credito credit) async {
@@ -1226,73 +1340,78 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Reprogramar Entrega'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            if (credit.scheduledDeliveryDate != null)
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                'Fecha actual: ${DateFormat('dd/MM/yyyy HH:mm').format(credit.scheduledDeliveryDate!)}',
-                style: const TextStyle(color: Colors.grey),
+                'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-            const SizedBox(height: 16),
-            const Text('Nueva fecha programada:'),
-            const SizedBox(height: 8),
-            StatefulBuilder(
-              builder: (context, setState) => Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      DateFormat('dd/MM/yyyy HH:mm').format(selectedDate),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+              if (credit.scheduledDeliveryDate != null)
+                Text(
+                  'Fecha actual: ${DateFormat('dd/MM/yyyy HH:mm').format(credit.scheduledDeliveryDate!)}',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              const SizedBox(height: 16),
+              const Text('Nueva fecha programada:'),
+              const SizedBox(height: 8),
+              StatefulBuilder(
+                builder: (context, setState) => Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        DateFormat('dd/MM/yyyy HH:mm').format(selectedDate),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (date != null) {
-                        final time = await showTimePicker(
+                    IconButton(
+                      onPressed: () async {
+                        final date = await showDatePicker(
                           context: context,
-                          initialTime: TimeOfDay.fromDateTime(selectedDate),
+                          initialDate: selectedDate,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
                         );
-                        if (time != null) {
-                          setState(() {
-                            selectedDate = DateTime(
-                              date.year,
-                              date.month,
-                              date.day,
-                              time.hour,
-                              time.minute,
-                            );
-                          });
+                        if (date != null) {
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.fromDateTime(selectedDate),
+                          );
+                          if (time != null) {
+                            setState(() {
+                              selectedDate = DateTime(
+                                date.year,
+                                date.month,
+                                date.day,
+                                time.hour,
+                                time.minute,
+                              );
+                            });
+                          }
                         }
-                      }
-                    },
-                    icon: const Icon(Icons.calendar_today),
-                  ),
-                ],
+                      },
+                      icon: const Icon(Icons.calendar_today),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: reasonController,
-              decoration: const InputDecoration(
-                labelText: 'Motivo de la reprogramación (opcional)',
-                hintText: 'Explique por qué se reprograma la entrega',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo de la reprogramación (opcional)',
+                  hintText: 'Explique por qué se reprograma la entrega',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
               ),
-              maxLines: 2,
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           TextButton(

@@ -1,0 +1,14 @@
+flutter_icons:
+  android: true
+  ios: false
+  image_path: "assets/icons/icon.jpg"
+  min_sdk_android: 21
+  adaptive_icon_background: "#667eea"
+  adaptive_icon_foreground: "assets/icons/icon.jpg"
+
+  # Configuración específica para iconos de notificación
+  android_notification_icon:
+    name: "notification_icon"
+    image_path: "assets/icons/icon.jpg"
+    background_color: "#667eea"
+

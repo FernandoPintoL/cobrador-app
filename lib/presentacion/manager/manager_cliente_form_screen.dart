@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
@@ -37,6 +39,7 @@ class _ManagerClienteFormScreenState
   double? _latitud;
   double? _longitud;
   bool _ubicacionObtenida = false;
+  String _tipoUbicacion = ''; // 'actual' o 'mapa'
 
   @override
   void initState() {
@@ -54,7 +57,21 @@ class _ManagerClienteFormScreenState
         _latitud = widget.cliente!.latitud;
         _longitud = widget.cliente!.longitud;
         _ubicacionObtenida = true;
+        _tipoUbicacion = 'existente';
       }
+    }
+  }
+
+  String _getTipoUbicacionTexto() {
+    switch (_tipoUbicacion) {
+      case 'actual':
+        return 'Ubicación actual obtenida';
+      case 'mapa':
+        return 'Ubicación seleccionada en mapa';
+      case 'existente':
+        return 'Ubicación existente';
+      default:
+        return 'Ubicación GPS obtenida';
     }
   }
 
@@ -168,24 +185,115 @@ class _ManagerClienteFormScreenState
                                 labelText: 'Dirección',
                                 border: const OutlineInputBorder(),
                                 prefixIcon: const Icon(Icons.location_on),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _ubicacionObtenida
-                                        ? Icons.gps_fixed
-                                        : Icons.gps_not_fixed,
-                                    color: _ubicacionObtenida
-                                        ? Colors.green
-                                        : null,
-                                  ),
-                                  onPressed: _obtenerUbicacionGPS,
-                                  tooltip: 'Obtener ubicación GPS',
+                                suffixIcon: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Botón para obtener ubicación actual
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.my_location,
+                                        size: 20,
+                                        color: _ubicacionObtenida
+                                            ? Colors.green
+                                            : Colors.blue,
+                                      ),
+                                      onPressed: _obtenerUbicacionActual,
+                                      tooltip: 'Obtener mi ubicación actual',
+                                      constraints: const BoxConstraints(
+                                        minWidth: 32,
+                                        minHeight: 32,
+                                      ),
+                                      padding: const EdgeInsets.all(4),
+                                    ),
+                                    // Botón para seleccionar en mapa
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.map,
+                                        size: 20,
+                                        color: _ubicacionObtenida
+                                            ? Colors.green
+                                            : Colors.orange,
+                                      ),
+                                      onPressed: _obtenerUbicacionGPS,
+                                      tooltip: 'Seleccionar en mapa',
+                                      constraints: const BoxConstraints(
+                                        minWidth: 32,
+                                        minHeight: 32,
+                                      ),
+                                      padding: const EdgeInsets.all(4),
+                                    ),
+                                  ],
                                 ),
                                 helperText: _ubicacionObtenida
-                                    ? 'Ubicación GPS obtenida ✓'
-                                    : 'Presiona el botón GPS para obtener ubicación automáticamente',
+                                    ? '${_getTipoUbicacionTexto()} ✓'
+                                    : 'Usa el botón de ubicación actual o selecciona en el mapa',
                               ),
                               maxLines: 2,
                             ),
+                            if (_ubicacionObtenida) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.green.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _tipoUbicacion == 'actual'
+                                          ? Icons.my_location
+                                          : _tipoUbicacion == 'mapa'
+                                          ? Icons.map
+                                          : Icons.location_on,
+                                      color: Colors.green,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Lat: ${_latitud?.toStringAsFixed(4)}, Lng: ${_longitud?.toStringAsFixed(4)}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _latitud = null;
+                                          _longitud = null;
+                                          _ubicacionObtenida = false;
+                                          _tipoUbicacion = '';
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.clear,
+                                          size: 12,
+                                          color: Colors.red,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -261,6 +369,139 @@ class _ManagerClienteFormScreenState
     );
   }
 
+  Future<void> _obtenerUbicacionActual() async {
+    try {
+      // Verificar permisos de ubicación
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Los servicios de ubicación están deshabilitados'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permisos de ubicación denegados'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Permisos de ubicación denegados permanentemente. Ve a configuración para habilitarlos.',
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Obteniendo ubicación actual...',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Obtener posición actual
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
+
+      // Cerrar diálogo de carga
+      if (mounted) Navigator.of(context).pop();
+
+      // Intentar obtener dirección de las coordenadas
+      String direccionObtenida = '';
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+
+        if (placemarks.isNotEmpty) {
+          Placemark place = placemarks.first;
+          direccionObtenida =
+              [
+                    place.street,
+                    place.locality,
+                    place.administrativeArea,
+                    place.country,
+                  ]
+                  .where((element) => element != null && element.isNotEmpty)
+                  .join(', ');
+        }
+      } catch (e) {
+        print('Error al obtener dirección: $e');
+      }
+
+      setState(() {
+        _latitud = position.latitude;
+        _longitud = position.longitude;
+        _ubicacionObtenida = true;
+        _tipoUbicacion = 'actual';
+
+        // Si se obtuvo una dirección, la usamos; si no, mantenemos la actual
+        if (direccionObtenida.isNotEmpty) {
+          _direccionController.text = direccionObtenida;
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Ubicación actual obtenida correctamente\n'
+            'Lat: ${position.latitude.toStringAsFixed(4)}\n'
+            'Lng: ${position.longitude.toStringAsFixed(4)}',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      // Cerrar diálogo de carga si está abierto
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al obtener ubicación actual: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
   Future<void> _obtenerUbicacionGPS() async {
     try {
       // Navegar a la pantalla de selección de ubicación
@@ -273,6 +514,7 @@ class _ManagerClienteFormScreenState
           _latitud = result['latitud'] as double?;
           _longitud = result['longitud'] as double?;
           _ubicacionObtenida = true;
+          _tipoUbicacion = 'mapa';
 
           // Si viene una dirección, la usamos
           if (result['direccion'] != null &&
@@ -283,7 +525,7 @@ class _ManagerClienteFormScreenState
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ubicación GPS obtenida correctamente'),
+            content: Text('Ubicación seleccionada en mapa correctamente'),
             backgroundColor: Colors.green,
           ),
         );

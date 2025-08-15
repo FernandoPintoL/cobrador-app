@@ -25,6 +25,11 @@ class WebSocketService {
   Timer? _reconnectTimer;
   Timer? _heartbeatTimer;
 
+  // Información del usuario autenticado (para incluir en eventos salientes)
+  String? _currentUserId;
+  String? _currentUserName;
+  String? _currentUserType;
+
   // Streams para diferentes tipos de eventos
   final _connectionController = StreamController<bool>.broadcast();
   final _notificationController =
@@ -206,14 +211,39 @@ class WebSocketService {
       print('❌ Error del socket: $error');
     });
 
-    // Eventos de aplicación
+    // Eventos de aplicación - Eventos básicos
     _socket!.on('notification', _handleNotification);
-    _socket!.on('payment_update', _handlePaymentUpdate);
-    _socket!.on('route_update', _handleRouteUpdate);
-    _socket!.on('message', _handleMessage);
-    _socket!.on('location_update', _handleLocationUpdate);
-    _socket!.on('user_authenticated', _handleUserAuthenticated);
+    _socket!.on('payment_updated', _handlePaymentUpdate);
+    _socket!.on('route_updated', _handleRouteUpdate);
+    _socket!.on('new_message', _handleMessage);
+    _socket!.on('cobrador_location_update', _handleLocationUpdate);
+    _socket!.on('authenticated', _handleUserAuthenticated);
     _socket!.on('authentication_error', _handleAuthenticationError);
+
+    // Eventos específicos de créditos - Compatibles con server.js
+    _socket!.on('credit_waiting_approval', _handleNotification);
+    _socket!.on('credit_approved', _handleNotification);
+    _socket!.on('credit_rejected', _handleNotification);
+    _socket!.on('credit_delivered', _handleNotification);
+    _socket!.on('credit_attention_required', _handleNotification);
+    _socket!.on('new_credit_notification', _handleNotification);
+    _socket!.on('credit_lifecycle_update', _handleNotification);
+    _socket!.on('credit_pending_approval', _handleNotification);
+    _socket!.on('credit_decision', _handleNotification);
+    _socket!.on('credit_delivered_notification', _handleNotification);
+
+    // Eventos específicos de pagos - Compatibles con server.js
+    _socket!.on('payment_received', _handlePaymentUpdate);
+    _socket!.on('cobrador_payment_received', _handlePaymentUpdate);
+
+    // Eventos de conexión de usuarios
+    _socket!.on('user_connected', (data) {
+      print('👋 Usuario conectado: ${data['userName']} (${data['userType']})');
+    });
+
+    _socket!.on('user_disconnected', (data) {
+      print('👋 Usuario desconectado: ${data['userName']} (${data['userType']})');
+    });
 
     print('🎯 Event listeners configurados');
   }
@@ -304,6 +334,11 @@ class WebSocketService {
         if (authToken != null) 'token': authToken,
       };
 
+      // Guardar datos del usuario autenticado para eventos salientes
+      _currentUserId = userId;
+      _currentUserName = userName;
+      _currentUserType = userType;
+
       print('🔐 Autenticando usuario: $userName ($userType)');
       _socket!.emit('authenticate', authData);
 
@@ -331,17 +366,24 @@ class WebSocketService {
       return;
     }
 
-    final notification = {
-      'targetUserId': targetUserId,
+    final notificationPayload = {
       'title': title,
       'message': message,
       'type': type,
       'timestamp': DateTime.now().toIso8601String(),
+      if (_currentUserId != null) 'fromUserId': _currentUserId,
+      if (_currentUserName != null) 'fromUserName': _currentUserName,
+      if (_currentUserType != null) 'fromUserType': _currentUserType,
       if (additionalData != null) ...additionalData,
     };
 
-    print('📤 Enviando notificación: $title');
-    _socket!.emit('send_notification', notification);
+    final envelope = {
+      'targetUserId': targetUserId,
+      'notification': notificationPayload,
+    };
+
+    print('📤 Enviando notificación de crédito: $title');
+    _socket!.emit('credit_notification', envelope);
   }
 
   /// Actualiza la ubicación del usuario (solo cobradores)
@@ -365,7 +407,7 @@ class WebSocketService {
     };
 
     print('📍 Actualizando ubicación: $latitude, $longitude');
-    _socket!.emit('update_location', locationData);
+    _socket!.emit('location_update', locationData);
   }
 
   /// Actualiza el estado de un pago
@@ -383,19 +425,23 @@ class WebSocketService {
       return;
     }
 
-    final paymentData = {
-      'paymentId': paymentId,
-      'cobradorId': cobradorId,
-      'clientId': clientId,
+    final payment = {
+      'id': paymentId,
       'amount': amount,
       'status': status,
-      'timestamp': DateTime.now().toIso8601String(),
-      if (notes != null) 'notes': notes,
+      'notes': notes,
+      'updatedAt': DateTime.now().toIso8601String(),
       if (additionalData != null) ...additionalData,
+    }..removeWhere((key, value) => value == null);
+
+    final payload = {
+      'payment': payment,
+      'cobradorId': cobradorId,
+      'clientId': clientId,
     };
 
     print('💰 Actualizando pago: $paymentId - $amount Bs.');
-    _socket!.emit('payment_update', paymentData);
+    _socket!.emit('payment_update', payload);
   }
 
   /// Envía un mensaje directo a otro usuario
@@ -403,6 +449,7 @@ class WebSocketService {
     required String recipientId,
     required String message,
     String? messageType,
+    String? senderId,
   }) {
     if (!_isConnected || _socket == null) {
       print('❌ No conectado para enviar mensaje');
@@ -414,10 +461,62 @@ class WebSocketService {
       'message': message,
       'timestamp': DateTime.now().toIso8601String(),
       if (messageType != null) 'type': messageType,
+      'senderId': senderId ?? _currentUserId,
     };
 
     print('💬 Enviando mensaje a: $recipientId');
     _socket!.emit('send_message', messageData);
+  }
+
+  /// Envía un evento de ciclo de vida de crédito (compatible con server.js)
+  void sendCreditLifecycle({
+    required String action, // 'created', 'approved', 'rejected', 'delivered', 'requires_attention'
+    required String creditId,
+    String? targetUserId,
+    Map<String, dynamic>? credit,
+    String? userType,
+    String? message,
+  }) {
+    if (!_isConnected || _socket == null) {
+      print('❌ No conectado para enviar ciclo de vida de crédito');
+      return;
+    }
+
+    final data = {
+      'action': action,
+      'creditId': creditId,
+      'timestamp': DateTime.now().toIso8601String(),
+      if (targetUserId != null) 'targetUserId': targetUserId,
+      if (credit != null) 'credit': credit,
+      if (userType != null) 'userType': userType,
+      if (message != null) 'message': message,
+      if (_currentUserId != null) 'fromUserId': _currentUserId,
+      if (_currentUserName != null) 'fromUserName': _currentUserName,
+      if (_currentUserType != null) 'fromUserType': _currentUserType,
+    };
+
+    print('🔄 Enviando ciclo de vida de crédito: $action para crédito $creditId');
+    _socket!.emit('credit_lifecycle', data);
+  }
+
+  /// Envía una notificación de ruta (compatible con server.js)
+  void sendRouteNotification({
+    required String cobradorId,
+    required Map<String, dynamic> routeUpdate,
+  }) {
+    if (!_isConnected || _socket == null) {
+      print('❌ No conectado para enviar notificación de ruta');
+      return;
+    }
+
+    final data = {
+      'cobradorId': cobradorId,
+      'routeUpdate': routeUpdate,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+
+    print('🛣️ Enviando notificación de ruta para cobrador: $cobradorId');
+    _socket!.emit('route_notification', data);
   }
 
   /// Verifica la conectividad de red

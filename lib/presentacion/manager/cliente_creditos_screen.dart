@@ -4,9 +4,11 @@ import 'package:intl/intl.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../negocio/providers/auth_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../creditos/credit_detail_screen.dart';
+import '../creditos/credit_form_screen.dart';
 
 class ClienteCreditosScreen extends ConsumerStatefulWidget {
   final Usuario cliente;
@@ -21,6 +23,16 @@ class ClienteCreditosScreen extends ConsumerStatefulWidget {
 class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedStatus = 'all';
+
+  // Método para obtener el rol del usuario actual
+  String _getUserRole(Usuario? usuario) {
+    if (usuario?.roles.contains('manager') == true) {
+      return 'manager';
+    } else if (usuario?.roles.contains('cobrador') == true) {
+      return 'cobrador';
+    }
+    return 'cliente';
+  }
 
   @override
   void initState() {
@@ -44,6 +56,8 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
   @override
   Widget build(BuildContext context) {
     final creditState = ref.watch(creditProvider);
+    final authState = ref.read(authProvider);
+    final currentUserRole = _getUserRole(authState.usuario);
 
     // Filtrar créditos del cliente específico
     final clientCredits = creditState.credits
@@ -56,7 +70,7 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
     return Scaffold(
       appBar: RoleAppBar(
         title: 'Créditos de ${widget.cliente.nombre}',
-        role: 'manager',
+        role: currentUserRole,
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list),
@@ -86,6 +100,11 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
             child: _buildCreditsList(filteredCredits, creditState.isLoading),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _navegarACrearCredito(),
+        tooltip: 'Crear Nuevo Crédito',
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -326,7 +345,27 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
             ),
           ],
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) => _manejarAccionCredito(value, credit),
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'ver_detalles',
+              child: ListTile(
+                leading: Icon(Icons.visibility, color: Colors.blue),
+                title: Text('Ver Detalles'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'editar',
+              child: ListTile(
+                leading: Icon(Icons.edit, color: Colors.orange),
+                title: Text('Editar Crédito'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
         onTap: () => _navigateToDetails(credit),
       ),
     );
@@ -466,5 +505,59 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
         builder: (context) => CreditDetailScreen(credit: credit),
       ),
     );
+  }
+
+  void _manejarAccionCredito(String accion, Credito credit) {
+    switch (accion) {
+      case 'ver_detalles':
+        _navigateToDetails(credit);
+        break;
+      case 'editar':
+        _navegarAEditarCredito(credit);
+        break;
+    }
+  }
+
+  void _navegarACrearCredito() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            CreditFormScreen(preselectedClient: widget.cliente),
+      ),
+    );
+
+    // Si se creó exitosamente, recargar la lista
+    if (result == true) {
+      _loadClientCredits();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Crédito creado exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  void _navegarAEditarCredito(Credito credit) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => CreditFormScreen(credit: credit)),
+    );
+
+    // Si se actualizó exitosamente, recargar la lista
+    if (result == true) {
+      _loadClientCredits();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Crédito actualizado exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 }

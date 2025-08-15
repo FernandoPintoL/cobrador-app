@@ -40,6 +40,9 @@ dependencies:
   http: ^1.1.0
   dio: ^5.4.0
   
+  # WebSocket
+  socket_io_client: ^2.0.3+1
+  
   # Estado y gestión de datos
   provider: ^6.1.1
   riverpod: ^2.4.9
@@ -53,7 +56,6 @@ dependencies:
   geocoding: ^4.0.0
   
   # WebSocket y conectividad en tiempo real
-  socket_io_client: ^3.0.0
   connectivity_plus: ^5.0.2
   
   # Mapas
