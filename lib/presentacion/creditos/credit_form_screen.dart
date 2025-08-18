@@ -7,6 +7,7 @@ import '../../negocio/providers/client_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../datos/modelos/credito.dart';
+import '../cliente/cliente_form_screen.dart';
 
 class CreditFormScreen extends ConsumerStatefulWidget {
   final Credito? credit; // Para edición
@@ -72,9 +73,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       _interestRateController.text = '20'; // Por defecto 20% de interés
       _selectedFrequency = 'daily'; // Por defecto diario
       _startDate = DateTime.now();
-      _endDate = DateTime.now().add(
-        const Duration(days: 24),
-      ); // 24 días por defecto para cuotas diarias
+      _endDate = _selectedFrequency == 'daily'
+          ? _computeDailyEndDateFromStart(_startDate!)
+          : DateTime.now().add(const Duration(days: 30)); // por defecto mensual aprox
       _startDateController.text = DateFormat('dd/MM/yyyy').format(_startDate!);
       _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
     }
@@ -101,6 +102,19 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         ref.read(clientProvider.notifier).cargarClientes();
       }
     }
+  }
+
+  DateTime _computeDailyEndDateFromStart(DateTime start) {
+    int payments = 0;
+    DateTime current = start;
+    while (payments < 24) {
+      current = current.add(const Duration(days: 1));
+      // Skips Sundays (7)
+      if (current.weekday != DateTime.sunday) {
+        payments++;
+      }
+    }
+    return current; // last due date after 24 Mon-Sat days
   }
 
   void _updateCalculations() {
@@ -134,7 +148,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
 
     switch (_selectedFrequency) {
       case 'daily':
-        return daysDifference; // +1 para incluir el día de inicio
+        return 24;
       case 'weekly':
         return (daysDifference / 7).ceil();
       case 'biweekly':
@@ -189,8 +203,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         _startDateController.text = DateFormat('dd/MM/yyyy').format(date);
 
         // Si la fecha de fin es anterior a la nueva fecha de inicio, ajustarla
-        if (_endDate != null && _endDate!.isBefore(date)) {
-          _endDate = date.add(const Duration(days: 24)); // 24 días por defecto
+        if (_selectedFrequency == 'daily') {
+          _endDate = _computeDailyEndDateFromStart(date);
+          _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
+        } else if (_endDate != null && _endDate!.isBefore(date)) {
+          _endDate = date.add(const Duration(days: 30));
           _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
         }
       });
@@ -311,6 +328,29 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.credit != null && widget.credit!.status != 'pending_approval')
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Este crédito no se puede editar porque no está pendiente de aprobación.',
+                          style: TextStyle(color: Colors.orange[800], fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               // Información del crédito
               Card(
                 child: Padding(
@@ -393,9 +433,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                       ),
                                     ),
                                     onPressed: () async {
-                                      final result = await Navigator.pushNamed(
+                                      final result = await Navigator.push(
                                         context,
-                                        '/crear-cliente',
+                                        MaterialPageRoute(
+                                          builder: (_) => const ClienteFormScreen(),
+                                        ),
                                       );
                                       if (result == true) {
                                         // Recargar clientes automáticamente después de crear uno nuevo
@@ -501,11 +543,14 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                                 Navigator.pop(
                                                   context,
                                                 ); // Cerrar el dropdown
-                                                final result =
-                                                    await Navigator.pushNamed(
-                                                      context,
-                                                      '/crear-cliente',
-                                                    );
+                                                final result = await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) => ClienteFormScreen(
+                                                      initialName: searchEntry,
+                                                    ),
+                                                  ),
+                                                );
                                                 if (result == true) {
                                                   await Future.delayed(
                                                     const Duration(
@@ -719,6 +764,10 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                         onChanged: (String? value) {
                           setState(() {
                             _selectedFrequency = value ?? 'daily';
+                            if (_startDate != null && _selectedFrequency == 'daily') {
+                              _endDate = _computeDailyEndDateFromStart(_startDate!);
+                              _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
+                            }
                           });
                           // Recalcular cuando cambie la frecuencia
                           _updateCalculations();
@@ -726,10 +775,10 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Estado (solo para edición)
-                      if (widget.credit != null) ...[
+                      // Estado (solo para edición cuando está pendiente)
+                      if (widget.credit != null && widget.credit!.status == 'pending_approval') ...[
                         DropdownButtonFormField<String>(
-                          value: _selectedStatus,
+                          value: _selectedStatus == 'pending_approval' ? 'active' : _selectedStatus,
                           decoration: const InputDecoration(
                             labelText: 'Estado *',
                             border: OutlineInputBorder(),
@@ -925,7 +974,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _saveCredit,
+                      onPressed: _isLoading || (widget.credit != null && widget.credit!.status != 'pending_approval')
+                          ? null
+                          : _saveCredit,
                       child: _isLoading
                           ? const SizedBox(
                               height: 20,

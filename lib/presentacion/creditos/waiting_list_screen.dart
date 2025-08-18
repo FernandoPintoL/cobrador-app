@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../config/role_colors.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
 import '../../ui/widgets/validation_error_display.dart'; // Importar widget de errores
 import 'credit_detail_screen.dart';
+import 'credit_form_screen.dart';
 
 class WaitingListScreen extends ConsumerStatefulWidget {
   const WaitingListScreen({super.key});
@@ -21,7 +23,7 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
@@ -34,16 +36,39 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
   }
 
   void _loadInitialData() {
+    // Cargar listas de espera
     ref.read(creditProvider.notifier).loadAllWaitingListData();
+
+    // Además, cargar créditos activos según el rol
+    final authState = ref.read(authProvider);
+    final usuario = authState.usuario;
+    final bool isCobrador = authState.isCobrador;
+
+    ref.read(creditProvider.notifier).loadCredits(
+      status: 'active',
+      cobradorId: isCobrador && usuario != null ? usuario.id.toInt() : null,
+      page: 1,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final creditState = ref.watch(creditProvider);
     final authState = ref.watch(authProvider);
+    // Obtener el rol del usuario actual
+    String currentUserRole = 'cliente';
+    if (authState.usuario != null) {
+      if (authState.usuario!.roles.contains('admin')) {
+        currentUserRole = 'admin';
+      } else if (authState.usuario!.roles.contains('manager')) {
+        currentUserRole = 'manager';
+      } else if (authState.usuario!.roles.contains('cobrador')) {
+        currentUserRole = 'cobrador';
+      }
+    }
 
-    // Verificar permisos - Solo managers y admins pueden ver esta pantalla
-    if (!authState.isManager && !authState.isAdmin) {
+    // Verificar permisos - Admins, managers y cobradores pueden ver esta pantalla
+    if (!authState.isManager && !authState.isAdmin && !authState.isCobrador) {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Acceso Denegado'),
@@ -109,12 +134,15 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
     });
 
     return Scaffold(
+      /*backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).scaffoldBackgroundColor
+          : RoleColors.getAccentColor(currentUserRole),*/
       appBar: AppBar(
         title: const Text(
-          'Lista de Espera de Créditos',
+          'Mis Créditos',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -132,6 +160,12 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
           isScrollable: true,
           tabs: [
             Tab(
+              text: 'Activos ('
+                  '${creditState.credits.where((c) => c.status == 'active').length}'
+                  ')',
+              icon: const Icon(Icons.playlist_add_check_circle),
+            ),
+            Tab(
               text: 'Pendientes (${creditState.pendingApprovalCredits.length})',
               icon: const Icon(Icons.hourglass_empty),
             ),
@@ -141,7 +175,7 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
             ),
             Tab(
               text:
-                  'Listos Hoy (${creditState.readyForDeliveryCredits.length})',
+                  'Entregar (${creditState.readyForDeliveryCredits.length})',
               icon: const Icon(Icons.today),
             ),
             Tab(
@@ -154,14 +188,18 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
       body: Column(
         children: [
           // Resumen de lista de espera
-          if (creditState.waitingListSummary != null)
-            _buildSummaryCard(creditState.waitingListSummary!),
+          /*if (creditState.waitingListSummary != null)
+            _buildSummaryCard(creditState.waitingListSummary!),*/
 
           // Contenido de las pestañas
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
+                _buildCreditsList(
+                  creditState.credits.where((c) => c.status == 'active').toList(),
+                  'active',
+                ),
                 _buildCreditsList(
                   creditState.pendingApprovalCredits,
                   'pending_approval',
@@ -183,110 +221,19 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSummaryCard(WaitingListSummary summary) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      child: Card(
-        elevation: 4,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Resumen de Lista de Espera',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildSummaryItem(
-                      'Total en Lista',
-                      '${summary.totalCreditsInWaitingList}',
-                      'Bs. ${NumberFormat('#,##0.00').format(summary.totalAmountInWaitingList)}',
-                      Icons.list,
-                      Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildSummaryItem(
-                      'Listos Hoy',
-                      '${summary.readyToday}',
-                      '',
-                      Icons.today,
-                      Colors.green,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildSummaryItem(
-                      'Atrasados',
-                      '${summary.overdueDelivery}',
-                      '',
-                      Icons.warning,
-                      Colors.red,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryItem(
-    String title,
-    String count,
-    String amount,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 4),
-          Text(
-            count,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const CreditFormScreen(),
             ),
-          ),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-            textAlign: TextAlign.center,
-          ),
-          if (amount.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              amount,
-              style: TextStyle(
-                fontSize: 10,
-                color: color,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ],
+          );
+          _loadInitialData();
+        },
+        icon: const Icon(Icons.add, color: Colors.white,),
+        label: const Text('Nuevo Crédito', style: TextStyle(color: Colors.white),),
       ),
     );
   }
@@ -414,9 +361,9 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.amberAccent.withValues(alpha: 25),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 77)),
                   ),
                   child: const Row(
                     children: [
@@ -446,9 +393,9 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 25),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                    border: Border.all(color: Colors.green.withValues(alpha: 77)),
                   ),
                   child: const Row(
                     children: [
@@ -474,9 +421,9 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 25),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    border: Border.all(color: Colors.red.withValues(alpha: 77)),
                   ),
                   child: Row(
                     children: [
@@ -513,7 +460,7 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
 
     switch (status) {
       case 'pending_approval':
-        color = Colors.orange;
+        color = Colors.orangeAccent;
         label = 'Pendiente';
         break;
       case 'waiting_delivery':
@@ -536,7 +483,7 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 25),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color),
       ),
@@ -552,9 +499,13 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
   }
 
   Widget _buildActionButtons(Credito credit, String listType) {
+    final authState = ref.watch(authProvider);
+    final canApprove = authState.isManager || authState.isAdmin;
+    final canDeliver = authState.isCobrador || authState.isManager || authState.isAdmin;
+
     List<Widget> buttons = [];
 
-    if (listType == 'pending_approval') {
+    if (listType == 'pending_approval' && canApprove) {
       buttons.addAll([
         Expanded(
           child: ElevatedButton.icon(
@@ -584,8 +535,8 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
           ),
         ),
       ]);
-    } else if (listType == 'ready_for_delivery' ||
-        (listType == 'waiting_delivery' && credit.isReadyForDelivery)) {
+    } else if ((listType == 'ready_for_delivery' ||
+        (listType == 'waiting_delivery' && credit.isReadyForDelivery)) && canDeliver) {
       buttons.add(
         Expanded(
           child: ElevatedButton.icon(
@@ -632,6 +583,8 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
         return Icons.check_circle_outline;
       case 'overdue_delivery':
         return Icons.warning_amber;
+      case 'active':
+        return Icons.playlist_add_check_circle_outlined;
       default:
         return Icons.folder_open;
     }
@@ -647,6 +600,8 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
         return 'No hay créditos listos para entrega hoy';
       case 'overdue_delivery':
         return 'No hay créditos con entrega atrasada';
+      case 'active':
+        return 'No hay créditos activos';
       default:
         return 'No hay créditos';
     }
@@ -666,123 +621,142 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
 
   Future<void> _showQuickApprovalDialog(Credito credit) async {
     final DateTime now = DateTime.now();
-    DateTime selectedDate = DateTime(now.year, now.month, now.day, now.hour, now.minute);
+    // Por defecto, programar para el día siguiente a las 09:00 (fecha posterior al día)
+    final DateTime tomorrow = now.add(const Duration(days: 1));
+    DateTime selectedDate = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9, 0);
 
-    // Agregar una hora para evitar errores de validación de fecha
-    selectedDate = selectedDate.add(const Duration(hours: 1));
-
-    final creditState = ref.watch(creditProvider);
+    bool deliverImmediately = false;
 
     // Usamos StatefulBuilder para poder actualizar el diálogo cuando cambian los errores
     await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Aprobar para Entrega'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
-              ),
-              Text(
-                'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
-              ),
-              const SizedBox(height: 16),
-              const Text('Fecha y hora de entrega programada:'),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () async {
-                  final DateTime? pickedDate = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: now,
-                    lastDate: DateTime(now.year + 1),
-                  );
-                  if (pickedDate != null) {
-                    final TimeOfDay? pickedTime = await showTimePicker(
+        builder: (context, setState) {
+          final creditState = ref.watch(creditProvider);
+          return AlertDialog(
+            title: const Text('Aprobar para Entrega'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+                ),
+                Text(
+                  'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+                ),
+                const SizedBox(height: 16),
+                const Text('Fecha y hora de entrega programada:'),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final DateTime? pickedDate = await showDatePicker(
                       context: context,
-                      initialTime: TimeOfDay.fromDateTime(selectedDate),
+                      initialDate: selectedDate,
+                      firstDate: now,
+                      lastDate: DateTime(now.year + 1),
                     );
-                    if (pickedTime != null) {
-                      setState(() {
-                        selectedDate = DateTime(
-                          pickedDate.year,
-                          pickedDate.month,
-                          pickedDate.day,
-                          pickedTime.hour,
-                          pickedTime.minute,
-                        );
-                      });
+                    if (pickedDate != null) {
+                      final TimeOfDay? pickedTime = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(selectedDate),
+                      );
+                      if (pickedTime != null) {
+                        setState(() {
+                          selectedDate = DateTime(
+                            pickedDate.year,
+                            pickedDate.month,
+                            pickedDate.day,
+                            pickedTime.hour,
+                            pickedTime.minute,
+                          );
+                        });
+                      }
                     }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          DateFormat('dd/MM/yyyy HH:mm').format(selectedDate),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: deliverImmediately,
+                  onChanged: (v) => setState(() => deliverImmediately = v ?? false),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Entregar inmediatamente al aprobar'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+
+                // Mostrar errores de validación si existen
+                if (creditState.validationErrors.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: ValidationErrorDisplay(
+                      errors: creditState.validationErrors,
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  bool result;
+                  if (deliverImmediately) {
+                    result = await ref.read(creditProvider.notifier).approveAndDeliverCredit(
+                          creditId: credit.id,
+                          scheduledDeliveryDate: selectedDate,
+                          approvalNotes: 'Aprobación rápida con entrega inmediata',
+                          deliveryNotes: 'Entrega inmediata desde aprobación',
+                        );
+                  } else {
+                    result = await ref
+                        .read(creditProvider.notifier)
+                        .approveCreditForDelivery(
+                          creditId: credit.id,
+                          scheduledDeliveryDate: selectedDate,
+                          notes: 'Aprobación rápida para entrega',
+                        );
+                  }
+
+                  if (result) {
+                    Navigator.pop(context, true);
+                    _loadInitialData();
+                  } else {
+                    // Actualizar el diálogo para mostrar los errores
+                    setState(() {});
                   }
                 },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.calendar_today, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        DateFormat('dd/MM/yyyy HH:mm').format(selectedDate),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ],
-                  ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                 ),
+                child: Text(deliverImmediately ? 'Aprobar y Entregar' : 'Aprobar'),
               ),
-              const SizedBox(height: 16),
-              const Text('¿Aprobar para entrega inmediata?'),
-
-              // Mostrar errores de validación si existen
-              if (creditState.validationErrors.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: ValidationErrorDisplay(
-                    errors: creditState.validationErrors,
-                  ),
-                ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final result = await ref
-                    .read(creditProvider.notifier)
-                    .approveCreditForDelivery(
-                      creditId: credit.id,
-                      scheduledDeliveryDate: selectedDate,
-                      notes: 'Aprobación rápida para entrega inmediata',
-                    );
-
-                if (result) {
-                  Navigator.pop(context, true);
-                  _loadInitialData();
-                } else {
-                  // Actualizar el diálogo para mostrar los errores
-                  setState(() {});
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Aprobar'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -855,47 +829,108 @@ class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
   }
 
   Future<void> _showQuickDeliveryDialog(Credito credit) async {
-    final result = await showDialog<bool>(
+    DateTime now = DateTime.now();
+    DateTime selectedDate = credit.scheduledDeliveryDate ?? now;
+
+    final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar Entrega'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Confirmar Entrega'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
+              ),
+              Text(
+                'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+              ),
+              const SizedBox(height: 12),
+              if (credit.scheduledDeliveryDate != null)
+                Text(
+                  'Programado: ${DateFormat('dd/MM/yyyy HH:mm').format(credit.scheduledDeliveryDate!)}',
+                  style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                ),
+              if (credit.scheduledDeliveryDate == null)
+                const Text(
+                  'Sin fecha programada. Puedes programar una antes de entregar.',
+                  style: TextStyle(fontSize: 12, color: Colors.orange),
+                ),
+              const SizedBox(height: 16),
+              const Text('¿Cómo deseas proceder?'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'cancel'),
+              child: const Text('Cancelar'),
             ),
-            Text(
-              'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+            TextButton.icon(
+              onPressed: () async {
+                final DateTime? pickedDate = await showDatePicker(
+                  context: context,
+                  initialDate: selectedDate,
+                  firstDate: now.subtract(const Duration(days: 0)),
+                  lastDate: DateTime(now.year + 1),
+                );
+                if (pickedDate != null) {
+                  final TimeOfDay? pickedTime = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(selectedDate),
+                  );
+                  if (pickedTime != null) {
+                    setState(() {
+                      selectedDate = DateTime(
+                        pickedDate.year,
+                        pickedDate.month,
+                        pickedDate.day,
+                        pickedTime.hour,
+                        pickedTime.minute,
+                      );
+                    });
+
+                    // Llamar a reprogramación inmediatamente para dejar "fecha marcada"
+                    final ok = await ref
+                        .read(creditProvider.notifier)
+                        .rescheduleCreditDelivery(
+                          creditId: credit.id,
+                          newScheduledDate: selectedDate,
+                          reason: 'Reprogramación desde diálogo de entrega',
+                        );
+                    if (ok) {
+                      if (context.mounted) Navigator.pop(context, 'rescheduled');
+                    }
+                  }
+                }
+              },
+              icon: const Icon(Icons.event),
+              label: const Text('Reprogramar fecha'),
             ),
-            const SizedBox(height: 16),
-            const Text('¿Confirmar entrega al cliente?'),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, 'deliver_now'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Entregar ahora'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Confirmar'),
-          ),
-        ],
       ),
     );
 
-    if (result == true) {
+    if (result == 'deliver_now') {
       await ref
           .read(creditProvider.notifier)
           .deliverCreditToClient(
             creditId: credit.id,
             notes: 'Entrega confirmada desde lista de espera',
           );
+      _loadInitialData();
+    } else if (result == 'rescheduled') {
+      // Tras reprogramar, refrescar listas para reflejar la nueva fecha
       _loadInitialData();
     }
   }

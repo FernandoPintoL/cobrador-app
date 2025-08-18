@@ -14,7 +14,7 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -34,6 +34,49 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     final wsState = ref.watch(webSocketProvider);
     final authState = ref.watch(authProvider);
 
+    // Determinar tabs/filters según el rol antes de construir el Scaffold
+    final bool isManager = authState.isManager == true;
+    final List<Map<String, dynamic>> tabs = [
+      {
+        'filter': 'all',
+        'label': 'Todas',
+        'icon': Icons.all_inbox,
+      },
+      {
+        'filter': 'unread',
+        'label': 'Sin Leer',
+        'icon': Icons.mark_email_unread,
+      },
+      if (isManager)
+        {
+          'filter': 'cobrador',
+          'label': 'Cobradores',
+          'icon': Icons.person_pin,
+        },
+      if (isManager)
+        {
+          'filter': 'cliente',
+          'label': 'Clientes',
+          'icon': Icons.business,
+        },
+      {
+        'filter': 'payment',
+        'label': 'Pagos',
+        'icon': Icons.payment,
+      },
+      {
+        'filter': 'system',
+        'label': 'Sistema',
+        'icon': Icons.settings,
+      },
+    ];
+
+    // Asegurar que el TabController tenga el mismo length que las tabs actuales
+    if (_tabController.length != tabs.length) {
+      _tabController.dispose();
+      _tabController = TabController(length: tabs.length, vsync: this);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -46,7 +89,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           // Estado de conexión WebSocket
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: Center(child: const WebSocketStatusWidget(showAsIcon: true)),
+            child: Center(child: WebSocketStatusWidget(showAsIcon: true)),
           ),
           // Menú de opciones
           PopupMenuButton<String>(
@@ -94,54 +137,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
-          tabs: [
-            Tab(
-              icon: Badge(
-                label: Text(
-                  '${_getFilteredNotifications(wsState, 'all').length}',
+          isScrollable: tabs.length > 4,
+          tabs: tabs
+              .map(
+                (t) => Tab(
+                  icon: Badge(
+                    label: Text(
+                      '${_getFilteredNotifications(wsState, t['filter'] as String).length}',
+                    ),
+                    child: Icon(t['icon'] as IconData),
+                  ),
+                  text: t['label'] as String,
                 ),
-                child: const Icon(Icons.all_inbox),
-              ),
-              text: 'Todas',
-            ),
-            Tab(
-              icon: Badge(
-                label: Text(
-                  '${_getFilteredNotifications(wsState, 'unread').length}',
-                ),
-                child: const Icon(Icons.mark_email_unread),
-              ),
-              text: 'Sin Leer',
-            ),
-            Tab(
-              icon: Badge(
-                label: Text(
-                  '${_getFilteredNotifications(wsState, 'payment').length}',
-                ),
-                child: const Icon(Icons.payment),
-              ),
-              text: 'Pagos',
-            ),
-            Tab(
-              icon: Badge(
-                label: Text(
-                  '${_getFilteredNotifications(wsState, 'system').length}',
-                ),
-                child: const Icon(Icons.settings),
-              ),
-              text: 'Sistema',
-            ),
-          ],
+              )
+              .toList(),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildNotificationsList('all'),
-          _buildNotificationsList('unread'),
-          _buildNotificationsList('payment'),
-          _buildNotificationsList('system'),
-        ],
+        children: tabs
+            .map(
+              (t) => _buildNotificationsList(t['filter'] as String),
+            )
+            .toList(),
       ),
       floatingActionButton: !wsState.isConnected
           ? FloatingActionButton(
@@ -156,23 +174,38 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     );
   }
 
-  List<AppNotification> _getFilteredNotifications(
-    WebSocketState wsState,
-    String filter,
-  ) {
+  List<AppNotification> _getFilteredNotifications(WebSocketState wsState, String filter) {
     switch (filter) {
       case 'unread':
         return wsState.notifications.where((n) => !n.isRead).toList();
+      case 'cobrador':
+        return wsState.notifications
+            .where(
+              (n) =>
+                  n.type.contains('cobrador') ||
+                  n.type.contains('collector') ||
+                  n.message.toLowerCase().contains('cobrador'),
+            )
+            .toList();
+      case 'cliente':
+        return wsState.notifications
+            .where(
+              (n) =>
+                  n.type.contains('client') ||
+                  n.type.contains('customer') ||
+                  n.message.toLowerCase().contains('cliente'),
+            )
+            .toList();
       case 'payment':
         return wsState.notifications
             .where(
-              (n) => n.type.contains('payment') || n.type.contains('credit'),
+              (n) => n.type.contains('payment') || n.type.contains('credit') || n.type.contains('pago'),
             )
             .toList();
       case 'system':
         return wsState.notifications
             .where(
-              (n) => n.type.contains('general') || n.type.contains('message'),
+              (n) => n.type.contains('general') || n.type.contains('message') || n.type.contains('system') || n.type.contains('connection'),
             )
             .toList();
       default:
@@ -394,11 +427,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   IconData _getNotificationIcon(String type) {
     if (type.contains('payment') || type.contains('pago')) {
       return Icons.payment;
+    } else if (type.contains('cobrador') || type.contains('collector')) {
+      return Icons.person_pin;
+    } else if (type.contains('client') || type.contains('customer') || type.contains('cliente')) {
+      return Icons.business;
     } else if (type.contains('user') || type.contains('usuario')) {
       return Icons.person;
     } else if (type.contains('credit') || type.contains('credito')) {
       return Icons.credit_card;
-    } else if (type.contains('system') || type.contains('connection')) {
+    } else if (type.contains('system') || type.contains('connection') || type.contains('general')) {
       return Icons.settings;
     }
     return Icons.notifications;
@@ -407,12 +444,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   Color _getNotificationColor(String type) {
     if (type.contains('payment') || type.contains('pago')) {
       return Colors.green;
-    } else if (type.contains('user') || type.contains('usuario')) {
+    } else if (type.contains('cobrador') || type.contains('collector')) {
       return Colors.blue;
-    } else if (type.contains('credit') || type.contains('credito')) {
+    } else if (type.contains('client') || type.contains('customer') || type.contains('cliente')) {
       return Colors.orange;
-    } else if (type.contains('system') || type.contains('connection')) {
+    } else if (type.contains('user') || type.contains('usuario')) {
+      return Colors.blueGrey;
+    } else if (type.contains('credit') || type.contains('credito')) {
       return Colors.purple;
+    } else if (type.contains('system') || type.contains('connection') || type.contains('general')) {
+      return Colors.grey;
     }
     return Colors.grey;
   }
@@ -420,11 +461,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   String _getTypeLabel(String type) {
     if (type.contains('payment') || type.contains('pago')) {
       return 'Pago';
+    } else if (type.contains('cobrador') || type.contains('collector')) {
+      return 'Cobrador';
+    } else if (type.contains('client') || type.contains('customer') || type.contains('cliente')) {
+      return 'Cliente';
     } else if (type.contains('user') || type.contains('usuario')) {
       return 'Usuario';
     } else if (type.contains('credit') || type.contains('credito')) {
       return 'Crédito';
-    } else if (type.contains('system') || type.contains('connection')) {
+    } else if (type.contains('system') || type.contains('connection') || type.contains('general')) {
       return 'Sistema';
     }
     return 'General';

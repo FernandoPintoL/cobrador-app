@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io' show Platform;
 import '../../datos/modelos/usuario.dart';
 import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
@@ -351,7 +353,7 @@ class _ClienteUbicacionScreenState extends State<ClienteUbicacionScreen> {
                 _openExternalMaps();
               },
             ),
-            ListTile(
+            /*ListTile(
               leading: const Icon(Icons.share, color: Colors.purple),
               title: const Text('Compartir Ubicación'),
               subtitle: const Text('Enviar coordenadas por WhatsApp/SMS'),
@@ -359,7 +361,7 @@ class _ClienteUbicacionScreenState extends State<ClienteUbicacionScreen> {
                 Navigator.pop(context);
                 _shareLocation();
               },
-            ),
+            ),*/
             const SizedBox(height: 16),
           ],
         ),
@@ -367,12 +369,120 @@ class _ClienteUbicacionScreenState extends State<ClienteUbicacionScreen> {
     );
   }
 
-  void _openExternalMaps() {
-    // TODO: Implementar apertura en app de mapas externa
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Abrir en app de mapas externa - En desarrollo'),
+  Future<void> _openExternalMaps() async {
+    if (_clienteLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este cliente no tiene ubicación para navegar'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final lat = _clienteLocation!.latitude;
+    final lng = _clienteLocation!.longitude;
+    final label = Uri.encodeComponent(
+      _direccion.isNotEmpty
+          ? _direccion
+          : (widget.cliente.nombre.isNotEmpty
+              ? widget.cliente.nombre
+              : 'Destino'),
+    );
+
+    // URIs para diferentes servicios
+    final Uri googleMapsApp = Platform.isIOS
+        ? Uri.parse('comgooglemaps://?q=$lat,$lng&center=$lat,$lng&zoom=16')
+        : Uri.parse('geo:$lat,$lng?q=$lat,$lng($label)');
+    final Uri googleMapsWeb =
+        Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+
+    final Uri wazeUri = Uri.parse('waze://?ll=$lat,$lng&navigate=yes');
+
+    // Apple Maps solo relevante en iOS
+    final Uri appleMapsUri =
+        Uri.parse('http://maps.apple.com/?ll=$lat,$lng&q=$label');
+
+    Future<void> tryLaunch(Uri uri, {Uri? fallback}) async {
+      try {
+        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched && fallback != null) {
+          await launchUrl(fallback, mode: LaunchMode.externalApplication);
+        }
+      } catch (_) {
+        if (fallback != null) {
+          await launchUrl(fallback, mode: LaunchMode.externalApplication);
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No se pudo abrir la app de mapas'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    // Mostrar opciones de mapas al usuario
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              const ListTile(
+                title: Text('Abrir en mapas'),
+                subtitle: Text('Selecciona la app para obtener direcciones'),
+              ),
+              if (Platform.isIOS || Platform.isAndroid)
+                ListTile(
+                  leading: const Icon(Icons.map, color: Colors.red),
+                  title: const Text('Google Maps'),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    // En Android primero intentamos con geo:, en iOS con comgooglemaps:// y luego web
+                    final Uri primary = Platform.isIOS ? googleMapsApp : googleMapsApp;
+                    await tryLaunch(primary, fallback: googleMapsWeb);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.navigation, color: Colors.blue),
+                title: const Text('Waze'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await tryLaunch(wazeUri, fallback: googleMapsWeb);
+                },
+              ),
+              if (Platform.isIOS)
+                ListTile(
+                  leading: const Icon(Icons.directions, color: Colors.black87),
+                  title: const Text('Apple Maps'),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await tryLaunch(appleMapsUri);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.public, color: Colors.green),
+                title: const Text('Abrir en navegador'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await tryLaunch(googleMapsWeb);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 

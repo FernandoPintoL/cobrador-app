@@ -9,8 +9,9 @@ import '../../negocio/providers/auth_provider.dart';
 class ClienteFormScreen extends ConsumerStatefulWidget {
   final Usuario? cliente;
   final VoidCallback? onClienteCreated;
+  final String? initialName;
 
-  const ClienteFormScreen({super.key, this.cliente, this.onClienteCreated});
+  const ClienteFormScreen({super.key, this.cliente, this.onClienteCreated, this.initialName});
 
   @override
   ConsumerState<ClienteFormScreen> createState() => _ClienteFormScreenState();
@@ -43,6 +44,11 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
       _emailController.text = widget.cliente!.email;
       _telefonoController.text = widget.cliente!.telefono;
       _direccionController.text = widget.cliente!.direccion;
+    } else {
+      // Prefill name if provided when creating a new client
+      if (widget.initialName != null && widget.initialName!.trim().isNotEmpty) {
+        _nombreController.text = widget.initialName!.trim();
+      }
     }
   }
 
@@ -117,7 +123,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
               if (widget.onClienteCreated != null) {
                 widget.onClienteCreated!();
               }
-              Navigator.pop(context);
+              Navigator.pop(context, true);
             }
           });
         }
@@ -175,30 +181,6 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-
-                      // Email
-                      /* TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          hintText: 'ejemplo@email.com (opcional)',
-                          prefixIcon: Icon(Icons.email_outlined),
-                        ),
-                        validator: (value) {
-                          // Email es opcional, pero si se ingresa debe ser válido
-                          if (value != null && value.trim().isNotEmpty) {
-                            if (!RegExp(
-                              r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                            ).hasMatch(value)) {
-                              return 'Ingrese un email válido';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16), */
-
                       // Teléfono
                       TextFormField(
                         controller: _telefonoController,
@@ -324,87 +306,6 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Contraseña (opcional - solo para nuevos clientes)
-              /* if (!_isEditing)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.orange[600]),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Contraseña (Opcional)',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.blue[200]!),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.info,
-                                color: Colors.blue[600],
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Los clientes no necesitan ingresar al sistema. Este campo es opcional.',
-                                  style: TextStyle(
-                                    color: Colors.blue[700],
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: !_showPassword,
-                          decoration: InputDecoration(
-                            labelText: 'Contraseña (opcional)',
-                            hintText: 'Dejar vacío - no es necesario',
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _showPassword
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _showPassword = !_showPassword;
-                                });
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              if (!_isEditing) const SizedBox(height: 16), */
-
               // Botones de acción
               Row(
                 children: [

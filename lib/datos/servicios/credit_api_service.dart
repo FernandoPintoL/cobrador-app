@@ -48,9 +48,7 @@ class CreditApiService extends BaseApiService {
   }
 
   /// Crea un nuevo crédito
-  Future<Map<String, dynamic>> createCredit(
-    Map<String, dynamic> creditData,
-  ) async {
+  Future<Map<String, dynamic>> createCredit(Map<String, dynamic> creditData) async {
     try {
       print('➕ Creando nuevo crédito...');
       print('📋 Datos a enviar: $creditData');

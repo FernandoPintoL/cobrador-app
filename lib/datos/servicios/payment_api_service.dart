@@ -1,4 +1,6 @@
 import 'base_api_service.dart';
+import 'package:dio/dio.dart';
+import '../modelos/api_exception.dart';
 
 /// Servicio API para gestión de pagos
 class PaymentApiService extends BaseApiService {
@@ -65,11 +67,31 @@ class PaymentApiService extends BaseApiService {
         print('✅ Pago creado exitosamente');
         return data;
       } else {
-        throw Exception('Error al crear pago: ${response.statusCode}');
+        throw ApiException(
+          message: 'Error al crear pago',
+          statusCode: response.statusCode,
+          errorData: response.data,
+        );
       }
+    } on DioException catch (e) {
+      // Propagar información del backend para que UI la muestre
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      String message = 'Error al crear pago';
+      if (data is Map<String, dynamic>) {
+        if (data['message'] != null) message = data['message'].toString();
+        else if (data['error'] != null) message = data['error'].toString();
+      }
+      print('❌ Error al crear pago: $message');
+      throw ApiException(
+        message: message,
+        statusCode: status,
+        errorData: data,
+        originalError: e,
+      );
     } catch (e) {
       print('❌ Error al crear pago: $e');
-      throw Exception('Error al crear pago: $e');
+      throw ApiException(message: 'Error al crear pago: $e', originalError: e);
     }
   }
 
@@ -324,7 +346,8 @@ class PaymentApiService extends BaseApiService {
       print('📋 Datos a enviar: $paymentData');
 
       final response = await post(
-        '/credits/$creditId/payments',
+        // '/credits/$creditId/payments',
+        '/payments',
         data: paymentData,
       );
 
@@ -333,13 +356,33 @@ class PaymentApiService extends BaseApiService {
         print('✅ Pago para crédito creado exitosamente');
         return data;
       } else {
-        throw Exception(
-          'Error al crear pago para crédito: ${response.statusCode}',
+        throw ApiException(
+          message: 'Error al crear pago para crédito',
+          statusCode: response.statusCode,
+          errorData: response.data,
         );
       }
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      String message = 'Error al crear pago para crédito';
+      if (data is Map<String, dynamic>) {
+        if (data['message'] != null) message = data['message'].toString();
+        else if (data['error'] != null) message = data['error'].toString();
+      }
+      print('❌ Error al crear pago para crédito: $message');
+      throw ApiException(
+        message: message,
+        statusCode: status,
+        errorData: data,
+        originalError: e,
+      );
     } catch (e) {
       print('❌ Error al crear pago para crédito: $e');
-      throw Exception('Error al crear pago para crédito: $e');
+      throw ApiException(
+        message: 'Error al crear pago para crédito: $e',
+        originalError: e,
+      );
     }
   }
 
@@ -361,11 +404,30 @@ class PaymentApiService extends BaseApiService {
         print('✅ Simulación de pago completada');
         return data;
       } else {
-        throw Exception('Error al simular pago: ${response.statusCode}');
+        throw ApiException(
+          message: 'Error al simular pago',
+          statusCode: response.statusCode,
+          errorData: response.data,
+        );
       }
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      String message = 'Error al simular pago';
+      if (data is Map<String, dynamic>) {
+        if (data['message'] != null) message = data['message'].toString();
+        else if (data['error'] != null) message = data['error'].toString();
+      }
+      print('❌ Error al simular pago: $message');
+      throw ApiException(
+        message: message,
+        statusCode: status,
+        errorData: data,
+        originalError: e,
+      );
     } catch (e) {
       print('❌ Error al simular pago: $e');
-      throw Exception('Error al simular pago: $e');
+      throw ApiException(message: 'Error al simular pago: $e', originalError: e);
     }
   }
 }

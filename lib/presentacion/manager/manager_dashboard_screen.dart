@@ -4,12 +4,13 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../config/role_colors.dart';
-import '../creditos/credits_screen.dart';
+import '../creditos/waiting_list_screen.dart';
 import 'manager_cobradores_screen.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import 'manager_reportes_screen.dart';
-import 'manager_notifications_screen.dart';
+import '../pantallas/notifications_screen.dart';
 import 'manager_client_assignment_screen.dart';
+import '../pantallas/profile_settings_screen.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -75,12 +76,23 @@ class _ManagerDashboardScreenState
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const ManagerNotificationsScreen(),
+                    builder: (context) => const NotificationsScreen(),
                   ),
                 ),
                 tooltip: 'Notificaciones Manager',
               );
             },
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Editar perfil',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ProfileSettingsScreen(),
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           IconButton(
@@ -171,7 +183,7 @@ class _ManagerDashboardScreenState
             const SizedBox(height: 24),
 
             // Estadísticas del equipo
-            const Text(
+            /*const Text(
               'Mis estadísticas',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
@@ -214,7 +226,7 @@ class _ManagerDashboardScreenState
                 ),
               ],
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 32),*/
 
             // Funciones de gestión
             const Text(
@@ -422,7 +434,7 @@ class _ManagerDashboardScreenState
   void _navigateToCreditManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const CreditsScreen()),
+      MaterialPageRoute(builder: (context) => const WaitingListScreen()),
     );
   }
 }

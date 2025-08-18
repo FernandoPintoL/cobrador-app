@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io' show Platform;
 
 /// Widget helper para acciones de contacto (llamadas y WhatsApp)
 class ContactActionsWidget {
@@ -77,13 +78,16 @@ class ContactActionsWidget {
     print('📞 URI de llamada: $phoneUri');
 
     try {
-      if (await canLaunchUrl(phoneUri)) {
-        print('✅ Realizando llamada...');
-        await launchUrl(phoneUri);
-      } else {
-        print('❌ No se puede realizar la llamada - canLaunchUrl retornó false');
+      // Preferir abrir en aplicación externa (teléfono)
+      final launched = await launchUrl(
+        phoneUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        print('❌ launchUrl retornó false para llamada');
         throw Exception('No se puede realizar la llamada');
       }
+      print('✅ Realizando llamada...');
     } catch (e) {
       print('❌ Error al intentar realizar la llamada: $e');
       throw Exception('Error al intentar realizar la llamada: $e');
@@ -123,44 +127,28 @@ class ContactActionsWidget {
     String whatsappNumber = cleanNumber.replaceFirst('+', '');
     print('📱 Número para WhatsApp: "$whatsappNumber"');
 
-    // Verificar si WhatsApp está instalado
-    final isInstalled = await isWhatsAppInstalled();
-    print('📱 WhatsApp instalado: $isInstalled');
-
-    if (!isInstalled) {
-      print('❌ WhatsApp no está instalado');
-      if (context != null && context.mounted) {
-        _showWhatsAppNotInstalledDialog(context, whatsappNumber, message);
-      }
-      throw Exception('WhatsApp no está instalado en este dispositivo');
-    }
-
-    // Lista de URLs para intentar (mejorada para múltiples WhatsApp)
-    final List<String> urlsToTry = [
-      // Intent específico para WhatsApp normal (más confiable en Android)
-      'intent://send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}#Intent;scheme=whatsapp;package=com.whatsapp;end',
-
-      // Intent para WhatsApp Business
-      'intent://send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end',
-
-      // Formato web estándar (funciona siempre)
-      'https://wa.me/$whatsappNumber${message != null && message.isNotEmpty ? '?text=${Uri.encodeComponent(message)}' : ''}',
-
-      // API WhatsApp web
-      'https://api.whatsapp.com/send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}',
-
-      // Esquema directo tradicional
-      'whatsapp://send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}',
-
-      // Esquema WhatsApp Business
-      'whatsapp4b://send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}',
-
-      // Formato simple
-      'whatsapp://send?phone=$whatsappNumber',
-
-      // Solo abrir WhatsApp
-      'whatsapp://',
-    ];
+    // Lista de URLs para intentar (optimizada por plataforma)
+    final List<String> urlsToTry = Platform.isAndroid
+        ? [
+            // Android: usar esquema directo primero
+            'whatsapp://send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}',
+            // Intent normal
+            'intent://send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}#Intent;scheme=whatsapp;package=com.whatsapp;end',
+            // Intent Business
+            'intent://send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end',
+            // Fallback web (abre navegador o app)
+            'https://wa.me/$whatsappNumber${message != null && message.isNotEmpty ? '?text=${Uri.encodeComponent(message)}' : ''}',
+            'https://api.whatsapp.com/send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}',
+            // Últimos recursos
+            'whatsapp://send?phone=$whatsappNumber',
+            'whatsapp://',
+          ]
+        : [
+            // iOS: esquema directo y fallback web (no usar intent://)
+            'whatsapp://send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}',
+            'https://wa.me/$whatsappNumber${message != null && message.isNotEmpty ? '?text=${Uri.encodeComponent(message)}' : ''}',
+            'https://api.whatsapp.com/send?phone=$whatsappNumber${message != null && message.isNotEmpty ? '&text=${Uri.encodeComponent(message)}' : ''}',
+          ];
 
     for (int i = 0; i < urlsToTry.length; i++) {
       final url = urlsToTry[i];
@@ -198,8 +186,13 @@ class ContactActionsWidget {
     // Si todos los métodos fallan
     print('❌ Todos los métodos de WhatsApp fallaron');
 
-    // Si WhatsApp está "instalado" pero no se puede abrir, podría ser problema de múltiples instalaciones
-    if (isInstalled && context != null && context.mounted) {
+    // Verificar instalación para mostrar mejor diagnóstico
+    bool installed = false;
+    try {
+      installed = await isWhatsAppInstalled();
+    } catch (_) {}
+
+    if (installed && context != null && context.mounted) {
       print('⚠️ Posible conflicto con múltiples WhatsApp instalados');
       _showMultipleWhatsAppDialog(context, whatsappNumber, message);
     } else if (context != null && context.mounted) {
@@ -207,7 +200,8 @@ class ContactActionsWidget {
     }
 
     throw Exception(
-      'No se pudo abrir WhatsApp con ningún método disponible. Es posible que tengas múltiples WhatsApp instalados.',
+      'No se pudo abrir WhatsApp con ningún método disponible.' +
+          (installed ? ' Es posible que tengas múltiples WhatsApp instalados.' : ''),
     );
   }
 
@@ -277,71 +271,6 @@ class ContactActionsWidget {
               }
             },
             child: const Text('Abrir en navegador'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Muestra diálogo cuando WhatsApp no está instalado
-  static void _showWhatsAppNotInstalledDialog(
-    BuildContext context,
-    String phoneNumber,
-    String? message,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('WhatsApp no disponible'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('WhatsApp no está instalado en este dispositivo.'),
-            const SizedBox(height: 16),
-            Text('Número: +$phoneNumber'),
-            if (message != null && message.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text('Mensaje: $message'),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cerrar'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              ContactActionsWidget.copyToClipboard('+$phoneNumber', context);
-            },
-            child: const Text('Copiar número'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              try {
-                final Uri playStoreUri = Uri.parse(
-                  'https://play.google.com/store/apps/details?id=com.whatsapp',
-                );
-                if (await canLaunchUrl(playStoreUri)) {
-                  await launchUrl(
-                    playStoreUri,
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
-              } catch (e) {
-                print('❌ Error abriendo Play Store: $e');
-              }
-            },
-            child: const Text('Instalar WhatsApp'),
           ),
         ],
       ),

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../negocio/providers/pago_provider.dart';
+import '../../ui/widgets/validation_error_display.dart';
 
 class CreditPaymentScreen extends ConsumerStatefulWidget {
   final Credito credit;
@@ -18,18 +20,83 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
 
+  Credito? _credit; // Crédito actualizado desde backend
+  bool _isLoadingCredit = true;
+
   List<PaymentSchedule>? _paymentSchedule;
   PaymentAnalysis? _paymentSimulation;
   bool _isLoadingSchedule = true;
-  bool _isSimulating = false;
   bool _isProcessing = false;
   String _selectedPaymentType = 'cash';
+  int? _currentInstallmentNumber; // cuota a pagar actualmente
+  bool _amountEdited = false;
+
+  Credito get _effectiveCredit => _credit ?? widget.credit;
+
+  double _computeSuggestedInstallment() {
+    // Calcular cuota sugerida basada en los datos del crédito
+    final c = _effectiveCredit;
+    final totalAmount = c.totalAmount ??
+        (c.interestRate != null
+            ? c.amount * (1 + (c.interestRate! / 100))
+            : c.amount);
+    final rawInstallment = c.installmentAmount ??
+        (totalAmount / c.totalInstallments);
+    // Sugerir no más que el saldo pendiente
+    final balance = c.balance;
+    final suggested = balance > 0
+        ? (rawInstallment <= balance ? rawInstallment : balance)
+        : rawInstallment;
+    // Evitar números negativos o NaN
+    return suggested.isFinite && suggested > 0 ? suggested : rawInstallment;
+  }
+
+  int? _findCurrentInstallmentNumber() {
+    final schedule = _paymentSchedule;
+    if (schedule == null || schedule.isEmpty) return null;
+
+    DateTime normalize(DateTime d) => DateTime(d.year, d.month, d.day);
+    final today = normalize(DateTime.now());
+
+    final unpaid = schedule.where((ins) => !_isInstallmentPaid(ins)).toList();
+    if (unpaid.isEmpty) return null;
+
+    // Excluir vencidos para "actual"
+    final notOverdue = unpaid.where((ins) => !ins.isOverdue).toList();
+    if (notOverdue.isEmpty) return null;
+
+    // Preferir cuotas que vencen hoy
+    final dueToday = notOverdue
+        .where((ins) => normalize(ins.dueDate) == today)
+        .toList();
+    if (dueToday.isNotEmpty) {
+      dueToday.sort((a, b) => a.installmentNumber.compareTo(b.installmentNumber));
+      return dueToday.first.installmentNumber;
+    }
+
+    // Si no hay para hoy, tomar la próxima futura más cercana por fecha
+    notOverdue.sort((a, b) {
+      final cmp = a.dueDate.compareTo(b.dueDate);
+      if (cmp != 0) return cmp;
+      return a.installmentNumber.compareTo(b.installmentNumber);
+    });
+    return notOverdue.first.installmentNumber;
+  }
 
   @override
   void initState() {
     super.initState();
-    print('datos del crédito: ${widget.credit.toJson()}');
+    print('datos del crédito (pasado): ${widget.credit.toJson()}');
+    // Prefijar el campo de monto con la "Cuota Sugerida" a partir de los datos disponibles
+    try {
+      final suggested = _computeSuggestedInstallment();
+      _amountController.text = suggested.toStringAsFixed(2);
+    } catch (_) {
+      // Si algo falla, dejar vacío sin bloquear la pantalla
+    }
+    // Programar carga de datos después del primer frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCredit();
       _loadPaymentSchedule();
     });
   }
@@ -41,6 +108,26 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
     super.dispose();
   }
 
+  Future<void> _loadCredit() async {
+    setState(() {
+      _isLoadingCredit = true;
+    });
+    final fetched = await ref.read(creditProvider.notifier).fetchCreditById(widget.credit.id);
+    setState(() {
+      _credit = fetched ?? _credit; // mantener el previo si ya existía
+      _isLoadingCredit = false;
+    });
+    // Actualizar el monto sugerido solo si el usuario no lo ha modificado o está vacío
+    if (!_amountEdited || _amountController.text.trim().isEmpty) {
+      try {
+        final suggested = _computeSuggestedInstallment();
+        _amountController.text = suggested.toStringAsFixed(2);
+      } catch (_) {
+        // Silenciar errores de cálculo para no interrumpir la UI
+      }
+    }
+  }
+
   Future<void> _loadPaymentSchedule() async {
     setState(() {
       _isLoadingSchedule = true;
@@ -48,44 +135,41 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
 
     final schedule = await ref
         .read(creditProvider.notifier)
-        .getPaymentSchedule(widget.credit.id);
+        .getPaymentSchedule(_effectiveCredit.id);
 
     setState(() {
       _paymentSchedule = schedule;
+      _currentInstallmentNumber = _findCurrentInstallmentNumber();
       _isLoadingSchedule = false;
     });
   }
 
-  Future<void> _simulatePayment() async {
-    final amount = double.tryParse(_amountController.text);
-    if (amount == null || amount <= 0) return;
-
-    setState(() {
-      _isSimulating = true;
-    });
-
-    final simulation = await ref
-        .read(creditProvider.notifier)
-        .simulatePayment(creditId: widget.credit.id, amount: amount);
-
-    setState(() {
-      _paymentSimulation = simulation;
-      _isSimulating = false;
-    });
-  }
-
   Future<void> _processPayment() async {
+    final c = _effectiveCredit;
+    // Bloquear si el crédito no está activo
+    if (c.status != 'active') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Solo se pueden registrar pagos para créditos activos'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     final amount = double.tryParse(_amountController.text);
-    if (amount == null || amount <= 0) return;
+    if (amount == null || amount <= 0.01) return;
 
     setState(() {
       _isProcessing = true;
     });
 
     final result = await ref
-        .read(creditProvider.notifier)
-        .processPayment(
-          creditId: widget.credit.id,
+        .read(pagoProvider.notifier)
+        .processPaymentForCredit(
+          creditId: c.id,
           amount: amount,
           paymentType: _selectedPaymentType,
           notes: _notesController.text.trim().isEmpty
@@ -100,12 +184,10 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
     if (result != null) {
       // Recargar cronograma después del pago exitoso
       await _loadPaymentSchedule();
-
       // Mostrar resultado del pago
       if (mounted) {
         _showPaymentResult(result);
       }
-
       // Limpiar formulario
       _amountController.clear();
       _notesController.clear();
@@ -147,6 +229,20 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Escuchar mensajes del PagoProvider dentro de build (requerido por Riverpod)
+    ref.listen<PagoState>(pagoProvider, (prev, next) {
+      if (!mounted) return;
+      if (next.errorMessage != null && next.errorMessage!.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(next.errorMessage!), backgroundColor: Colors.red),
+        );
+      } else if (next.successMessage != null && next.successMessage!.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(next.successMessage!), backgroundColor: Colors.green),
+        );
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -182,11 +278,22 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
   }
 
   Widget _buildCreditInfo() {
-    final totalAmount = widget.credit.totalAmount ?? widget.credit.amount;
-    final installmentAmount =
-        widget.credit.installmentAmount ??
-        (totalAmount / widget.credit.totalInstallments);
+    if (_isLoadingCredit) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
 
+    final c = _effectiveCredit;
+    print("🪙 credit: "+c.toJson().toString());
+    // Usar valores seguros calculando total con interés si es necesario
+    final totalAmountSafe = c.totalAmount ??
+        (c.interestRate != null ? c.amount * (1 + (c.interestRate! / 100)) : c.amount);
+    final installmentAmountSafe = c.installmentAmount ??
+        (totalAmountSafe / c.totalInstallments);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -206,8 +313,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
               children: [
                 const Text('Cliente:'),
                 Text(
-                  widget.credit.client?.nombre ??
-                      'Cliente #${widget.credit.clientId}',
+                  c.client?.nombre ?? 'Cliente #${c.clientId}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ],
@@ -219,26 +325,11 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
               children: [
                 const Text('Monto Original:'),
                 Text(
-                  'Bs. ${widget.credit.amount.toStringAsFixed(2)}',
+                  'Bs. ${c.amount.toStringAsFixed(2)}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ],
             ),
-
-            if (widget.credit.interestRate != null &&
-                widget.credit.interestRate! > 0) ...[
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Interés:'),
-                  Text(
-                    '${widget.credit.interestRate!.toStringAsFixed(1)}%',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ],
 
             const SizedBox(height: 8),
             Row(
@@ -246,7 +337,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
               children: [
                 const Text('Total a Pagar:'),
                 Text(
-                  'Bs. ${totalAmount.toStringAsFixed(2)}',
+                  'Bs. ${totalAmountSafe!.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.blue,
@@ -261,7 +352,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
               children: [
                 const Text('Saldo Pendiente:'),
                 Text(
-                  'Bs. ${widget.credit.balance.toStringAsFixed(2)}',
+                  'Bs. ${c.balance.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.orange,
@@ -276,7 +367,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
               children: [
                 const Text('Cuota Sugerida:'),
                 Text(
-                  'Bs. ${installmentAmount.toStringAsFixed(2)}',
+                  'Bs. ${installmentAmountSafe.toStringAsFixed(2)}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ],
@@ -288,7 +379,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
               children: [
                 const Text('Frecuencia:'),
                 Text(
-                  widget.credit.frequencyLabel,
+                  c.frequencyLabel,
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ],
@@ -338,7 +429,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
 
   Widget _buildScheduleCalendar() {
     final schedule = _paymentSchedule!;
-    final itemsPerRow = 7; // Una semana
+    final itemsPerRow = 6; // Una semana
 
     return Column(
       children: [
@@ -348,6 +439,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
           children: [
             _buildLegendItem(Colors.green, 'Pagado'),
             _buildLegendItem(Colors.grey.shade300, 'Pendiente'),
+            _buildLegendItem(Colors.lightBlueAccent, 'Actual'),
             _buildLegendItem(Colors.red, 'Vencido'),
           ],
         ),
@@ -388,14 +480,46 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
     );
   }
 
+  bool _isInstallmentPaid(PaymentSchedule installment) {
+    final c = _effectiveCredit;
+    // 1) Trust backend status if provided
+    if (installment.isPaid) return true;
+
+    // 2) Infer by number of cuotas pagadas según el crédito
+    // paidInstallments usa balance e installmentAmount para estimar cuántas cuotas ya se cubrieron
+    final paidCount = c.paidInstallments;
+    if (paidCount >= installment.installmentNumber) return true;
+
+    // 3) Infer by exact/same-day payment date
+    final pagos = c.payments;
+    if (pagos != null && pagos.isNotEmpty) {
+      for (final p in pagos) {
+        final diff = p.paymentDate.difference(installment.dueDate).inDays.abs();
+        if (diff <= 1 && (p.status == 'completed' || p.status == 'paid')) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   Widget _buildInstallmentTile(PaymentSchedule installment) {
     Color backgroundColor;
     Color textColor = Colors.white;
 
-    if (installment.isPaid) {
+    final consideredPaid = _isInstallmentPaid(installment);
+    final isCurrent = !consideredPaid && !installment.isOverdue &&
+        _currentInstallmentNumber != null &&
+        installment.installmentNumber == _currentInstallmentNumber;
+
+    if (consideredPaid) {
       backgroundColor = Colors.green;
     } else if (installment.isOverdue) {
       backgroundColor = Colors.red;
+    } else if (isCurrent) {
+      backgroundColor = Colors.lightBlueAccent;
+      textColor = Colors.black;
     } else {
       backgroundColor = Colors.grey.shade300;
       textColor = Colors.black87;
@@ -506,7 +630,8 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
                 decimal: true,
               ),
               onChanged: (_) {
-                // Limpiar simulación previa cuando cambie el monto
+                // Marcar que el usuario editó el campo y limpiar simulación previa
+                _amountEdited = true;
                 setState(() {
                   _paymentSimulation = null;
                 });
@@ -529,7 +654,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
                   child: Text('Transferencia'),
                 ),
                 DropdownMenuItem(value: 'check', child: Text('Cheque')),
-                DropdownMenuItem(value: 'card', child: Text('Tarjeta')),
+                DropdownMenuItem(value: 'other', child: Text('Otro')),
               ],
               onChanged: (value) {
                 setState(() {
@@ -540,7 +665,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
             const SizedBox(height: 16),
 
             // Notas
-            TextFormField(
+            /*TextFormField(
               controller: _notesController,
               decoration: const InputDecoration(
                 labelText: 'Notas (Opcional)',
@@ -550,39 +675,29 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
               ),
               maxLines: 2,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 20),*/
+
+            // Errores de validación del backend
+            Consumer(builder: (context, ref, _) {
+              final pagoState = ref.watch(pagoProvider);
+              if (pagoState.validationErrors.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ValidationErrorDisplay(errors: pagoState.validationErrors),
+              );
+            }),
 
             // Botones de acción
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isSimulating ? null : _simulatePayment,
-                    icon: _isSimulating
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.calculate),
-                    label: const Text('Simular'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : _processPayment,
-                    icon: _isProcessing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.payment),
-                    label: const Text('Procesar Pago'),
-                  ),
-                ),
-              ],
+            ElevatedButton.icon(
+              onPressed: (_isProcessing || _isLoadingCredit) ? null : _processPayment,
+              icon: _isProcessing
+                  ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+                  : const Icon(Icons.payment),
+              label: const Text('Procesar Pago'),
             ),
           ],
         ),

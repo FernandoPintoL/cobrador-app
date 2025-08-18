@@ -5,6 +5,7 @@ import '../../config/role_colors.dart';
 import 'user_management_screen.dart';
 import 'cobrador_assignment_screen.dart';
 import '../widgets/user_stats_widget.dart';
+import '../pantallas/profile_settings_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -21,6 +22,17 @@ class AdminDashboardScreen extends ConsumerWidget {
         foregroundColor: Colors.white,
         elevation: 4,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Editar perfil',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ProfileSettingsScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authProvider.notifier).logout(),

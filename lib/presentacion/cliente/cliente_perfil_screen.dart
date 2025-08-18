@@ -5,7 +5,7 @@ import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
 import 'cliente_creditos_screen.dart';
-import 'cliente_ubicacion_screen.dart';
+import '../manager/cliente_ubicacion_screen.dart';
 
 class ClientePerfilScreen extends ConsumerWidget {
   final Usuario cliente;

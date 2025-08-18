@@ -46,11 +46,14 @@ class ValidationErrorDisplay extends StatelessWidget {
                 size: 20,
               ),
               const SizedBox(width: 8),
-              Text(
-                'Por favor corrige los siguientes errores:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: txtColor,
+              Expanded(
+                child: Text(
+                  'Por favor corrige los siguientes errores:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: txtColor,
+                  ),
+                  softWrap: true,
                 ),
               ),
             ],

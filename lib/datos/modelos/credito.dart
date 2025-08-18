@@ -212,7 +212,8 @@ class Credito {
     final daysDiff = endDate.difference(startDate).inDays + 1;
     switch (frequency) {
       case 'daily':
-        return daysDiff;
+        // 24 cuotas diarias (lunes a sábado), independientemente de los días calendario entre fechas
+        return 24;
       case 'weekly':
         return (daysDiff / 7).ceil();
       case 'biweekly':

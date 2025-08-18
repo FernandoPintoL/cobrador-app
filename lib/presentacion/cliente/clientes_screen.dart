@@ -7,8 +7,8 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/contact_actions_widget.dart';
 import '../manager/manager_cliente_form_screen.dart';
-import '../manager/cliente_creditos_screen.dart';
-import '../manager/cliente_perfil_screen.dart';
+import 'cliente_creditos_screen.dart';
+import 'cliente_perfil_screen.dart';
 import '../manager/cliente_ubicacion_screen.dart';
 import '../manager/manager_client_assignment_screen.dart';
 

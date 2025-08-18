@@ -11,7 +11,7 @@ import '../widgets/websocket_widgets.dart';
 import '../pantallas/profile_settings_screen.dart';
 import '../pantallas/notifications_screen.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
-import '../creditos/credits_screen.dart';
+import '../creditos/waiting_list_screen.dart';
 import 'package:intl/intl.dart';
 
 class CobradorDashboardScreen extends ConsumerStatefulWidget {
@@ -184,7 +184,7 @@ class _CobradorDashboardScreenState
               const SizedBox(height: 24),
 
               // Estadísticas del cobrador
-              Text(
+              /*Text(
                 'Mis Estadísticas',
                 style: TextStyle(
                   fontSize: 20,
@@ -193,7 +193,6 @@ class _CobradorDashboardScreenState
                 ),
               ),
               const SizedBox(height: 16),
-
               // GridView mejorado con mejor responsive design
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -247,7 +246,7 @@ class _CobradorDashboardScreenState
                   );
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 24),*/
 
               // Widget de notificaciones
               // const NotificationsSummaryCard(),
@@ -284,7 +283,7 @@ class _CobradorDashboardScreenState
                     () => _navigateToClientManagement(context),
                   ),
                   const SizedBox(height: 12),
-                  _buildCobradorActionCard(
+                  /*_buildCobradorActionCard(
                     context,
                     'Reportes',
                     'Ver mis reportes de cobro',
@@ -300,7 +299,7 @@ class _CobradorDashboardScreenState
                     Icons.settings,
                     Colors.grey,
                     () => _navigateToSettings(context),
-                  ),
+                  ),*/
                 ],
               ),
               const SizedBox(height: 20), // Espacio adicional al final
@@ -438,7 +437,7 @@ class _CobradorDashboardScreenState
   void _navigateToCreditManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const CreditsScreen()),
+      MaterialPageRoute(builder: (context) => const WaitingListScreen()),
     );
   }
 

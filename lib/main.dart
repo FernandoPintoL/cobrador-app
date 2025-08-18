@@ -123,24 +123,27 @@ class _MyAppState extends ConsumerState<MyApp> {
   }
 
   ThemeData _buildLightTheme() {
+    // Soft, accessible palette for light mode
+    const primarySoft = Color(0xFF5E81F4); // soft indigo
+    const secondarySoft = Color(0xFF56C8C8); // soft teal
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: primarySoft,
+      primary: primarySoft,
+      secondary: secondarySoft,
+      brightness: Brightness.light,
+    );
     return ThemeData(
       brightness: Brightness.light,
-      primarySwatch: Colors.blue,
-      primaryColor: const Color(0xFF667eea),
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF667eea),
-        primary: const Color(0xFF667eea),
-        secondary: const Color(0xFF764ba2),
-        brightness: Brightness.light,
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF667eea),
+      colorScheme: colorScheme,
+      primaryColor: primarySoft,
+      appBarTheme: AppBarTheme(
+        backgroundColor: colorScheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF667eea),
+          backgroundColor: colorScheme.primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
@@ -149,11 +152,11 @@ class _MyAppState extends ConsumerState<MyApp> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
       ),
       cardTheme: const CardThemeData(
-        elevation: 4,
+        elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
@@ -163,24 +166,28 @@ class _MyAppState extends ConsumerState<MyApp> {
   }
 
   ThemeData _buildDarkTheme() {
+    // Soft, muted palette for dark mode
+    const primarySoftDark = Color(0xFF90A4F4); // softer indigo tint for dark
+    const secondarySoftDark = Color(0xFF6FD6CF); // softer teal for dark
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: primarySoftDark,
+      primary: primarySoftDark,
+      secondary: secondarySoftDark,
+      brightness: Brightness.dark,
+    );
     return ThemeData(
       brightness: Brightness.dark,
-      primarySwatch: Colors.blue,
-      primaryColor: const Color(0xFF667eea),
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF667eea),
-        primary: const Color(0xFF667eea),
-        secondary: const Color(0xFF764ba2),
-        brightness: Brightness.dark,
-      ),
+      colorScheme: colorScheme,
+      primaryColor: primarySoftDark,
+      scaffoldBackgroundColor: const Color(0xFF121212),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF1a1a1a),
+        backgroundColor: Color(0xFF1A1A1A),
         foregroundColor: Colors.white,
         elevation: 0,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF667eea),
+          backgroundColor: colorScheme.primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
@@ -189,11 +196,11 @@ class _MyAppState extends ConsumerState<MyApp> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
       ),
       cardTheme: const CardThemeData(
-        elevation: 4,
+        elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
         ),

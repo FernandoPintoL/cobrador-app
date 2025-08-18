@@ -89,7 +89,7 @@ class _ManagerClienteFormScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_esEdicion ? 'Editar Cliente' : 'Crear Cliente'),
+        title: Text(_esEdicion ? 'Editar Cliente' : 'Creares Cliente'),
         backgroundColor: RoleColors.managerPrimary,
         foregroundColor: Colors.white,
         elevation: 4,
@@ -298,49 +298,6 @@ class _ManagerClienteFormScreenState
                         ),
                       ),
                     ),
-                    /* const SizedBox(height: 16),
-                    if (!_esEdicion) // Solo mostrar contraseña para nuevos clientes
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Credenciales de Acceso (Opcional)',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Solo necesario si el cliente tendrá acceso al sistema',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: Colors.grey[600]),
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _contrasenaController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Contraseña (opcional)',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.lock),
-                                  helperText:
-                                      'Dejar vacío si el cliente no necesita acceso al sistema',
-                                ),
-                                obscureText: true,
-                                validator: (value) {
-                                  // Contraseña es opcional para clientes
-                                  if (value != null && value.isNotEmpty) {
-                                    if (value.length < 6) {
-                                      return 'Si establece contraseña, debe tener al menos 6 caracteres';
-                                    }
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ), */
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,

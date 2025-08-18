@@ -6,6 +6,8 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
 import 'credit_form_screen.dart';
 import 'credit_payment_screen.dart';
+import '../widgets/contact_actions_widget.dart';
+import '../manager/cliente_ubicacion_screen.dart';
 
 class CreditDetailScreen extends ConsumerStatefulWidget {
   final Credito credit;
@@ -21,10 +23,45 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
   late TabController _tabController;
   final _paymentAmountController = TextEditingController();
 
+  // Detalles enriquecidos del crédito (incluye cliente con ubicación)
+  Credito? _detailedCredit;
+  bool _isLoadingDetails = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // Cargar detalles solo si faltan datos del cliente (p. ej., ubicación)
+    final needsClientDetails = widget.credit.client == null ||
+        widget.credit.client?.latitud == null ||
+        widget.credit.client?.longitud == null;
+    if (needsClientDetails) {
+      _loadCreditDetails();
+    }
+  }
+
+  Future<void> _loadCreditDetails() async {
+    print("widget credito: "+widget.credit.toJson().toString());
+    try {
+      setState(() => _isLoadingDetails = true);
+      final details = await ref
+          .read(creditProvider.notifier)
+          .getCreditDetails(widget.credit.id);
+      if (!mounted) return;
+      setState(() {
+        _detailedCredit = details ?? widget.credit;
+        _isLoadingDetails = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingDetails = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudieron cargar todos los datos del cliente: $e'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   @override
@@ -34,29 +71,74 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     super.dispose();
   }
 
+  // Cuenta días entre dos fechas excluyendo domingos (incluye sábados)
+  /*int _countBusinessDaysExcludingSundays(DateTime from, DateTime to) {
+    // Normalizar a fechas (sin tiempo)
+    final start = DateTime(from.year, from.month, from.day);
+    final end = DateTime(to.year, to.month, to.day);
+    if (start.isAfter(end)) return 0;
+
+    int count = 0;
+    DateTime current = start;
+    while (!current.isAfter(end)) {
+      if (current.weekday != DateTime.sunday) {
+        count++;
+      }
+      current = current.add(const Duration(days: 1));
+    }
+    return count;
+  }*/
+
   @override
   Widget build(BuildContext context) {
     final creditState = ref.watch(creditProvider);
 
-    // Buscar el crédito actualizado en el estado
-    final currentCredit = creditState.credits.firstWhere(
-      (c) => c.id == widget.credit.id,
-      orElse: () => widget.credit,
-    );
+    // Buscar el crédito actualizado en el estado, pero si el de estado está incompleto (sin totalAmount)
+    // y el widget.credit sí lo trae, preferir el del widget para no perder datos.
+    Credito baseCredit;
+    try {
+      final stateCredit = creditState.credits.firstWhere((c) => c.id == widget.credit.id);
+      if (stateCredit.totalAmount == null && widget.credit.totalAmount != null) {
+        baseCredit = widget.credit;
+      } else {
+        baseCredit = stateCredit;
+      }
+    } catch (_) {
+      baseCredit = widget.credit;
+    }
+    final currentCredit = _detailedCredit ?? baseCredit;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Créditosss #${currentCredit.id}',
+          'Crédito #${currentCredit.id}',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                Theme.of(context).colorScheme.secondary,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: () => _editCredit(currentCredit),
+            onPressed: currentCredit.status == 'pending_approval'
+                ? () => _editCredit(currentCredit)
+                : null,
+            tooltip: currentCredit.status == 'pending_approval'
+                ? 'Editar crédito'
+                : 'Solo se puede editar cuando está pendiente',
           ),
           PopupMenuButton<String>(
             onSelected: (value) => _handleMenuAction(value, currentCredit),
@@ -85,14 +167,26 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildInformationTab(currentCredit),
-          _buildPaymentsTab(currentCredit),
-        ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Theme.of(context).colorScheme.surface.withOpacity(0.96),
+              Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.96),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildInformationTab(currentCredit),
+            _buildPaymentsTab(currentCredit),
+          ],
+        ),
       ),
-      floatingActionButton: _tabController.index == 1
+      floatingActionButton: _tabController.index == 1 && currentCredit.status == 'active'
           ? FloatingActionButton.extended(
               onPressed: () => _navigateToPaymentScreen(currentCredit),
               icon: const Icon(Icons.payment),
@@ -117,8 +211,14 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
   }
 
   Widget _buildInformationTab(Credito credit) {
-    final progress = (credit.amount - credit.balance) / credit.amount;
-    final daysRemaining = credit.endDate.difference(DateTime.now()).inDays;
+    // final total = credit.totalAmount ?? credit.amount;
+    final total = widget.credit.totalAmount;
+    final paid = (total! - widget.credit.balance).clamp(0, total);
+    final progress = total > 0 ? (paid / total) : 0.0;
+    final daysRemaining = widget.credit.frequency == 'daily'
+        ? widget.credit.pendingInstallments
+        : widget.credit.endDate.difference(DateTime.now()).inDays;
+    print(daysRemaining.toString());
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -127,6 +227,8 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
         children: [
           // Estado del crédito
           Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -135,9 +237,11 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                   Wrap(
                     spacing: 8,
                     runSpacing: 4,
+                    // alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
-                        'Estado del Crédito',
+                        'Estado del Crédito ',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
@@ -146,7 +250,6 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                     ],
                   ),
                   const SizedBox(height: 16),
-
                   // Progreso
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -183,7 +286,14 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                           children: [
                             _buildInfoCard(
                               'Monto Total',
-                              'Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+                              'Bs. ${NumberFormat('#,##0.00').format(total)}',
+                              Icons.attach_money,
+                              Colors.blue,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildInfoCard(
+                              'Monto Prestamo',
+                              'Bs. ${NumberFormat('#,##0.00').format(widget.credit.amount)}',
                               Icons.attach_money,
                               Colors.blue,
                             ),
@@ -202,7 +312,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                           Expanded(
                             child: _buildInfoCard(
                               'Monto Total',
-                              'Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+                              'Bs. ${NumberFormat('#,##0.00').format(total)}',
                               Icons.attach_money,
                               Colors.blue,
                             ),
@@ -305,14 +415,13 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                       ),
                     ),
                   ],
-
                   // Botones de acción rápida
                   const SizedBox(height: 20),
                   Row(
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => _navigateToPaymentScreen(credit),
+                          onPressed: credit.status == 'active' ? () => _navigateToPaymentScreen(credit) : null,
                           icon: const Icon(Icons.payment),
                           label: const Text('Procesar Pago'),
                           style: ElevatedButton.styleFrom(
@@ -326,9 +435,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () {
-                            _tabController.animateTo(
-                              1,
-                            ); // Cambiar a pestaña de pagos
+                            _tabController.animateTo(1); // Cambiar a pestaña de pagos
                           },
                           icon: const Icon(Icons.history),
                           label: const Text('Ver Pagos'),
@@ -351,6 +458,8 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
 
           // Información del cliente
           Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -373,10 +482,99 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (credit.client?.email != null)
-                          Text('Email: ${credit.client!.email}'),
-                        if (credit.client?.telefono != null)
+                        if (credit.client?.telefono != null && credit.client!.telefono.isNotEmpty)
                           Text('Teléfono: ${credit.client!.telefono}'),
+                        if (credit.client?.direccion != null && credit.client!.direccion.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text('Dirección: ${credit.client!.direccion}'),
+                        ],
+                        if (credit.client?.latitud != null && credit.client?.longitud != null) ...[
+                          const SizedBox(height: 4),
+                          Text('Ubicación GPS: ${credit.client!.latitud!.toStringAsFixed(6)}, ${credit.client!.longitud!.toStringAsFixed(6)}'),
+                        ] else if (_isLoadingDetails) ...[
+                          const SizedBox(height: 4),
+                          const Text('Cargando datos de ubicación del cliente...', style: TextStyle(color: Colors.grey)),
+                        ],
+                        const SizedBox(height: 8),
+                        // Acciones de contacto y mapa
+                        Row(
+                          children: [
+                            // Llamada normal
+                            IconButton(
+                              tooltip: 'Llamar',
+                              icon: const Icon(Icons.phone, color: Colors.green),
+                              onPressed: (credit.client?.telefono != null && credit.client!.telefono.isNotEmpty)
+                                  ? () async {
+                                      try {
+                                        await ContactActionsWidget.makePhoneCall(credit.client!.telefono);
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                                          );
+                                        }
+                                      }
+                                    }
+                                  : null,
+                            ),
+                            // WhatsApp
+                            IconButton(
+                              tooltip: 'WhatsApp',
+                              icon: const Icon(Icons.message, color: Colors.green),
+                              onPressed: (credit.client?.telefono != null && credit.client!.telefono.isNotEmpty)
+                                  ? () async {
+                                      try {
+                                        await ContactActionsWidget.openWhatsApp(
+                                          credit.client!.telefono,
+                                          message: 'Hola ${credit.client!.nombre}, me comunico desde la aplicación.',
+                                          context: context,
+                                        );
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                                          );
+                                        }
+                                      }
+                                    }
+                                  : null,
+                            ),
+                            // Ver ubicación en mapa
+                            IconButton(
+                              tooltip: 'Ver ubicación en mapa',
+                              icon: const Icon(Icons.map, color: Colors.blue),
+                              onPressed: (credit.client?.latitud != null && credit.client?.longitud != null)
+                                  ? () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (context) => ClienteUbicacionScreen(
+                                            cliente: credit.client!,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  : () {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Este cliente no tiene ubicación GPS registrada'),
+                                          backgroundColor: Colors.orange,
+                                        ),
+                                      );
+                                    },
+                            ),
+                          ],
+                        ),
+                        if (credit.client == null) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: _isLoadingDetails ? null : _loadCreditDetails,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Recargar datos del cliente'),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -389,6 +587,8 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
 
           // Fechas del crédito
           Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -401,7 +601,6 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   _buildDateInfo('Fecha de Inicio', credit.startDate),
                   const SizedBox(height: 8),
                   _buildDateInfo('Fecha de Vencimiento', credit.endDate),
@@ -410,30 +609,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                 ],
               ),
             ),
-          ),
-
-          // Notas
-          /* if (credit.notes != null && credit.notes!.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notas',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(credit.notes!),
-                  ],
-                ),
-              ),
-            ),
-          ], */
+          )
         ],
       ),
     );
@@ -441,19 +617,30 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
 
   Widget _buildPaymentsTab(Credito credit) {
     final payments = credit.payments ?? [];
+    final total = credit.totalAmount ?? credit.amount;
 
     return Column(
       children: [
         // Resumen de pagos
         Container(
           padding: const EdgeInsets.all(16),
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                Theme.of(context).colorScheme.secondary.withOpacity(0.10),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final items = <Widget>[
                 _buildPaymentSummary(
                   'Total Pagado',
-                  'Bs. ${NumberFormat('#,##0.00').format(credit.amount - credit.balance)}',
+                  'Bs. ${NumberFormat('#,##0.00').format((total - credit.balance).clamp(0, total))}',
                   Icons.payment,
                   Colors.green,
                 ),
@@ -622,18 +809,28 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     );
   }
 
-  Widget _buildInfoCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildInfoCard(String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.9),
+            color.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,12 +861,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     );
   }
 
-  Widget _buildPaymentSummary(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildPaymentSummary(String title, String value, IconData icon, Color color) {
     return Column(
       children: [
         Icon(icon, color: color, size: 24),
@@ -783,6 +975,8 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
 
   Widget _buildWaitingListInfo(Credito credit) {
     return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1003,12 +1197,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     );
   }
 
-  Widget _buildWaitingListRow(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildWaitingListRow(String label, String value, IconData icon, Color color) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

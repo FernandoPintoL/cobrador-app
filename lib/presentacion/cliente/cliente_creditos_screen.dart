@@ -68,6 +68,9 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
     final filteredCredits = _filterCredits(clientCredits);
 
     return Scaffold(
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).scaffoldBackgroundColor
+          : RoleColors.getAccentColor(currentUserRole),
       appBar: RoleAppBar(
         title: 'Créditos de ${widget.cliente.nombre}',
         role: currentUserRole,
@@ -102,6 +105,7 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
         onPressed: () => _navegarACrearCredito(),
         tooltip: 'Crear Nuevo Crédito',
         child: const Icon(Icons.add),
