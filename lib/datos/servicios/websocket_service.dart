@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'notification_service.dart';
 
 /// Servicio WebSocket para el sistema de cobrador
 /// Maneja conexiones en tiempo real, notificaciones y actualizaciones
@@ -39,6 +41,15 @@ class WebSocketService {
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _locationController =
       StreamController<Map<String, dynamic>>.broadcast();
+
+  // Notificaciones locales (para mostrar en segundo plano)
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+  bool _notificationsInitialized = false;
+  static const String _androidChannelId = 'cobrador_realtime_channel';
+  static const String _androidChannelName = 'Actualizaciones en tiempo real';
+  static const String _androidChannelDescription =
+      'Notificaciones de créditos, pagos, mensajes y rutas en tiempo real';
 
   // Getters para streams
   Stream<bool> get connectionStream => _connectionController.stream;
@@ -83,6 +94,8 @@ class WebSocketService {
 
   /// Conecta al servidor WebSocket
   Future<bool> connect() async {
+    // Asegurar inicialización de notificaciones locales
+    unawaited(_initializeNotifications());
     if (_serverUrl == null) {
       print('❌ URL del servidor no configurada');
       return false;
@@ -252,8 +265,15 @@ class WebSocketService {
   void _handleNotification(dynamic data) {
     try {
       final notification = data is String ? jsonDecode(data) : data;
-      print('📨 Notificación recibida: ${notification['title']}');
-      _notificationController.add(Map<String, dynamic>.from(notification));
+      final map = Map<String, dynamic>.from(notification);
+      final title = (map['title'] ?? 'Notificación').toString();
+      final message = (map['message'] ?? map['body'] ?? '').toString();
+      print('📨 Notificación recibida: $title');
+      _notificationController.add(map);
+
+      // Mostrar notificación del sistema para asegurar visibilidad en segundo plano
+      _showLocalNotification(title, message.isEmpty ? 'Tienes una nueva notificación' : message,
+          payload: jsonEncode(map));
     } catch (e) {
       print('❌ Error procesando notificación: $e');
     }
@@ -263,8 +283,15 @@ class WebSocketService {
   void _handlePaymentUpdate(dynamic data) {
     try {
       final payment = data is String ? jsonDecode(data) : data;
-      print('💰 Actualización de pago: ${payment['amount']} Bs.');
-      _paymentController.add(Map<String, dynamic>.from(payment));
+      final map = Map<String, dynamic>.from(payment);
+      final amount = map['amount'];
+      print('💰 Actualización de pago: ${amount} Bs.');
+      _paymentController.add(map);
+
+      // Mostrar notificación local resumida
+      final title = 'Pago actualizado';
+      final body = amount != null ? 'Monto: ${amount} Bs.' : 'Se actualizó un pago';
+      _showLocalNotification(title, body, payload: jsonEncode(map));
     } catch (e) {
       print('❌ Error procesando pago: $e');
     }
@@ -285,8 +312,15 @@ class WebSocketService {
   void _handleMessage(dynamic data) {
     try {
       final message = data is String ? jsonDecode(data) : data;
-      print('💬 Mensaje de ${message['senderId']}: ${message['message']}');
-      _messageController.add(Map<String, dynamic>.from(message));
+      final map = Map<String, dynamic>.from(message);
+      final sender = map['senderId'] ?? 'Usuario';
+      final text = map['message']?.toString() ?? '';
+      print('💬 Mensaje de $sender: $text');
+      _messageController.add(map);
+
+      final title = 'Nuevo mensaje';
+      final body = text.isEmpty ? 'Has recibido un mensaje' : text;
+      _showLocalNotification(title, body, payload: jsonEncode(map));
     } catch (e) {
       print('❌ Error procesando mensaje: $e');
     }
@@ -296,8 +330,9 @@ class WebSocketService {
   void _handleLocationUpdate(dynamic data) {
     try {
       final location = data is String ? jsonDecode(data) : data;
-      print('📍 Actualización de ubicación: ${location['userId']}');
-      _locationController.add(Map<String, dynamic>.from(location));
+      final map = Map<String, dynamic>.from(location);
+      print('📍 Actualización de ubicación: ${map['userId']}');
+      _locationController.add(map);
     } catch (e) {
       print('❌ Error procesando ubicación: $e');
     }
@@ -584,6 +619,40 @@ class WebSocketService {
     _connectionController.add(false);
 
     print('✅ WebSocket desconectado');
+  }
+
+  /// Inicializa las notificaciones locales delegando al NotificationService
+  Future<void> _initializeNotifications() async {
+    if (_notificationsInitialized) return;
+    try {
+      final ok = await NotificationService().initialize();
+      _notificationsInitialized = ok;
+      if (ok) {
+        print('🔔 Notificaciones locales inicializadas (NotificationService)');
+      } else {
+        print('❌ No se pudo inicializar NotificationService');
+      }
+    } catch (e) {
+      print('❌ Error inicializando notificaciones locales (delegado): $e');
+    }
+  }
+
+  Future<void> _showLocalNotification(String title, String body,
+      {String? payload}) async {
+    try {
+      if (!_notificationsInitialized) {
+        await _initializeNotifications();
+      }
+      // Delegar la visualización a NotificationService centralizado
+      await NotificationService().showGeneralNotification(
+        title: title,
+        body: body,
+        type: 'realtime',
+        payload: payload,
+      );
+    } catch (e) {
+      print('❌ Error mostrando notificación local (delegado): $e');
+    }
   }
 
   /// Limpia recursos cuando no se necesita más el servicio

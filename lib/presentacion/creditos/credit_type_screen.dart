@@ -9,14 +9,14 @@ import '../../ui/widgets/validation_error_display.dart'; // Importar widget de e
 import 'credit_detail_screen.dart';
 import 'credit_form_screen.dart';
 
-class WaitingListScreen extends ConsumerStatefulWidget {
-  const WaitingListScreen({super.key});
+class CreditTypeScreen extends ConsumerStatefulWidget {
+  const CreditTypeScreen({super.key});
 
   @override
-  ConsumerState<WaitingListScreen> createState() => _WaitingListScreenState();
+  ConsumerState<CreditTypeScreen> createState() => _WaitingListScreenState();
 }
 
-class _WaitingListScreenState extends ConsumerState<WaitingListScreen>
+class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 

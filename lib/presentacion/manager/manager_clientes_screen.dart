@@ -9,8 +9,8 @@ import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
 import '../cliente/cliente_creditos_screen.dart';
 import '../cliente/cliente_perfil_screen.dart';
-import 'cliente_ubicacion_screen.dart';
-import 'manager_cliente_form_screen.dart';
+import '../cliente/cliente_ubicacion_screen.dart';
+import '../cliente/cliente_form_screen.dart';
 
 class ManagerClientesScreen extends ConsumerStatefulWidget {
   const ManagerClientesScreen({super.key});
@@ -1010,7 +1010,7 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) =>
-            ManagerClienteFormScreen(onClienteSaved: _cargarDatos),
+            ClienteFormScreen(onClienteSaved: _cargarDatos),
       ),
     );
   }
@@ -1018,7 +1018,7 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   void _navegarEditarCliente(Usuario cliente) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ManagerClienteFormScreen(
+        builder: (context) => ClienteFormScreen(
           cliente: cliente,
           onClienteSaved: _cargarDatos,
         ),

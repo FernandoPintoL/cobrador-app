@@ -129,6 +129,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
   Future<bool> crearUsuario({
     required String nombre,
     required String email,
+    required String ci,
     String? password,
     required List<String> roles,
     String? telefono,
@@ -142,6 +143,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
       final data = {
         'name': nombre,
         'email': email,
+        'ci': ci,
         'roles': roles,
         if (password != null && password.isNotEmpty) 'password': password,
         if (telefono != null) 'phone': telefono,
@@ -193,6 +195,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
     required BigInt id,
     required String nombre,
     required String email,
+    required String ci,
     String? password,
     List<String>? roles,
     String? telefono,
@@ -206,6 +209,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
       final data = {
         'name': nombre,
         'email': email,
+        'ci': ci,
         if (password != null && password.isNotEmpty) 'password': password,
         if (roles != null) 'roles': roles,
         if (telefono != null) 'phone': telefono,

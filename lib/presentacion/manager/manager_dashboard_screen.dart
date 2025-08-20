@@ -4,7 +4,7 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../config/role_colors.dart';
-import '../creditos/waiting_list_screen.dart';
+import '../creditos/credit_type_screen.dart';
 import 'manager_cobradores_screen.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import 'manager_reportes_screen.dart';
@@ -279,58 +279,6 @@ class _ManagerDashboardScreenState
     );
   }
 
-  Widget _buildStatCard(
-    BuildContext context,
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(8.0), // Reducido de 12 a 8
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize:
-              MainAxisSize.min, // Importante: usar el mínimo espacio necesario
-          children: [
-            Icon(icon, size: 28, color: color), // Reducido de 32 a 28
-            const SizedBox(height: 4), // Reducido de 6 a 4
-            Flexible(
-              // Permitir que el texto se adapte al espacio
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontSize: 18, // Reducido de 20 a 18
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-            const SizedBox(height: 2), // Reducido de 4 a 2
-            Flexible(
-              // Permitir que el título se adapte al espacio
-              child: Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 10, // Reducido de 11 a 10
-                  color: Colors.grey[600],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildManagerFunctionCard(
     BuildContext context,
     String title,
@@ -415,15 +363,6 @@ class _ManagerDashboardScreenState
     );
   }
 
-  void _navigateToRouteAssignment(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ManagerClientAssignmentScreen(),
-      ),
-    );
-  }
-
   void _navigateToCollectorReports(BuildContext context) {
     Navigator.push(
       context,
@@ -434,7 +373,7 @@ class _ManagerDashboardScreenState
   void _navigateToCreditManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const WaitingListScreen()),
+      MaterialPageRoute(builder: (context) => const CreditTypeScreen()),
     );
   }
 }

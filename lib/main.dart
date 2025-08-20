@@ -2,10 +2,8 @@ import 'package:cobrador_app/presentacion/cliente/cliente_form_screen.dart';
 import 'package:cobrador_app/presentacion/pantallas/notifications_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'config/app_bootstrap.dart';
 import 'negocio/providers/auth_provider.dart';
-import 'datos/servicios/websocket_service.dart';
-import 'datos/servicios/notification_service.dart';
 import 'presentacion/pantallas/splash_screen.dart';
 import 'presentacion/pantallas/login_screen.dart';
 import 'presentacion/superadmin/admin_dashboard_screen.dart';
@@ -16,47 +14,8 @@ Future<void> main() async {
   // Asegurarse de que Flutter esté inicializado
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Cargar variables de entorno con manejo de errores
-  try {
-    await dotenv.load(fileName: ".env");
-    print("✅ Variables de entorno cargadas correctamente");
-  } catch (e) {
-    print("Error cargando .env: $e");
-    // Continuar sin variables de entorno
-  }
-
-  // Configurar WebSocket con la URL del .env
-  try {
-    final websocketUrl = dotenv.env['WEBSOCKET_URL'];
-    if (websocketUrl != null && websocketUrl.isNotEmpty) {
-      final wsService = WebSocketService();
-      // Determinar si es producción basándose en la URL
-      final isProduction = websocketUrl.contains('railway.app') ||
-                          websocketUrl.startsWith('wss://');
-
-      wsService.configureServer(
-        url: websocketUrl,
-        isProduction: isProduction,
-        enableSSL: websocketUrl.startsWith('wss://'),
-      );
-
-      print("🔧 WebSocket configurado con URL: $websocketUrl");
-      print("🏭 Modo: ${isProduction ? 'Producción' : 'Desarrollo'}");
-    } else {
-      print("⚠️ WEBSOCKET_URL no encontrada en .env");
-    }
-  } catch (e) {
-    print("❌ Error configurando WebSocket: $e");
-  }
-
-  // Inicializar el servicio de notificaciones
-  try {
-    final notificationService = NotificationService();
-    await notificationService.initialize();
-    print("🔔 Servicio de notificaciones inicializado");
-  } catch (e) {
-    print("⚠️ Error inicializando notificaciones: $e");
-  }
+  // Centralizar inicialización de servicios
+  await AppBootstrap.init();
 
   runApp(const ProviderScope(child: MyApp()));
 }

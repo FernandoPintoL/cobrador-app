@@ -7,7 +7,7 @@ import '../../datos/modelos/credito.dart';
 import 'credit_form_screen.dart';
 import 'credit_payment_screen.dart';
 import '../widgets/contact_actions_widget.dart';
-import '../manager/cliente_ubicacion_screen.dart';
+import '../cliente/cliente_ubicacion_screen.dart';
 
 class CreditDetailScreen extends ConsumerStatefulWidget {
   final Credito credit;

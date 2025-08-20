@@ -11,7 +11,7 @@ import '../widgets/websocket_widgets.dart';
 import '../pantallas/profile_settings_screen.dart';
 import '../pantallas/notifications_screen.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
-import '../creditos/waiting_list_screen.dart';
+import '../creditos/credit_type_screen.dart';
 import 'package:intl/intl.dart';
 
 class CobradorDashboardScreen extends ConsumerStatefulWidget {
@@ -283,23 +283,6 @@ class _CobradorDashboardScreenState
                     () => _navigateToClientManagement(context),
                   ),
                   const SizedBox(height: 12),
-                  /*_buildCobradorActionCard(
-                    context,
-                    'Reportes',
-                    'Ver mis reportes de cobro',
-                    Icons.analytics,
-                    Colors.teal,
-                    () => _navigateToReports(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Configuración',
-                    'Configurar mi perfil y preferencias',
-                    Icons.settings,
-                    Colors.grey,
-                    () => _navigateToSettings(context),
-                  ),*/
                 ],
               ),
               const SizedBox(height: 20), // Espacio adicional al final
@@ -437,7 +420,7 @@ class _CobradorDashboardScreenState
   void _navigateToCreditManagement(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const WaitingListScreen()),
+      MaterialPageRoute(builder: (context) => const CreditTypeScreen()),
     );
   }
 

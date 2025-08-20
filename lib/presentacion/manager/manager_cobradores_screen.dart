@@ -9,7 +9,7 @@ import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
 import '../cliente/clientes_screen.dart'; // Nueva pantalla genérica
-import 'manager_cobrador_form_screen.dart';
+import '../cobrador/cobrador_form_screen.dart';
 import 'manager_client_assignment_screen.dart';
 
 class ManagerCobradoresScreen extends ConsumerStatefulWidget {
@@ -402,7 +402,7 @@ class _ManagerCobradoresScreenState
   void _navegarCrearCobrador() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => const ManagerCobradorFormScreen(),
+        builder: (context) => const CobradorFormScreen(),
       ),
     );
   }
@@ -410,7 +410,7 @@ class _ManagerCobradoresScreenState
   void _navegarEditarCobrador(Usuario cobrador) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ManagerCobradorFormScreen(cobrador: cobrador),
+        builder: (context) => CobradorFormScreen(cobrador: cobrador),
       ),
     );
   }

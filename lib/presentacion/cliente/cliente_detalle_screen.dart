@@ -396,13 +396,13 @@ class _ClienteDetalleScreenState extends ConsumerState<ClienteDetalleScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => ClienteFormScreen(
-          cliente: widget.cliente,
-          onClienteCreated: () {
+          cliente: widget.cliente
+          /*onClienteCreated: () {
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Cliente actualizado exitosamente')),
             );
-          },
+          },*/
         ),
       ),
     );

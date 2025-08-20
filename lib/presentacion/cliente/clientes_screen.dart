@@ -6,10 +6,10 @@ import '../../negocio/providers/client_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/contact_actions_widget.dart';
-import '../manager/manager_cliente_form_screen.dart';
+import 'cliente_form_screen.dart';
 import 'cliente_creditos_screen.dart';
 import 'cliente_perfil_screen.dart';
-import '../manager/cliente_ubicacion_screen.dart';
+import 'cliente_ubicacion_screen.dart';
 import '../manager/manager_client_assignment_screen.dart';
 
 /// Pantalla genérica para mostrar clientes
@@ -395,7 +395,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) =>
-            ManagerClienteFormScreen(onClienteSaved: _cargarDatos),
+            ClienteFormScreen(onClienteSaved: _cargarDatos),
       ),
     );
   }
@@ -906,7 +906,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
         // Siempre usar el formulario unificado para editar
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => ManagerClienteFormScreen(
+            builder: (context) => ClienteFormScreen(
               cliente: cliente,
               onClienteSaved: _cargarDatos,
             ),

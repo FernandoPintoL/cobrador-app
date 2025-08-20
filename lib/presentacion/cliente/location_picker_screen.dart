@@ -4,7 +4,16 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
 class LocationPickerScreen extends StatefulWidget {
-  const LocationPickerScreen({super.key});
+  final bool allowSelection; // Permite seleccionar ubicación tocando el mapa
+  final Set<Marker>? extraMarkers; // Marcadores extra (por ejemplo, clientes registrados)
+  final String? customTitle; // Título personalizado opcional
+
+  const LocationPickerScreen({
+    super.key,
+    this.allowSelection = true,
+    this.extraMarkers,
+    this.customTitle,
+  });
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
@@ -28,7 +37,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    _verificarConectividadYPermisos();
+    if (widget.allowSelection) {
+      _verificarConectividadYPermisos();
+    } else {
+      // En modo solo visualización, no solicitar permisos ni ubicar automáticamente
+      // Mostrar directamente el mapa con marcadores extra (si existen)
+      _isLoading = false;
+    }
   }
 
   Future<void> _verificarConectividadYPermisos() async {
@@ -196,6 +211,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   void _onMapTap(LatLng location) {
+    if (!widget.allowSelection) return; // En modo solo vista, ignorar taps
     setState(() {
       _selectedLocation = location;
     });
@@ -231,11 +247,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool soloVista = !widget.allowSelection;
+    final String appBarTitle = widget.customTitle ?? (
+      soloVista
+          ? (widget.extraMarkers != null && widget.extraMarkers!.isNotEmpty
+              ? 'Mapa de Clientes'
+              : 'Mapa')
+          : 'Seleccionar Ubicación'
+    );
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Seleccionar Ubicación'),
+        title: Text(appBarTitle),
         actions: [
-          if (_selectedLocation != null)
+          if (!soloVista && _selectedLocation != null)
             TextButton(
               onPressed: _confirmarUbicacion,
               child: const Text(
@@ -306,10 +331,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                           ),
                         ],
                       ] else ...[
-                        const Text(
-                          'Toca en el mapa para seleccionar una ubicación',
-                          style: TextStyle(fontSize: 14),
-                        ),
+                        if (widget.allowSelection)
+                          const Text(
+                            'Toca en el mapa para seleccionar una ubicación',
+                            style: TextStyle(fontSize: 14),
+                          )
+                        else
+                          const Text(
+                            'Visualización de ubicaciones en el mapa',
+                            style: TextStyle(fontSize: 14),
+                          ),
                       ],
                     ],
                   ),
@@ -325,24 +356,28 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         child: GoogleMap(
                           onMapCreated: _onMapCreated,
                           initialCameraPosition: CameraPosition(
-                            target: _selectedLocation ?? _defaultLocation,
+                            target: _selectedLocation ?? (
+                              (widget.extraMarkers != null && widget.extraMarkers!.isNotEmpty)
+                                  ? widget.extraMarkers!.first.position
+                                  : _defaultLocation
+                            ),
                             zoom: 15,
                           ),
                           onTap: _onMapTap,
-                          markers: _selectedLocation != null
-                              ? {
-                                  Marker(
-                                    markerId: const MarkerId(
-                                      'selected_location',
-                                    ),
-                                    position: _selectedLocation!,
-                                    infoWindow: const InfoWindow(
-                                      title: 'Ubicación Seleccionada',
-                                      snippet: 'Toca para cambiar',
-                                    ),
-                                  ),
-                                }
-                              : {},
+                          markers: {
+                            if (_selectedLocation != null)
+                              Marker(
+                                markerId: const MarkerId('selected_location'),
+                                position: _selectedLocation!,
+                                infoWindow: InfoWindow(
+                                  title: 'Ubicación Seleccionada',
+                                  snippet: widget.allowSelection
+                                      ? 'Toca para cambiar'
+                                      : null,
+                                ),
+                              ),
+                            ...?widget.extraMarkers,
+                          },
                           myLocationEnabled: true,
                           myLocationButtonEnabled: true,
                           zoomControlsEnabled: true,
@@ -476,38 +511,39 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   ),
                 ),
                 // Botones de acción
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _obtenerUbicacionActual,
-                          icon: const Icon(Icons.my_location),
-                          label: const Text('Mi Ubicación'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
+                if (!soloVista)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _obtenerUbicacionActual,
+                            icon: const Icon(Icons.my_location),
+                            label: const Text('Mi Ubicación'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _selectedLocation != null
-                              ? _confirmarUbicacion
-                              : null,
-                          icon: const Icon(Icons.check),
-                          label: const Text('Confirmar'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _selectedLocation != null
+                                ? _confirmarUbicacion
+                                : null,
+                            icon: const Icon(Icons.check),
+                            label: const Text('Confirmar'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
     );

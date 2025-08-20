@@ -7,6 +7,7 @@ class Usuario {
   final String profileImage;
   final String telefono;
   final String direccion;
+  final String ci;
   final double? latitud;
   final double? longitud;
   final DateTime fechaCreacion;
@@ -22,6 +23,7 @@ class Usuario {
     required this.profileImage,
     required this.telefono,
     required this.direccion,
+    required this.ci,
     this.latitud,
     this.longitud,
     required this.fechaCreacion,
@@ -103,6 +105,7 @@ class Usuario {
         email: json['email']?.toString() ?? '',
         telefono: json['phone']?.toString() ?? '',
         direccion: json['address']?.toString() ?? '',
+        ci: json['ci']?.toString() ?? '',
         latitud: json['location']?['coordinates']?[1]?.toDouble(),
         longitud: json['location']?['coordinates']?[0]?.toDouble(),
         fechaCreacion: fechaCreacion,
@@ -122,6 +125,7 @@ class Usuario {
         profileImage: '',
         telefono: '',
         direccion: '',
+        ci: '',
         fechaCreacion: DateTime.now(),
         fechaActualizacion: DateTime.now(),
         roles: ['client'],
@@ -139,6 +143,7 @@ class Usuario {
       'profile_image': profileImage,
       'phone': telefono,
       'address': direccion,
+      'ci': ci,
       'location': latitud != null && longitud != null
           ? {
               'type': 'Point',
@@ -163,6 +168,7 @@ class Usuario {
       'profile_image': profileImage,
       'phone': telefono,
       'address': direccion,
+      'ci': ci,
       'location': latitud != null && longitud != null
           ? {
               'type': 'Point',
@@ -198,6 +204,7 @@ class Usuario {
     String? profileImage,
     String? telefono,
     String? direccion,
+    String? ci,
     double? latitud,
     double? longitud,
     DateTime? fechaCreacion,
@@ -213,6 +220,7 @@ class Usuario {
       profileImage: profileImage ?? this.profileImage,
       telefono: telefono ?? this.telefono,
       direccion: direccion ?? this.direccion,
+      ci: ci ?? this.ci,
       latitud: latitud ?? this.latitud,
       longitud: longitud ?? this.longitud,
       fechaCreacion: fechaCreacion ?? this.fechaCreacion,
@@ -231,6 +239,6 @@ class Usuario {
 
   @override
   String toString() {
-    return 'Usuario{id: $id, nombre: $nombre, email: $email, roles: $roles}';
+    return 'Usuario{id: $id, nombre: $nombre, email: $email, ci: $ci, roles: $roles}';
   }
 }

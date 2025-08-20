@@ -4,31 +4,32 @@ import '../../datos/modelos/usuario.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
-import '../pantallas/location_picker_screen.dart';
+import '../cliente/location_picker_screen.dart';
 
-class ManagerCobradorFormScreen extends ConsumerStatefulWidget {
+class CobradorFormScreen extends ConsumerStatefulWidget {
   final Usuario? cobrador; // null para crear, con datos para editar
   final VoidCallback? onCobradorSaved;
 
-  const ManagerCobradorFormScreen({
+  const CobradorFormScreen({
     super.key,
     this.cobrador,
     this.onCobradorSaved,
   });
 
   @override
-  ConsumerState<ManagerCobradorFormScreen> createState() =>
+  ConsumerState<CobradorFormScreen> createState() =>
       _ManagerCobradorFormScreenState();
 }
 
 class _ManagerCobradorFormScreenState
-    extends ConsumerState<ManagerCobradorFormScreen> {
+    extends ConsumerState<CobradorFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _telefonoController = TextEditingController();
   final _direccionController = TextEditingController();
+  final _ciController = TextEditingController();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -49,6 +50,7 @@ class _ManagerCobradorFormScreenState
       _emailController.text = widget.cobrador!.email;
       _telefonoController.text = widget.cobrador!.telefono;
       _direccionController.text = widget.cobrador!.direccion;
+      _ciController.text = widget.cobrador!.ci;
 
       // Cargar ubicación si existe
       if (widget.cobrador!.latitud != null &&
@@ -67,6 +69,7 @@ class _ManagerCobradorFormScreenState
     _passwordController.dispose();
     _telefonoController.dispose();
     _direccionController.dispose();
+    _ciController.dispose();
     super.dispose();
   }
 
@@ -365,6 +368,7 @@ class _ManagerCobradorFormScreenState
               id: widget.cobrador!.id,
               nombre: _nombreController.text.trim(),
               email: _emailController.text.trim(),
+              ci: _ciController.text.trim(),
               telefono: _telefonoController.text.trim(),
               direccion: _direccionController.text.trim(),
               password: _passwordController.text.isNotEmpty
@@ -390,6 +394,7 @@ class _ManagerCobradorFormScreenState
             .crearUsuario(
               nombre: _nombreController.text.trim(),
               email: _emailController.text.trim(),
+              ci: _ciController.text.trim(),
               password: _passwordController.text,
               telefono: _telefonoController.text.trim(),
               direccion: _direccionController.text.trim(),

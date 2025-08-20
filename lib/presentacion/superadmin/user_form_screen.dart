@@ -6,7 +6,7 @@ import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/cobrador_assignment_provider.dart';
 import '../../datos/modelos/usuario.dart';
 import '../widgets/validation_error_widgets.dart';
-import '../pantallas/location_picker_screen.dart';
+import '../cliente/location_picker_screen.dart';
 
 class UserFormScreen extends ConsumerStatefulWidget {
   final String userType;
@@ -31,6 +31,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
   final _passwordController = TextEditingController();
   final _telefonoController = TextEditingController();
   final _direccionController = TextEditingController();
+  final _ciController = TextEditingController();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -53,6 +54,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
       _emailController.text = widget.usuario!.email;
       _telefonoController.text = widget.usuario!.telefono;
       _direccionController.text = widget.usuario!.direccion;
+      _ciController.text = widget.usuario!.ci;
       _latitud = widget.usuario!.latitud;
       _longitud = widget.usuario!.longitud;
       _actualizarTextoUbicacion();
@@ -73,6 +75,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
     _passwordController.dispose();
     _telefonoController.dispose();
     _direccionController.dispose();
+    _ciController.dispose();
     super.dispose();
   }
 
@@ -273,6 +276,27 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                   r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
                 ).hasMatch(value)) {
                   return 'Ingrese un email válido';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // CI
+            TextFormField(
+              controller: _ciController,
+              keyboardType: TextInputType.text,
+              decoration: const InputDecoration(
+                labelText: 'CI (Cédula de identidad) *',
+                prefixIcon: Icon(Icons.badge),
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'El CI es requerido';
+                }
+                if (value.trim().length < 5) {
+                  return 'El CI debe tener al menos 5 caracteres';
                 }
                 return null;
               },
@@ -534,6 +558,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
               id: widget.usuario!.id,
               nombre: _nombreController.text.trim(),
               email: _emailController.text.trim(),
+              ci: _ciController.text.trim(),
               telefono: _telefonoController.text.trim(),
               direccion: _direccionController.text.trim(),
               roles: [widget.userType],
@@ -548,6 +573,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
             .crearUsuario(
               nombre: _nombreController.text.trim(),
               email: _emailController.text.trim(),
+              ci: _ciController.text.trim(),
               password: _passwordController.text.isNotEmpty
                   ? _passwordController.text
                   : null,
@@ -574,6 +600,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                 profileImage: '',
                 telefono: '',
                 direccion: '',
+                ci: '',
                 fechaCreacion: DateTime.now(),
                 fechaActualizacion: DateTime.now(),
                 roles: [],

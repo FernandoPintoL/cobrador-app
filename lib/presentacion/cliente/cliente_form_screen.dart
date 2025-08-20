@@ -3,52 +3,83 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../datos/modelos/usuario.dart';
-import '../../negocio/providers/client_provider.dart';
+import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../../config/role_colors.dart';
+import 'location_picker_screen.dart';
 
 class ClienteFormScreen extends ConsumerStatefulWidget {
-  final Usuario? cliente;
+  final Usuario? cliente; // null para crear, con datos para editar
+  final VoidCallback? onClienteSaved;
   final VoidCallback? onClienteCreated;
   final String? initialName;
 
-  const ClienteFormScreen({super.key, this.cliente, this.onClienteCreated, this.initialName});
+  const ClienteFormScreen({
+    super.key,
+    this.cliente,
+    this.onClienteSaved,
+    this.onClienteCreated,
+    this.initialName
+  });
 
   @override
-  ConsumerState<ClienteFormScreen> createState() => _ClienteFormScreenState();
+  ConsumerState<ClienteFormScreen> createState() =>
+      _ManagerClienteFormScreenState();
 }
 
-class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
+class _ManagerClienteFormScreenState
+    extends ConsumerState<ClienteFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _emailController = TextEditingController();
   final _telefonoController = TextEditingController();
   final _direccionController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _contrasenaController = TextEditingController();
+  final _ciController = TextEditingController();
 
+  bool _esEdicion = false;
   bool _isLoading = false;
-  // bool _showPassword = false;
-  bool _isEditing = false;
-  bool _obteniendoUbicacion = false;
 
-  // Variables para ubicación
+  // Variables para ubicación GPS
   double? _latitud;
   double? _longitud;
+  bool _ubicacionObtenida = false;
+  String _tipoUbicacion = ''; // 'actual' o 'mapa'
 
   @override
   void initState() {
     super.initState();
-    _isEditing = widget.cliente != null;
+    _esEdicion = widget.cliente != null;
 
-    if (_isEditing) {
+    if (_esEdicion) {
       _nombreController.text = widget.cliente!.nombre;
       _emailController.text = widget.cliente!.email;
       _telefonoController.text = widget.cliente!.telefono;
       _direccionController.text = widget.cliente!.direccion;
-    } else {
-      // Prefill name if provided when creating a new client
-      if (widget.initialName != null && widget.initialName!.trim().isNotEmpty) {
-        _nombreController.text = widget.initialName!.trim();
+      _ciController.text = widget.cliente!.ci;
+
+      // Cargar ubicación si existe
+      if (widget.cliente!.latitud != null && widget.cliente!.longitud != null) {
+        _latitud = widget.cliente!.latitud;
+        _longitud = widget.cliente!.longitud;
+        _ubicacionObtenida = true;
+        _tipoUbicacion = 'existente';
       }
+    } else if (widget.initialName != null && widget.initialName!.trim().isNotEmpty) {
+      _nombreController.text = widget.initialName!.trim();
+    }
+  }
+
+  String _getTipoUbicacionTexto() {
+    switch (_tipoUbicacion) {
+      case 'actual':
+        return 'Ubicación actual obtenida';
+      case 'mapa':
+        return 'Ubicación seleccionada en mapa';
+      case 'existente':
+        return 'Ubicación existente';
+      default:
+        return 'Ubicación GPS obtenida';
     }
   }
 
@@ -58,425 +89,322 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
     _emailController.dispose();
     _telefonoController.dispose();
     _direccionController.dispose();
-    _passwordController.dispose();
+    _contrasenaController.dispose();
+    _ciController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Escuchar cambios en el estado solo cuando cambian los valores específicos
-    ref.listen<ClientState>(clientProvider, (previous, next) {
-      // Solo procesar errores nuevos o diferentes
-      if (next.error != null && next.error != previous?.error) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-
-          print('🚨 Mostrando error: ${next.error}');
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(next.error!),
-              backgroundColor: Colors.red,
-              duration: const Duration(
-                seconds: 6,
-              ), // Más tiempo para leer el error
-              action: SnackBarAction(
-                label: 'Cerrar',
-                textColor: Colors.white,
-                onPressed: () {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                },
-              ),
-            ),
-          );
-
-          // Limpiar el error después de mostrarlo
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              ref.read(clientProvider.notifier).limpiarMensajes();
-            }
-          });
-        }
-      }
-
-      // Solo procesar mensajes de éxito nuevos o diferentes
-      if (next.successMessage != null &&
-          next.successMessage != previous?.successMessage) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-
-          print('✅ Mostrando éxito: ${next.successMessage}');
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(next.successMessage!),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-
-          // Limpiar el mensaje y cerrar pantalla
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              ref.read(clientProvider.notifier).limpiarMensajes();
-
-              if (widget.onClienteCreated != null) {
-                widget.onClienteCreated!();
-              }
-              Navigator.pop(context, true);
-            }
-          });
-        }
-      }
-    });
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Editar Cliente' : 'Nuevo Cliente'),
-        backgroundColor: const Color(0xFF667eea),
+        title: Text(_esEdicion ? 'Editar Cliente' : 'Creares Cliente'),
+        backgroundColor: RoleColors.managerPrimary,
         foregroundColor: Colors.white,
+        elevation: 4,
+        actions: [
+          if (_esEdicion)
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _confirmarEliminarCliente,
+            ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Información básica
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.person, color: const Color(0xFF667eea)),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Información Básica',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Información Personal',
+                              style: Theme.of(context).textTheme.titleLarge,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Nombre
-                      TextFormField(
-                        controller: _nombreController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre completo *',
-                          hintText: 'Ingrese el nombre del cliente',
-                          prefixIcon: Icon(Icons.person_outline),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'El nombre es requerido';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      // Teléfono
-                      TextFormField(
-                        controller: _telefonoController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Teléfono',
-                          hintText: '+1234567890',
-                          prefixIcon: Icon(Icons.phone_outlined),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Dirección con botón de ubicación
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _direccionController,
-                            maxLines: 3,
-                            decoration: const InputDecoration(
-                              labelText: 'Dirección',
-                              hintText: 'Ingrese la dirección del cliente',
-                              prefixIcon: Icon(Icons.location_on_outlined),
-                              alignLabelWithHint: true,
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _nombreController,
+                              decoration: const InputDecoration(
+                                labelText: 'Nombre Completo *',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.person),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'El nombre es obligatorio';
+                                }
+                                if (value.trim().length < 2) {
+                                  return 'El nombre debe tener al menos 2 caracteres';
+                                }
+                                return null;
+                              },
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _obteniendoUbicacion
-                                      ? null
-                                      : _obtenerUbicacionActual,
-                                  icon: _obteniendoUbicacion
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.my_location),
-                                  label: Text(
-                                    _obteniendoUbicacion
-                                        ? 'Obteniendo...'
-                                        : 'Ubicación Actual',
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF667eea),
-                                    side: const BorderSide(
-                                      color: Color(0xFF667eea),
+                            const SizedBox(height: 16),
+                            // CI obligatorio
+                            TextFormField(
+                              controller: _ciController,
+                              decoration: const InputDecoration(
+                                labelText: 'CI (Cédula de identidad) *',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.badge),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'El CI es obligatorio';
+                                }
+                                if (value.trim().length < 5) {
+                                  return 'El CI debe tener al menos 5 caracteres';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _telefonoController,
+                              decoration: const InputDecoration(
+                                labelText: 'Teléfono *',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.phone),
+                              ),
+                              keyboardType: TextInputType.phone,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'El teléfono es obligatorio';
+                                }
+                                if (value.trim().length < 8) {
+                                  return 'El teléfono debe tener al menos 8 dígitos';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _direccionController,
+                              decoration: InputDecoration(
+                                labelText: 'Dirección',
+                                border: const OutlineInputBorder(),
+                                prefixIcon: const Icon(Icons.location_on),
+                                suffixIcon: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Botón para obtener ubicación actual
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.my_location,
+                                        size: 20,
+                                        color: _ubicacionObtenida
+                                            ? Colors.green
+                                            : Colors.blue,
+                                      ),
+                                      onPressed: _obtenerUbicacionActual,
+                                      tooltip: 'Obtener mi ubicación actual',
+                                      constraints: const BoxConstraints(
+                                        minWidth: 32,
+                                        minHeight: 32,
+                                      ),
+                                      padding: const EdgeInsets.all(4),
                                     ),
+                                    // Botón para seleccionar en mapa
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.map,
+                                        size: 20,
+                                        color: _ubicacionObtenida
+                                            ? Colors.green
+                                            : Colors.orange,
+                                      ),
+                                      onPressed: _obtenerUbicacionGPS,
+                                      tooltip: 'Seleccionar en mapa',
+                                      constraints: const BoxConstraints(
+                                        minWidth: 32,
+                                        minHeight: 32,
+                                      ),
+                                      padding: const EdgeInsets.all(4),
+                                    ),
+                                  ],
+                                ),
+                                helperText: _ubicacionObtenida
+                                    ? '${_getTipoUbicacionTexto()} ✓'
+                                    : 'Usa el botón de ubicación actual o selecciona en el mapa',
+                              ),
+                              maxLines: 2,
+                            ),
+                            if (_ubicacionObtenida) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.green.withOpacity(0.3),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _abrirMapa,
-                                  icon: const Icon(Icons.map),
-                                  label: const Text('Seleccionar en Mapa'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF667eea),
-                                    side: const BorderSide(
-                                      color: Color(0xFF667eea),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _tipoUbicacion == 'actual'
+                                          ? Icons.my_location
+                                          : _tipoUbicacion == 'mapa'
+                                          ? Icons.map
+                                          : Icons.location_on,
+                                      color: Colors.green,
+                                      size: 16,
                                     ),
-                                  ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Lat: ${_latitud?.toStringAsFixed(4)}, Lng: ${_longitud?.toStringAsFixed(4)}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _latitud = null;
+                                          _longitud = null;
+                                          _ubicacionObtenida = false;
+                                          _tipoUbicacion = '';
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.clear,
+                                          size: 12,
+                                          color: Colors.red,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
-                          ),
-                          if (_latitud != null && _longitud != null) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.green[50],
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.green[200]!),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.location_on,
-                                    color: Colors.green[600],
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      'Coordenadas: ${_latitud!.toStringAsFixed(6)}, ${_longitud!.toStringAsFixed(6)}',
-                                      style: TextStyle(
-                                        color: Colors.green[700],
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _latitud = null;
-                                        _longitud = null;
-                                      });
-                                    },
-                                    icon: Icon(
-                                      Icons.close,
-                                      color: Colors.green[600],
-                                      size: 16,
-                                    ),
-                                    constraints: const BoxConstraints(),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                ],
-                              ),
-                            ),
                           ],
-                        ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Cancelar'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _guardarCliente,
+                            child: Text(
+                              _esEdicion ? 'Actualizar' : 'Crear Cliente',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              // Botones de acción
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _cancelar,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[300],
-                        foregroundColor: Colors.black87,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text('Cancelar'),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _guardarCliente,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF667eea),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : Text(_isEditing ? 'Actualizar' : 'Crear'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 
-  void _guardarCliente() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    // Evitar múltiples clicks mientras está cargando
-    if (_isLoading) {
-      print('⚠️ Ya se está procesando una solicitud...');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    print('🔄 Iniciando proceso de guardado...');
-
-    // Limpiar mensajes previos antes de iniciar
-    ref.read(clientProvider.notifier).limpiarMensajes();
-
-    final authState = ref.read(authProvider);
-    final cobradorId = authState.isCobrador
-        ? authState.usuario?.id.toString()
-        : null;
-
-    bool resultado = false;
-
-    try {
-      if (_isEditing) {
-        // Actualizar cliente existente
-        resultado = await ref
-            .read(clientProvider.notifier)
-            .actualizarCliente(
-              id: widget.cliente!.id.toString(),
-              nombre: _nombreController.text.trim(),
-              email: _emailController.text.trim(),
-              telefono: _telefonoController.text.trim(),
-              direccion: _direccionController.text.trim(),
-              cobradorId: cobradorId,
-            );
-      } else {
-        // Crear nuevo cliente
-        resultado = await ref
-            .read(clientProvider.notifier)
-            .crearCliente(
-              nombre: _nombreController.text.trim(),
-              email: _emailController.text.trim().isEmpty
-                  ? null
-                  : _emailController.text.trim(),
-              password: _passwordController.text.isNotEmpty
-                  ? _passwordController.text
-                  : null,
-              telefono: _telefonoController.text.trim(),
-              direccion: _direccionController.text.trim(),
-              cobradorId: cobradorId,
-            );
-      }
-
-      print('📋 Resultado del guardado: $resultado');
-
-      // Si el resultado fue exitoso pero no hay mensaje de éxito,
-      // el listener se encargará de manejar la respuesta
-      if (!resultado) {
-        // Solo cambiar el estado si falló localmente
-        setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      print('❌ Error en _guardarCliente: $e');
-      setState(() => _isLoading = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error inesperado: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _cancelar() {
-    Navigator.pop(context);
-  }
-
-  // Métodos para manejo de ubicación
   Future<void> _obtenerUbicacionActual() async {
-    setState(() {
-      _obteniendoUbicacion = true;
-    });
-
     try {
       // Verificar permisos de ubicación
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        throw Exception('Los servicios de ubicación están deshabilitados');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Los servicios de ubicación están deshabilitados'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          throw Exception('Permisos de ubicación denegados');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permisos de ubicación denegados'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        throw Exception('Permisos de ubicación denegados permanentemente');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Permisos de ubicación denegados permanentemente. Ve a configuración para habilitarlos.',
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
       }
+
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Obteniendo ubicación actual...',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      );
 
       // Obtener posición actual
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
       );
 
-      setState(() {
-        _latitud = position.latitude;
-        _longitud = position.longitude;
-      });
+      // Cerrar diálogo de carga
+      if (mounted) Navigator.of(context).pop();
 
-      // Intentar obtener dirección legible
+      // Intentar obtener dirección de las coordenadas
+      String direccionObtenida = '';
       try {
         List<Placemark> placemarks = await placemarkFromCoordinates(
           position.latitude,
@@ -484,76 +412,257 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
         );
 
         if (placemarks.isNotEmpty) {
-          Placemark place = placemarks[0];
-          String direccion = '';
-
-          if (place.street != null && place.street!.isNotEmpty) {
-            direccion += place.street!;
-          }
-          if (place.subThoroughfare != null &&
-              place.subThoroughfare!.isNotEmpty) {
-            direccion += ' ${place.subThoroughfare!}';
-          }
-          if (place.locality != null && place.locality!.isNotEmpty) {
-            direccion += ', ${place.locality!}';
-          }
-          if (place.administrativeArea != null &&
-              place.administrativeArea!.isNotEmpty) {
-            direccion += ', ${place.administrativeArea!}';
-          }
-
-          if (direccion.isNotEmpty) {
-            _direccionController.text = direccion;
-          }
+          Placemark place = placemarks.first;
+          direccionObtenida =
+              [
+                    place.street,
+                    place.locality,
+                    place.administrativeArea,
+                    place.country,
+                  ]
+                  .where((element) => element != null && element.isNotEmpty)
+                  .join(', ');
         }
       } catch (e) {
-        print('Error obteniendo dirección: $e');
-        // No es crítico si no se puede obtener la dirección
+        print('Error al obtener dirección: $e');
       }
 
-      if (mounted) {
+      setState(() {
+        _latitud = position.latitude;
+        _longitud = position.longitude;
+        _ubicacionObtenida = true;
+        _tipoUbicacion = 'actual';
+
+        // Si se obtuvo una dirección, la usamos; si no, mantenemos la actual
+        if (direccionObtenida.isNotEmpty) {
+          _direccionController.text = direccionObtenida;
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Ubicación actual obtenida correctamente\n'
+            'Lat: ${position.latitude.toStringAsFixed(4)}\n'
+            'Lng: ${position.longitude.toStringAsFixed(4)}',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      // Cerrar diálogo de carga si está abierto
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al obtener ubicación actual: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _obtenerUbicacionGPS() async {
+    try {
+      // Navegar a la pantalla de selección de ubicación
+      final result = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(builder: (context) => const LocationPickerScreen()),
+      );
+
+      if (result != null) {
+        setState(() {
+          _latitud = result['latitud'] as double?;
+          _longitud = result['longitud'] as double?;
+          _ubicacionObtenida = true;
+          _tipoUbicacion = 'mapa';
+
+          // Si viene una dirección, la usamos
+          if (result['direccion'] != null &&
+              result['direccion'].toString().isNotEmpty) {
+            _direccionController.text = result['direccion'] as String;
+          }
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ubicación obtenida exitosamente'),
+            content: Text('Ubicación seleccionada en mapa correctamente'),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al obtener ubicación: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _guardarCliente() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authState = ref.read(authProvider);
+      if (authState.usuario == null) {
+        throw Exception('Usuario no autenticado');
+      }
+
+      if (_esEdicion) {
+        await ref
+            .read(userManagementProvider.notifier)
+            .actualizarUsuario(
+              id: widget.cliente!.id,
+              nombre: _nombreController.text.trim(),
+              email: _emailController.text.trim(),
+              ci: _ciController.text.trim(),
+              telefono: _telefonoController.text.trim(),
+              direccion: _direccionController.text.trim(),
+              latitud: _latitud,
+              longitud: _longitud,
+            );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cliente actualizado exitosamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        await ref
+            .read(userManagementProvider.notifier)
+            .crearUsuario(
+              nombre: _nombreController.text.trim(),
+              email: _emailController.text.trim(),
+              ci: _ciController.text.trim(),
+              roles: ['client'],
+              telefono: _telefonoController.text.trim(),
+              direccion: _direccionController.text.trim(),
+              password: _contrasenaController.text.isNotEmpty
+                  ? _contrasenaController.text
+                  : null,
+              latitud: _latitud,
+              longitud: _longitud,
+            );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cliente creado exitosamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+
+      if (widget.onClienteSaved != null) {
+        widget.onClienteSaved!();
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error obteniendo ubicación: $e'),
+            content: Text(
+              'Error al ${_esEdicion ? 'actualizar' : 'crear'} cliente: $e',
+            ),
             backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
-      setState(() {
-        _obteniendoUbicacion = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _abrirMapa() {
-    // Por ahora mostrar un diálogo informativo
-    // En una implementación futura se puede abrir un mapa interactivo
+  void _confirmarEliminarCliente() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Selección en Mapa'),
-        content: const Text(
-          'Esta funcionalidad estará disponible próximamente.\n\n'
-          'Por ahora, puedes usar el botón "Ubicación Actual" para obtener '
-          'automáticamente las coordenadas y dirección.',
+        title: const Text('Confirmar Eliminación'),
+        content: Text(
+          '¿Estás seguro de que deseas eliminar permanentemente a ${widget.cliente!.nombre}?\n\n'
+          'Esta acción no se puede deshacer y el cliente será eliminado del sistema.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Entendido'),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _eliminarCliente();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _eliminarCliente() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await ref
+          .read(userManagementProvider.notifier)
+          .eliminarUsuario(widget.cliente!.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Cliente ${widget.cliente!.nombre} eliminado exitosamente',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        if (widget.onClienteSaved != null) {
+          widget.onClienteSaved!();
+        }
+
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al eliminar cliente: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 }
