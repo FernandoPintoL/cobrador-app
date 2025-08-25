@@ -60,11 +60,37 @@ class CreditApiService extends BaseApiService {
         print('✅ Crédito creado exitosamente');
         return data;
       } else {
-        throw Exception('Error al crear crédito: ${response.statusCode}');
+        throw ApiException(
+          message: 'Error al crear crédito: ${response.statusCode}',
+          statusCode: response.statusCode,
+          errorData: response.data,
+        );
       }
+    } on DioException catch (e) {
+      // Convertir el error de Dio en ApiException con mensaje amigable y errores de validación
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      String message = 'Error al crear crédito';
+      if (data is Map<String, dynamic>) {
+        if (data['message'] != null) {
+          message = data['message'].toString();
+        } else if (data['error'] != null) {
+          message = data['error'].toString();
+        }
+      } else if (e.message != null) {
+        message = e.message!;
+      }
+
+      print('❌ Error al crear crédito (ApiException): $message');
+      throw ApiException(
+        message: message,
+        statusCode: status,
+        errorData: data,
+        originalError: e,
+      );
     } catch (e) {
       print('❌ Error al crear crédito: $e');
-      throw Exception('Error al crear crédito: $e');
+      throw ApiException(message: 'Error al crear crédito: $e');
     }
   }
 

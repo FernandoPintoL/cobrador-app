@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LocationPickerScreen extends StatefulWidget {
   final bool allowSelection; // Permite seleccionar ubicación tocando el mapa
@@ -33,6 +34,196 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     -12.0464,
     -77.0428,
   ); // Lima, Perú
+
+  // Estilo de mapa para modo oscuro
+  static const String _darkMapStyle = '''
+  [
+    {
+      "elementType": "geometry",
+      "stylers": [
+        {
+          "color": "#212121"
+        }
+      ]
+    },
+    {
+      "elementType": "labels.icon",
+      "stylers": [
+        {
+          "visibility": "off"
+        }
+      ]
+    },
+    {
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#757575"
+        }
+      ]
+    },
+    {
+      "elementType": "labels.text.stroke",
+      "stylers": [
+        {
+          "color": "#212121"
+        }
+      ]
+    },
+    {
+      "featureType": "administrative",
+      "elementType": "geometry",
+      "stylers": [
+        {
+          "color": "#757575"
+        }
+      ]
+    },
+    {
+      "featureType": "administrative.country",
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#9e9e9e"
+        }
+      ]
+    },
+    {
+      "featureType": "administrative.land_parcel",
+      "stylers": [
+        {
+          "visibility": "off"
+        }
+      ]
+    },
+    {
+      "featureType": "administrative.locality",
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#bdbdbd"
+        }
+      ]
+    },
+    {
+      "featureType": "poi",
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#757575"
+        }
+      ]
+    },
+    {
+      "featureType": "poi.park",
+      "elementType": "geometry",
+      "stylers": [
+        {
+          "color": "#181818"
+        }
+      ]
+    },
+    {
+      "featureType": "poi.park",
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#616161"
+        }
+      ]
+    },
+    {
+      "featureType": "poi.park",
+      "elementType": "labels.text.stroke",
+      "stylers": [
+        {
+          "color": "#1b1b1b"
+        }
+      ]
+    },
+    {
+      "featureType": "road",
+      "elementType": "geometry.fill",
+      "stylers": [
+        {
+          "color": "#2c2c2c"
+        }
+      ]
+    },
+    {
+      "featureType": "road",
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#8a8a8a"
+        }
+      ]
+    },
+    {
+      "featureType": "road.arterial",
+      "elementType": "geometry",
+      "stylers": [
+        {
+          "color": "#373737"
+        }
+      ]
+    },
+    {
+      "featureType": "road.highway",
+      "elementType": "geometry",
+      "stylers": [
+        {
+          "color": "#3c3c3c"
+        }
+      ]
+    },
+    {
+      "featureType": "road.highway.controlled_access",
+      "elementType": "geometry",
+      "stylers": [
+        {
+          "color": "#4e4e4e"
+        }
+      ]
+    },
+    {
+      "featureType": "road.local",
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#616161"
+        }
+      ]
+    },
+    {
+      "featureType": "transit",
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#757575"
+        }
+      ]
+    },
+    {
+      "featureType": "water",
+      "elementType": "geometry",
+      "stylers": [
+        {
+          "color": "#000000"
+        }
+      ]
+    },
+    {
+      "featureType": "water",
+      "elementType": "labels.text.fill",
+      "stylers": [
+        {
+          "color": "#3d3d3d"
+        }
+      ]
+    }
+  ]
+  ''';
 
   @override
   void initState() {
@@ -245,6 +436,79 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 
+  bool _hayUbicacionRegistrada() {
+    return widget.extraMarkers != null && widget.extraMarkers!.isNotEmpty;
+  }
+
+  LatLng? _obtenerDestinoNavegacion() {
+    // Prioridad: ubicación seleccionada, si no existe y hay un único marcador extra, usarlo
+    if (_selectedLocation != null) return _selectedLocation;
+    if (widget.extraMarkers != null && widget.extraMarkers!.length == 1) {
+      return widget.extraMarkers!.first.position;
+    }
+    return null;
+  }
+
+  Future<void> _abrirEnGoogleMaps(LatLng destino) async {
+    final uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=${destino.latitude},${destino.longitude}&travelmode=driving');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      _mostrarMensaje('No se pudo abrir', 'No se pudo abrir Google Maps.', Colors.red);
+    }
+  }
+
+  Future<void> _abrirEnWaze(LatLng destino) async {
+    final uri = Uri.parse('https://waze.com/ul?ll=${destino.latitude},${destino.longitude}&navigate=yes');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      _mostrarMensaje('No se pudo abrir', 'No se pudo abrir Waze.', Colors.red);
+    }
+  }
+
+  Future<void> _mostrarOpcionesNavegacion() async {
+    final destino = _obtenerDestinoNavegacion();
+    if (destino == null) {
+      _mostrarMensaje(
+        'Selecciona un destino',
+        'Selecciona una ubicación en el mapa o asegúrate de tener un único marcador para navegar.',
+        Colors.orange,
+      );
+      return;
+    }
+
+    // Mostrar opciones para abrir en apps externas
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        final isDarkMode = Theme.of(ctx).brightness == Brightness.dark;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.map, color: Colors.redAccent),
+                title: const Text('Abrir en Google Maps'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _abrirEnGoogleMaps(destino);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.navigation, color: Colors.blueAccent),
+                title: const Text('Abrir en Waze'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _abrirEnWaze(destino);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool soloVista = !widget.allowSelection;
@@ -256,40 +520,65 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           : 'Seleccionar Ubicación'
     );
 
+    // Detectar el tema actual para adaptar colores
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDarkMode ? Colors.grey[900] : Colors.grey[100];
+    final cardColor = isDarkMode ? Colors.grey[800] : Colors.white;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final subtitleColor = isDarkMode ? Colors.grey[300] : Colors.grey[600];
+
     return Scaffold(
       appBar: AppBar(
         title: Text(appBarTitle),
+        backgroundColor: isDarkMode ? Colors.grey[900] : null,
+        foregroundColor: isDarkMode ? Colors.white : null,
         actions: [
+          if (_hayUbicacionRegistrada())
+            IconButton(
+              tooltip: 'Cómo llegar',
+              onPressed: _mostrarOpcionesNavegacion,
+              icon: const Icon(Icons.directions),
+            ),
           if (!soloVista && _selectedLocation != null)
             TextButton(
               onPressed: _confirmarUbicacion,
-              child: const Text(
+              child: Text(
                 'Confirmar',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.white,
+                ),
               ),
             ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(
+                color: isDarkMode ? Colors.blue[300] : Colors.blue,
+              ),
+            )
           : Column(
               children: [
                 // Información de ubicación
                 Container(
                   padding: const EdgeInsets.all(16),
-                  color: Colors.grey[100],
+                  color: backgroundColor,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.location_on, color: Colors.blue),
+                          Icon(
+                            Icons.location_on,
+                            color: isDarkMode ? Colors.blue[300] : Colors.blue,
+                          ),
                           const SizedBox(width: 8),
-                          const Text(
+                          Text(
                             'Ubicación Seleccionada:',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
+                              color: textColor,
                             ),
                           ),
                         ],
@@ -298,48 +587,53 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       if (_selectedLocation != null) ...[
                         Text(
                           'Latitud: ${_selectedLocation!.latitude.toStringAsFixed(6)}',
-                          style: const TextStyle(fontSize: 14),
+                          style: TextStyle(fontSize: 14, color: textColor),
                         ),
                         Text(
                           'Longitud: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
-                          style: const TextStyle(fontSize: 14),
+                          style: TextStyle(fontSize: 14, color: textColor),
                         ),
                         if (_direccion.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
                             'Dirección: $_direccion',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
+                              color: textColor,
                             ),
                           ),
                         ],
                         if (_isGettingAddress) ...[
                           const SizedBox(height: 4),
-                          const Row(
+                          Row(
                             children: [
                               SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
+                                  color: isDarkMode ? Colors.blue[300] : Colors.blue,
                                 ),
                               ),
-                              SizedBox(width: 8),
-                              Text('Obteniendo dirección...'),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Obteniendo dirección...',
+                                style: TextStyle(color: subtitleColor),
+                              ),
                             ],
                           ),
                         ],
                       ] else ...[
                         if (widget.allowSelection)
-                          const Text(
+                          Text(
                             'Toca en el mapa para seleccionar una ubicación',
-                            style: TextStyle(fontSize: 14),
+                            style: TextStyle(fontSize: 14, color: subtitleColor),
                           )
                         else
-                          const Text(
+                          Text(
                             'Visualización de ubicaciones en el mapa',
-                            style: TextStyle(fontSize: 14),
+                            style: TextStyle(fontSize: 14, color: subtitleColor),
                           ),
                       ],
                     ],
@@ -382,7 +676,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                           myLocationButtonEnabled: true,
                           zoomControlsEnabled: true,
                           mapToolbarEnabled: false,
-                          // Agregar callbacks para manejo de errores
+                          // Configurar estilo del mapa según el tema
+                          style: isDarkMode ? _darkMapStyle : null,
                           onCameraMove: (CameraPosition position) {
                             print('📍 Cámara moviéndose a: ${position.target}');
                           },
@@ -392,14 +687,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         ),
                       ),
 
-                      // Widget de diagnóstico (solo en debug)
-                      Positioned(
+                      // Widget de diagnóstico (adaptado para modo oscuro)
+                      /*Positioned(
                         top: 10,
                         right: 10,
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.black87,
+                            color: isDarkMode ? Colors.grey[800]?.withOpacity(0.9) : Colors.black87,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Column(
@@ -442,8 +737,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                             ],
                           ),
                         ),
-                      ),
-                      // Indicador de error del mapa
+                      ),*/
+                      // Indicador de error del mapa (adaptado para modo oscuro)
                       if (_mapError)
                         Positioned(
                           top: 16,
@@ -452,22 +747,27 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.red[100],
+                              color: isDarkMode ? Colors.red[900]?.withOpacity(0.9) : Colors.red[100],
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red),
+                              border: Border.all(
+                                color: isDarkMode ? Colors.red[300]! : Colors.red,
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
-                                    const Icon(Icons.error, color: Colors.red),
+                                    Icon(
+                                      Icons.error,
+                                      color: isDarkMode ? Colors.red[300] : Colors.red,
+                                    ),
                                     const SizedBox(width: 8),
-                                    const Text(
+                                    Text(
                                       'Error del Mapa',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.red,
+                                        color: isDarkMode ? Colors.red[300] : Colors.red,
                                       ),
                                     ),
                                   ],
@@ -477,7 +777,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                                   _mapErrorMessage.isNotEmpty
                                       ? _mapErrorMessage
                                       : 'No se pudo cargar el mapa. Verifica tu conexión a internet.',
-                                  style: const TextStyle(fontSize: 12),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDarkMode ? Colors.white : Colors.black87,
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 Row(
@@ -491,7 +794,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                                           });
                                         },
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.red,
+                                          backgroundColor: isDarkMode ? Colors.red[600] : Colors.red,
                                           foregroundColor: Colors.white,
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 12,
@@ -510,10 +813,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     ],
                   ),
                 ),
-                // Botones de acción
+                // Botones de acción (adaptados para modo oscuro)
                 if (!soloVista)
                   Container(
                     padding: const EdgeInsets.all(16),
+                    color: backgroundColor,
                     child: Row(
                       children: [
                         Expanded(
@@ -522,7 +826,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                             icon: const Icon(Icons.my_location),
                             label: const Text('Mi Ubicación'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
+                              backgroundColor: isDarkMode ? Colors.blue[600] : Colors.blue,
                               foregroundColor: Colors.white,
                             ),
                           ),
@@ -536,7 +840,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                             icon: const Icon(Icons.check),
                             label: const Text('Confirmar'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
+                              backgroundColor: isDarkMode ? Colors.green[600] : Colors.green,
                               foregroundColor: Colors.white,
                             ),
                           ),
@@ -546,6 +850,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   ),
               ],
             ),
+      floatingActionButton: _hayUbicacionRegistrada()
+          ? FloatingActionButton.extended(
+              onPressed: _mostrarOpcionesNavegacion,
+              icon: const Icon(Icons.directions, color: Colors.white),
+              label: const Text('Cómo llegar', style: TextStyle(color: Colors.white)),
+              backgroundColor: isDarkMode ? Colors.blue : Colors.blue,
+            )
+          : null,
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
@@ -9,7 +10,7 @@ import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
 import '../cliente/cliente_creditos_screen.dart';
 import '../cliente/cliente_perfil_screen.dart';
-import '../cliente/cliente_ubicacion_screen.dart';
+import '../cliente/location_picker_screen.dart';
 import '../cliente/cliente_form_screen.dart';
 
 class ManagerClientesScreen extends ConsumerStatefulWidget {
@@ -663,12 +664,36 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   }
 
   void _navegarAUbicacionCliente(Usuario cliente) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ClienteUbicacionScreen(cliente: cliente),
-      ),
-    );
+    if (cliente.latitud != null && cliente.longitud != null) {
+      // Crear marcador para la ubicación del cliente
+      final clienteMarker = Marker(
+        markerId: MarkerId('cliente_${cliente.id}'),
+        position: LatLng(cliente.latitud!, cliente.longitud!),
+        infoWindow: InfoWindow(
+          title: cliente.nombre,
+          snippet: 'Cliente ${cliente.clientCategory ?? 'B'} - ${cliente.telefono}',
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LocationPickerScreen(
+            allowSelection: false, // Modo solo visualización
+            extraMarkers: {clienteMarker},
+            customTitle: 'Ubicación de ${cliente.nombre}',
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este cliente no tiene ubicación GPS registrada'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   void _mostrarMenuFiltros() {

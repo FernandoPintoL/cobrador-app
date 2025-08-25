@@ -227,7 +227,8 @@ class ManagerNotifier extends StateNotifier<ManagerState> {
 
   // ===== MÉTODOS PARA CLIENTES DEL MANAGER =====
 
-  /// Carga todos los clientes asociados a un manager (a través de sus cobradores)
+  /// Carga todos los clientes de un manager (directos + de cobradores)
+  /// Usa el endpoint recomendado: GET /api/users/{managerId}/manager-clients
   Future<void> cargarClientesDelManager(String managerId) async {
     // Evitar múltiples peticiones simultáneas
     if (state.isLoading) return;
@@ -245,10 +246,72 @@ class ManagerNotifier extends StateNotifier<ManagerState> {
             .toList();
 
         state = state.copyWith(clientesDelManager: clientes, isLoading: false);
+        print('✅ Clientes del manager cargados: ${clientes.length} encontrados');
       } else {
         state = state.copyWith(
           isLoading: false,
           error: response['message'] ?? 'Error al cargar clientes del manager',
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: 'Error de conexión: $e');
+    }
+  }
+
+  /// Carga los clientes de un cobrador específico
+  /// Usa el endpoint: GET /api/users/{cobradorId}/clients
+  Future<void> cargarClientesDelCobrador(String cobradorId) async {
+    // Evitar múltiples peticiones simultáneas
+    if (state.isLoading) return;
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final response = await _managerApiService.getClientesDelCobrador(cobradorId);
+
+      if (response['success'] == true) {
+        final clientesData = response['data']?['data'] as List? ?? [];
+
+        final clientes = clientesData
+            .map((json) => Usuario.fromJson(json))
+            .toList();
+
+        state = state.copyWith(clientesDelManager: clientes, isLoading: false);
+        print('✅ Clientes del cobrador cargados: ${clientes.length} encontrados');
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Error al cargar clientes del cobrador',
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: 'Error de conexión: $e');
+    }
+  }
+
+  /// Carga solo los clientes directos de un manager (sin incluir los de cobradores)
+  /// Usa el endpoint: GET /api/users/{managerId}/clients-direct
+  Future<void> cargarClientesDirectosDelManager(String managerId) async {
+    if (state.isLoading) return;
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final response = await _managerApiService.getClientesDirectosDelManager(managerId);
+
+      if (response['success'] == true) {
+        final clientesData = response['data']?['data'] as List? ?? [];
+
+        final clientes = clientesData
+            .map((json) => Usuario.fromJson(json))
+            .toList();
+
+        state = state.copyWith(clientesDelManager: clientes, isLoading: false);
+        print('✅ Clientes directos del manager cargados: ${clientes.length} encontrados');
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Error al cargar clientes directos del manager',
         );
       }
     } catch (e) {

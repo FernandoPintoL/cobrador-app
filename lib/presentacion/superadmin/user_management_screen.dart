@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../datos/modelos/usuario.dart';
 import '../widgets/role_widgets.dart';
+import '../pantallas/change_password_screen.dart';
 import 'user_form_screen.dart';
 
 class UserManagementScreen extends ConsumerStatefulWidget {
@@ -256,6 +257,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
               case 'edit':
                 _editarUsuario(usuario);
                 break;
+              case 'change_password':
+                _cambiarContrasena(usuario);
+                break;
               case 'delete':
                 _confirmarEliminacion(usuario);
                 break;
@@ -272,6 +276,17 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
                 ],
               ),
             ),
+            if (usuario.roles.first != 'client') // Solo mostrar para managers y cobradores
+              const PopupMenuItem(
+                value: 'change_password',
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_reset, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Cambiar Contraseña'),
+                  ],
+                ),
+              ),
             const PopupMenuItem(
               value: 'delete',
               child: Row(
@@ -325,6 +340,22 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen>
             _cargarUsuarios();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Usuario actualizado exitosamente')),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _cambiarContrasena(Usuario usuario) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChangePasswordScreen(
+          targetUser: usuario,
+          onPasswordChanged: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Contraseña cambiada exitosamente')),
             );
           },
         ),

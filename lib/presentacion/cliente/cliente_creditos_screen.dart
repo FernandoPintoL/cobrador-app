@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
@@ -9,6 +10,12 @@ import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../creditos/credit_detail_screen.dart';
 import '../creditos/credit_form_screen.dart';
+import '../widgets/contact_actions_widget.dart';
+import '../widgets/profile_image_widget.dart';
+import '../../ui/widgets/loading_overlay.dart';
+import '../../ui/widgets/client_category_chip.dart';
+import 'cliente_perfil_screen.dart';
+import 'location_picker_screen.dart';
 
 class ClienteCreditosScreen extends ConsumerStatefulWidget {
   final Usuario cliente;
@@ -43,8 +50,10 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
   }
 
   void _loadClientCredits() {
-    // Cargar todos los créditos y filtrar en el lado del cliente
-    ref.read(creditProvider.notifier).loadCredits();
+    // Usar el endpoint específico para obtener todos los créditos del cliente
+    // GET /api/credits/client/{client} - más eficiente y directo
+    print('🔄 Cargando créditos para cliente ID: ${widget.cliente.id}');
+    ref.read(creditProvider.notifier).loadClientCredits(widget.cliente.id.toInt());
   }
 
   @override
@@ -59,18 +68,24 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
     final authState = ref.read(authProvider);
     final currentUserRole = _getUserRole(authState.usuario);
 
-    // Filtrar créditos del cliente específico
-    final clientCredits = creditState.credits
-        .where((credit) => credit.clientId == widget.cliente.id)
-        .toList();
+    // Debug: Verificar los datos recibidos
+    print('🔍 DEBUG - Cliente ID: ${widget.cliente.id} (tipo: ${widget.cliente.id.runtimeType})');
+    print('🔍 DEBUG - Total créditos en estado: ${creditState.credits.length}');
 
-    // Aplicar filtros adicionales
+    for (var credit in creditState.credits) {
+      print('🔍 DEBUG - Crédito ID: ${credit.id}, ClientID: ${credit.clientId} (tipo: ${credit.clientId.runtimeType})');
+    }
+
+    // Como el endpoint /credits/client/{client} ya devuelve solo los créditos del cliente,
+    // no necesitamos filtrar por clientId nuevamente. Solo aplicamos filtros adicionales.
+    final clientCredits = creditState.credits;
+
+    print('🔍 DEBUG - Créditos sin filtrar adicional: ${clientCredits.length}');
+
+    // Aplicar filtros adicionales (búsqueda y estado)
     final filteredCredits = _filterCredits(clientCredits);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? Theme.of(context).scaffoldBackgroundColor
-          : RoleColors.getAccentColor(currentUserRole),
       appBar: RoleAppBar(
         title: 'Créditos de ${widget.cliente.nombre}',
         role: currentUserRole,
@@ -87,28 +102,33 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // Información del cliente
-          _buildClientInfoCard(),
+          Column(
+            children: [
+              // Información del cliente
+              _buildClientInfoCard(),
 
-          // Estadísticas de créditos
-          _buildCreditStatsCard(clientCredits),
+              // Estadísticas de créditos
+              _buildCreditStatsCard(clientCredits),
 
-          // Barra de búsqueda
-          _buildSearchBar(),
+              // Barra de búsqueda
+              _buildSearchBar(),
 
-          // Lista de créditos
-          Expanded(
-            child: _buildCreditsList(filteredCredits, creditState.isLoading),
+              // Lista de créditos
+              Expanded(
+                child: _buildCreditsList(filteredCredits, creditState.isLoading),
+              ),
+            ],
           ),
+          LoadingOverlay(isLoading: creditState.isLoading, message: 'Cargando créditos...'),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
         onPressed: () => _navegarACrearCredito(),
         tooltip: 'Crear Nuevo Crédito',
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -116,46 +136,212 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
   Widget _buildClientInfoCard() {
     return Card(
       margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: RoleColors.clientePrimary,
-              radius: 30,
-              child: Text(
-                widget.cliente.nombre.isNotEmpty
-                    ? widget.cliente.nombre[0].toUpperCase()
-                    : 'C',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _navegarAlPerfil(),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              // Header con foto y información principal
+              Row(
                 children: [
-                  Text(
-                    widget.cliente.nombre,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  // Foto de perfil del cliente
+                  ProfileImageWidget(
+                    profileImage: widget.cliente.profileImage,
+                    size: 60,
+                  ),
+                  const SizedBox(width: 16),
+                  // Información principal
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                widget.cliente.nombre,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            // Botón de perfil completo
+                            IconButton(
+                              icon: Icon(
+                                Icons.person,
+                                color: RoleColors.clientePrimary,
+                              ),
+                              onPressed: () => _navegarAlPerfil(),
+                              tooltip: 'Ver perfil completo',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        ClientCategoryChip(
+                          category: widget.cliente.clientCategory,
+                          compact: true,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.email_outlined,
+                              size: 16,
+                              color: Colors.grey[600],
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                widget.cliente.email,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (widget.cliente.telefono.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.phone_outlined,
+                                size: 16,
+                                color: Colors.grey[600],
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  widget.cliente.telefono,
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (widget.cliente.direccion.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 16,
+                                color: Colors.grey[600],
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  widget.cliente.direccion,
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  Text(
-                    widget.cliente.email,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+
+              // Botones de acción rápida
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Botón de llamar
                   if (widget.cliente.telefono.isNotEmpty)
-                    Text(
-                      widget.cliente.telefono,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    _buildActionButton(
+                      icon: Icons.phone,
+                      label: 'Llamar',
+                      color: Colors.green,
+                      onTap: () => _llamarCliente(),
+                    ),
+
+                  // Botón de WhatsApp
+                  if (widget.cliente.telefono.isNotEmpty)
+                    _buildActionButton(
+                      icon: Icons.message,
+                      label: 'WhatsApp',
+                      color: Colors.green[600]!,
+                      onTap: () => _enviarWhatsApp(),
+                    ),
+
+                  // Botón de ver perfil
+                  _buildActionButton(
+                    icon: Icons.account_circle,
+                    label: 'Perfil',
+                    color: RoleColors.clientePrimary,
+                    onTap: () => _navegarAlPerfil(),
+                  ),
+
+                  // Botón de ubicación (si tiene coordenadas)
+                  if (widget.cliente.latitud != null && widget.cliente.longitud != null)
+                    _buildActionButton(
+                      icon: Icons.location_on,
+                      label: 'Ubicación',
+                      color: Colors.blue,
+                      onTap: () => _verUbicacion(),
                     ),
                 ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 20,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -563,5 +749,89 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
         );
       }
     }
+  }
+
+  // ========================================
+  // MÉTODOS DE ACCIÓN PARA EL CLIENTE
+  // ========================================
+
+  void _llamarCliente() {
+    if (widget.cliente.telefono.isNotEmpty) {
+      ContactActionsWidget.makePhoneCall(widget.cliente.telefono);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este cliente no tiene teléfono registrado'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  void _enviarWhatsApp() {
+    if (widget.cliente.telefono.isNotEmpty) {
+      ContactActionsWidget.openWhatsApp(
+        widget.cliente.telefono,
+        message: ContactActionsWidget.getDefaultMessage(
+          'cliente',
+          widget.cliente.nombre,
+        ),
+        context: context,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este cliente no tiene teléfono registrado'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  void _navegarAlPerfil() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClientePerfilScreen(cliente: widget.cliente),
+      ),
+    );
+  }
+
+  void _verUbicacion() {
+    if (widget.cliente.latitud != null && widget.cliente.longitud != null) {
+      // Usar la misma lógica que en el perfil del cliente
+      _mostrarUbicacionEnMapa();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este cliente no tiene ubicación GPS registrada'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  void _mostrarUbicacionEnMapa() {
+    // Crear marcador para la ubicación del cliente
+    final clienteMarker = Marker(
+      markerId: MarkerId('cliente_${widget.cliente.id}'),
+      position: LatLng(widget.cliente.latitud!, widget.cliente.longitud!),
+      infoWindow: InfoWindow(
+        title: widget.cliente.nombre,
+        snippet: 'Cliente ${widget.cliente.clientCategory ?? 'B'} - ${widget.cliente.telefono}',
+      ),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LocationPickerScreen(
+          allowSelection: false, // Modo solo visualización
+          extraMarkers: {clienteMarker},
+          customTitle: 'Ubicación de ${widget.cliente.nombre}',
+        ),
+      ),
+    );
   }
 }

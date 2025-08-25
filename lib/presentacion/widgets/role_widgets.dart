@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/role_colors.dart';
+import '../../datos/servicios/api_service.dart';
 
 /// Widget que muestra información del rol de manera consistente
 class RoleDisplayWidget extends StatelessWidget {
@@ -245,6 +247,86 @@ class RoleFloatingActionButton extends StatelessWidget {
       foregroundColor: Colors.white,
       tooltip: tooltip,
       child: child,
+    );
+  }
+}
+
+/// Avatar con imagen de perfil real o iniciales del rol como fallback
+class ProfileAvatarWidget extends StatelessWidget {
+  final String role;
+  final String userName;
+  final String? profileImagePath;
+  final double radius;
+  final bool useGradient;
+
+  const ProfileAvatarWidget({
+    super.key,
+    required this.role,
+    required this.userName,
+    this.profileImagePath,
+    this.radius = 20,
+    this.useGradient = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Si hay imagen de perfil, mostrarla
+    if (profileImagePath != null && profileImagePath!.isNotEmpty) {
+      final apiService = ApiService();
+      final imageUrl = apiService.getProfileImageUrl(profileImagePath);
+
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        imageBuilder: (context, imageProvider) => CircleAvatar(
+          radius: radius,
+          backgroundImage: imageProvider,
+        ),
+        placeholder: (context, url) => _buildFallbackAvatar(),
+        errorWidget: (context, url, error) => _buildFallbackAvatar(),
+        memCacheWidth: (radius * 4).toInt(),
+        memCacheHeight: (radius * 4).toInt(),
+      );
+    }
+
+    // Si no hay imagen, mostrar avatar del rol
+    return _buildFallbackAvatar();
+  }
+
+  Widget _buildFallbackAvatar() {
+    final initial = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
+
+    if (useGradient) {
+      return Container(
+        width: radius * 2,
+        height: radius * 2,
+        decoration: BoxDecoration(
+          gradient: RoleColors.getGradient(role),
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            initial,
+            style: TextStyle(
+              fontSize: radius * 0.6,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: RoleColors.getPrimaryColor(role),
+      child: Text(
+        initial,
+        style: TextStyle(
+          fontSize: radius * 0.6,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
     );
   }
 }

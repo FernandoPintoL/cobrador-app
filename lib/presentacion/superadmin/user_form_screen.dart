@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../ui/utilidades/image_utils.dart';
+import '../../ui/utilidades/phone_utils.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/cobrador_assignment_provider.dart';
 import '../../datos/modelos/usuario.dart';
@@ -46,6 +50,15 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
   Usuario? _cobradorSeleccionado;
   bool _cargandoCobradores = false;
 
+  // Categoría de cliente (A, B, C) - solo aplicable para userType == 'client'
+  String _clientCategory = 'B';
+
+  // Imágenes requeridas de CI y opcional foto de perfil
+  File? _idFront;
+  File? _idBack;
+  File? _profileImage;
+  final _picker = ImagePicker();
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +71,19 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
       _latitud = widget.usuario!.latitud;
       _longitud = widget.usuario!.longitud;
       _actualizarTextoUbicacion();
+
+      // Inicializar categoría si es cliente existente
+      if (widget.userType == 'client') {
+        _clientCategory = (widget.usuario!.clientCategory ?? 'B').toUpperCase();
+        if (!['A', 'B', 'C'].contains(_clientCategory)) {
+          _clientCategory = 'B';
+        }
+      }
+    } else {
+      // Valor por defecto para nuevos clientes
+      if (widget.userType == 'client') {
+        _clientCategory = 'B';
+      }
     }
 
     // Cargar cobradores si estamos creando un cliente
@@ -366,6 +392,39 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
               const SizedBox(height: 16),
             ],
 
+            // Categoría de Cliente (solo para clientes)
+            if (widget.userType == 'client') ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Categoría de Cliente',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _clientCategory,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.category),
+                      helperText:
+                          'A = Cliente VIP, B = Cliente Normal, C = Mal Cliente',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'A', child: Text('A - Cliente VIP')),
+                      DropdownMenuItem(value: 'B', child: Text('B - Cliente Normal')),
+                      DropdownMenuItem(value: 'C', child: Text('C - Mal Cliente')),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _clientCategory = v);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Contraseña (opcional)
             TextFormField(
               controller: _passwordController,
@@ -409,15 +468,59 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                 prefixIcon: Icon(Icons.phone),
                 border: OutlineInputBorder(),
               ),
-              validator: (value) {
-                if (value != null && value.isNotEmpty) {
-                  if (value.length < 7) {
-                    return 'El teléfono debe tener al menos 7 dígitos';
-                  }
-                }
-                return null;
-              },
+              validator: (value) => PhoneUtils.validatePhone(value, required: false),
             ),
+            const SizedBox(height: 16),
+
+            // Documentos de Identidad (requerido para clientes/cobradores en creación)
+            if (widget.usuario == null && (widget.userType == 'client' || widget.userType == 'cobrador'))
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Documentos de Identidad',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Anverso y Reverso del CI son obligatorios. La foto de perfil es opcional.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _buildImagePicker(
+                            label: 'CI Anverso*',
+                            file: _idFront,
+                            onTap: () => _pickImage('id_front'),
+                          ),
+                          const SizedBox(width: 12),
+                          _buildImagePicker(
+                            label: 'CI Reverso*',
+                            file: _idBack,
+                            onTap: () => _pickImage('id_back'),
+                          ),
+                          const SizedBox(width: 12),
+                          _buildImagePicker(
+                            label: 'Perfil (opcional)',
+                            file: _profileImage,
+                            onTap: () => _pickImage('profile'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Las imágenes se comprimen automáticamente para pesar menos de 1MB.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             const SizedBox(height: 16),
 
             // Ubicación
@@ -543,6 +646,17 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
       return;
     }
 
+    // Validar fotos requeridas si es creación de cliente o cobrador
+    if (widget.usuario == null && (widget.userType == 'client' || widget.userType == 'cobrador')) {
+      if (_idFront == null || _idBack == null) {
+        ValidationErrorSnackBar.show(
+          context,
+          message: 'Debes subir las fotos del CI (anverso y reverso)'.toString(),
+        );
+        return;
+      }
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -562,27 +676,55 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
               telefono: _telefonoController.text.trim(),
               direccion: _direccionController.text.trim(),
               roles: [widget.userType],
+              clientCategory:
+                  widget.userType == 'client' ? _clientCategory : null,
               password: _passwordController.text.isNotEmpty
                   ? _passwordController.text
                   : null,
             );
       } else {
         // Crear nuevo usuario
-        success = await ref
-            .read(userManagementProvider.notifier)
-            .crearUsuario(
-              nombre: _nombreController.text.trim(),
-              email: _emailController.text.trim(),
-              ci: _ciController.text.trim(),
-              password: _passwordController.text.isNotEmpty
-                  ? _passwordController.text
-                  : null,
-              roles: [widget.userType],
-              telefono: _telefonoController.text.trim(),
-              direccion: _direccionController.text.trim(),
-              latitud: _latitud,
-              longitud: _longitud,
-            );
+        final roles = [widget.userType];
+        if (widget.userType == 'client' || widget.userType == 'cobrador') {
+          success = await ref
+              .read(userManagementProvider.notifier)
+              .crearUsuarioConFotos(
+                nombre: _nombreController.text.trim(),
+                email: _emailController.text.trim(),
+                ci: _ciController.text.trim(),
+                password: _passwordController.text.isNotEmpty
+                    ? _passwordController.text
+                    : null,
+                roles: roles,
+                telefono: _telefonoController.text.trim(),
+                direccion: _direccionController.text.trim(),
+                latitud: _latitud,
+                longitud: _longitud,
+                clientCategory:
+                    widget.userType == 'client' ? _clientCategory : null,
+                idFront: _idFront!,
+                idBack: _idBack!,
+                profileImage: _profileImage,
+              );
+        } else {
+          success = await ref
+              .read(userManagementProvider.notifier)
+              .crearUsuario(
+                nombre: _nombreController.text.trim(),
+                email: _emailController.text.trim(),
+                ci: _ciController.text.trim(),
+                password: _passwordController.text.isNotEmpty
+                    ? _passwordController.text
+                    : null,
+                roles: roles,
+                telefono: _telefonoController.text.trim(),
+                direccion: _direccionController.text.trim(),
+                latitud: _latitud,
+                longitud: _longitud,
+                clientCategory:
+                    widget.userType == 'client' ? _clientCategory : null,
+              );
+        }
 
         // Si es un cliente y se seleccionó un cobrador, asignarlo
         if (success &&
@@ -660,6 +802,98 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Widget _buildImagePicker({required String label, required File? file, required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 90,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: file == null
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.add_a_photo, size: 20, color: Colors.grey),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    file,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Future<ImageSource?> _selectImageSource() async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Cámara'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              const Divider(height: 0),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galería'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickImage(String type) async {
+    try {
+      final source = await _selectImageSource();
+      if (source == null) return;
+
+      final picked = await _picker.pickImage(source: source, imageQuality: 100);
+      if (picked == null) return;
+      File file = File(picked.path);
+      file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);
+
+      setState(() {
+        if (type == 'id_front') {
+          _idFront = file;
+        } else if (type == 'id_back') {
+          _idBack = file;
+        } else {
+          _profileImage = file;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ValidationErrorSnackBar.show(
+          context,
+          message: 'No se pudo seleccionar la imagen: $e',
+        );
       }
     }
   }

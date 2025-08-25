@@ -44,7 +44,8 @@ class _CobradorDashboardScreenState
 
     // Escuchar cambios en el estado de la imagen de perfil
     ref.listen<ProfileImageState>(profileImageProvider, (previous, next) {
-      if (next.error != null) {
+      // Mostrar error solo cuando cambie
+      if (previous?.error != next.error && next.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.error!),
@@ -53,10 +54,10 @@ class _CobradorDashboardScreenState
                 : Colors.red,
           ),
         );
-        ref.read(profileImageProvider.notifier).clearError();
+        // No limpiar aquí para evitar bucles
       }
 
-      if (next.successMessage != null) {
+      if (previous?.successMessage != next.successMessage && next.successMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.successMessage!),
@@ -98,6 +99,17 @@ class _CobradorDashboardScreenState
                 tooltip: 'Notificaciones',
               );
             },
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Editar perfil',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ProfileSettingsScreen(),
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           IconButton(
@@ -182,74 +194,6 @@ class _CobradorDashboardScreenState
                 ),
               ),
               const SizedBox(height: 24),
-
-              // Estadísticas del cobrador
-              /*Text(
-                'Mis Estadísticas',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              // GridView mejorado con mejor responsive design
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final stats = creditState.stats;
-                  final activeCredits = creditState.credits
-                      .where((c) => c.status == 'active')
-                      .length;
-                  final attentionCredits = creditState.attentionCredits.length;
-
-                  return GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: constraints.maxWidth > 400 ? 1.5 : 1.3,
-                    children: [
-                      _buildStatCard(
-                        context,
-                        'Créditos Activos',
-                        '$activeCredits',
-                        Icons.credit_card,
-                        Colors.blue,
-                      ),
-                      _buildStatCard(
-                        context,
-                        'Saldo Pendiente',
-                        stats != null
-                            ? 'Bs. ${NumberFormat('#,##0').format(stats.totalBalance)}'
-                            : 'Bs. 0',
-                        Icons.account_balance_wallet,
-                        Colors.green,
-                      ),
-                      _buildStatCard(
-                        context,
-                        'Requieren Atención',
-                        '$attentionCredits',
-                        Icons.warning,
-                        Colors.orange,
-                      ),
-                      _buildStatCard(
-                        context,
-                        'Tasa Cobranza',
-                        stats != null
-                            ? '${stats.collectionRate.toStringAsFixed(1)}%'
-                            : '0%',
-                        Icons.trending_up,
-                        Colors.purple,
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 24),*/
-
-              // Widget de notificaciones
-              // const NotificationsSummaryCard(),
 
               // Acciones rápidas
               Text(

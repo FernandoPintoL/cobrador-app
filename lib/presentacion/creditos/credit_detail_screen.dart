@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
+import '../../ui/widgets/client_category_chip.dart';
+import '../../datos/servicios/credit_api_service.dart';
 import 'credit_form_screen.dart';
 import 'credit_payment_screen.dart';
 import '../widgets/contact_actions_widget.dart';
-import '../cliente/cliente_ubicacion_screen.dart';
+import '../../ui/widgets/loading_overlay.dart';
+import '../cliente/location_picker_screen.dart';
 
 class CreditDetailScreen extends ConsumerStatefulWidget {
   final Credito credit;
@@ -27,26 +31,71 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
   Credito? _detailedCredit;
   bool _isLoadingDetails = false;
 
+  // Datos extra del endpoint /details
+  Map<String, dynamic>? _creditSummary; // summary
+  List<PaymentSchedule>? _apiPaymentSchedule; // payment_schedule
+  List<Pago>? _paymentsHistory; // payments_history
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    // Cargar detalles solo si faltan datos del cliente (p. ej., ubicación)
-    final needsClientDetails = widget.credit.client == null ||
-        widget.credit.client?.latitud == null ||
-        widget.credit.client?.longitud == null;
-    if (needsClientDetails) {
+    // Cargar detalles desde endpoints (crédito + cliente) siempre que se abre la pantalla
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCreditDetails();
-    }
+    });
   }
 
   Future<void> _loadCreditDetails() async {
-    print("widget credito: "+widget.credit.toJson().toString());
+    print("🪙 widget credito: " + widget.credit.toJson().toString());
     try {
       setState(() => _isLoadingDetails = true);
+      // 1) Obtener y fusionar detalles del crédito (incluye cliente/ubicación)
       final details = await ref
           .read(creditProvider.notifier)
           .getCreditDetails(widget.credit.id);
+      print("🪙 detalles obtenidos: " + (details?.toJson() ?? {}).toString());
+
+      // 2) Obtener respuesta cruda del endpoint /details para extraer summary/schedule/history
+      try {
+        final api = CreditApiService();
+        final raw = await api.getCreditDetails(widget.credit.id);
+        debugPrint('🔍 Detalles crudos de /details: $raw');
+        if (raw['success'] == true && raw['data'] is Map<String, dynamic>) {
+          final data = raw['data'] as Map<String, dynamic>;
+          // summary
+          final summary = data['summary'];
+          // schedule
+          final schedule = data['payment_schedule'];
+          // history
+          final history = data['payments_history'];
+
+          _creditSummary = summary is Map<String, dynamic> ? summary : null;
+
+          if (schedule is List) {
+            _apiPaymentSchedule = schedule
+                .whereType<Map<String, dynamic>>()
+                .map((e) => PaymentSchedule.fromJson(e))
+                .toList();
+          } else {
+            _apiPaymentSchedule = null;
+          }
+
+          if (history is List) {
+            _paymentsHistory = history
+                .whereType<Map<String, dynamic>>()
+                .map((e) => Pago.fromJson(e))
+                .toList();
+          } else {
+            _paymentsHistory = null;
+          }
+        }
+      } catch (e) {
+        // Si falla la extracción de extras, continuar con lo disponible
+        // ignore: avoid_print
+        print('⚠️ No se pudieron obtener extras de /details: $e');
+      }
+
       if (!mounted) return;
       setState(() {
         _detailedCredit = details ?? widget.credit;
@@ -57,7 +106,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       setState(() => _isLoadingDetails = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudieron cargar todos los datos del cliente: $e'),
+          content: Text(
+            'No se pudieron cargar todos los datos del cliente: $e',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -97,8 +148,11 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     // y el widget.credit sí lo trae, preferir el del widget para no perder datos.
     Credito baseCredit;
     try {
-      final stateCredit = creditState.credits.firstWhere((c) => c.id == widget.credit.id);
-      if (stateCredit.totalAmount == null && widget.credit.totalAmount != null) {
+      final stateCredit = creditState.credits.firstWhere(
+        (c) => c.id == widget.credit.id,
+      );
+      if (stateCredit.totalAmount == null &&
+          widget.credit.totalAmount != null) {
         baseCredit = widget.credit;
       } else {
         baseCredit = stateCredit;
@@ -167,26 +221,32 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
           ],
         ),
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).colorScheme.surface.withOpacity(0.96),
-              Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.96),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.surface.withOpacity(0.96),
+                  Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.96),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildInformationTab(currentCredit),
+                _buildPaymentsTab(currentCredit),
+              ],
+            ),
           ),
-        ),
-        child: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildInformationTab(currentCredit),
-            _buildPaymentsTab(currentCredit),
-          ],
-        ),
+          LoadingOverlay(isLoading: _isLoadingDetails, message: 'Cargando detalles...'),
+        ],
       ),
-      floatingActionButton: _tabController.index == 1 && currentCredit.status == 'active'
+      floatingActionButton:
+          currentCredit.status == 'active'
           ? FloatingActionButton.extended(
               onPressed: () => _navigateToPaymentScreen(currentCredit),
               icon: const Icon(Icons.payment),
@@ -225,241 +285,107 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Estado del crédito
-          Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    // alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        'Estado del Crédito ',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+          const SizedBox(height: 16),
+          if (_creditSummary != null)
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Resumen del crédito',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                      _buildStatusChip(credit.status),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Progreso
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Progreso:',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      Text(
-                        '${(progress * 100).toStringAsFixed(1)}%',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      alignment: WrapAlignment.center,
+                      runAlignment: WrapAlignment.center,
+                      children: [
+                        _buildInfoChip(
+                          'Monto Original',
+                          _formatCurrency(_creditSummary!['original_amount']),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: Colors.grey.shade300,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      progress >= 1.0 ? Colors.green : Colors.blue,
+                        _buildInfoChip(
+                          'Interés %',
+                          (_creditSummary!['interest_rate'] ?? '').toString(),
+                        ),
+                        _buildInfoChip(
+                          'Total',
+                          _formatCurrency(_creditSummary!['total_amount']),
+                        ),
+                        _buildInfoChip(
+                          'Cuota',
+                          _formatCurrency(
+                            _creditSummary!['installment_amount'],
+                          ),
+                        ),
+                        _buildInfoChip(
+                          'Cuotas',
+                          (_creditSummary!['total_installments'] ?? '')
+                              .toString(),
+                        ),
+                        _buildInfoChip(
+                          'Saldo',
+                          _formatCurrency(_creditSummary!['current_balance']),
+                        ),
+                        _buildInfoChip(
+                          'Pagado',
+                          _formatCurrency(_creditSummary!['total_paid']),
+                        ),
+                        _buildInfoChip(
+                          'Pendientes',
+                          (_creditSummary!['pending_installments'] ?? '')
+                              .toString(),
+                        ),
+                        // _buildInfoChip('Esperadas', (_creditSummary!['expected_installments'] ?? '').toString()),
+                        // _buildInfoChip('Mora', ((_creditSummary!['is_overdue'] ?? false) ? 'Sí' : 'No')),
+                        // _buildInfoChip('Monto en Mora', _formatCurrency(_creditSummary!['overdue_amount'])),
+                      ],
                     ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Información de montos
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isNarrow = constraints.maxWidth < 500;
-                      if (isNarrow) {
-                        return Column(
-                          children: [
-                            _buildInfoCard(
-                              'Monto Total',
-                              'Bs. ${NumberFormat('#,##0.00').format(total)}',
-                              Icons.attach_money,
-                              Colors.blue,
-                            ),
-                            const SizedBox(height: 12),
-                            _buildInfoCard(
-                              'Monto Prestamo',
-                              'Bs. ${NumberFormat('#,##0.00').format(widget.credit.amount)}',
-                              Icons.attach_money,
-                              Colors.blue,
-                            ),
-                            const SizedBox(height: 12),
-                            _buildInfoCard(
-                              'Saldo Pendiente',
-                              'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}',
-                              Icons.account_balance_wallet,
-                              credit.balance > 0 ? Colors.orange : Colors.green,
-                            ),
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: _buildInfoCard(
-                              'Monto Total',
-                              'Bs. ${NumberFormat('#,##0.00').format(total)}',
-                              Icons.attach_money,
-                              Colors.blue,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildInfoCard(
-                              'Saldo Pendiente',
-                              'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}',
-                              Icons.account_balance_wallet,
-                              credit.balance > 0 ? Colors.orange : Colors.green,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Información de fechas
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isNarrow = constraints.maxWidth < 500;
-                      if (isNarrow) {
-                        return Column(
-                          children: [
-                            _buildInfoCard(
-                              'Días Restantes',
-                              daysRemaining > 0 ? '$daysRemaining días' : 'Vencido',
-                              Icons.calendar_today,
-                              daysRemaining > 7
-                                  ? Colors.green
-                                  : daysRemaining > 0
-                                      ? Colors.orange
-                                      : Colors.red,
-                            ),
-                            const SizedBox(height: 12),
-                            _buildInfoCard(
-                              'Frecuencia',
-                              credit.frequencyLabel,
-                              Icons.schedule,
-                              Colors.purple,
-                            ),
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: _buildInfoCard(
-                              'Días Restantes',
-                              daysRemaining > 0 ? '$daysRemaining días' : 'Vencido',
-                              Icons.calendar_today,
-                              daysRemaining > 7
-                                  ? Colors.green
-                                  : daysRemaining > 0
-                                      ? Colors.orange
-                                      : Colors.red,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildInfoCard(
-                              'Frecuencia',
-                              credit.frequencyLabel,
-                              Icons.schedule,
-                              Colors.purple,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-
-                  // Alertas de atención
-                  if (credit.requiresAttention) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        border: Border.all(color: Colors.red.shade200),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning, color: Colors.red.shade600),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Este crédito requiere atención: ${_getAttentionReason(credit)}',
-                              style: TextStyle(
-                                color: Colors.red.shade800,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 12,),
+                    LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 12,
+                      backgroundColor: Colors.grey.shade300,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        progress < 0.5
+                            ? Colors.red
+                            : (progress < 0.8 ? Colors.orange : Colors.green),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(child: _buildDateInfo('F. Inicio', credit.startDate)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _buildDateInfo('F. Vencimiento', credit.endDate)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDateInfo('Fecha para Entrega', credit.scheduledDeliveryDate!),
                   ],
-                  // Botones de acción rápida
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: credit.status == 'active' ? () => _navigateToPaymentScreen(credit) : null,
-                          icon: const Icon(Icons.payment),
-                          label: const Text('Procesar Pago'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            _tabController.animateTo(1); // Cambiar a pestaña de pagos
-                          },
-                          icon: const Icon(Icons.history),
-                          label: const Text('Ver Pagos'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-
           const SizedBox(height: 16),
-
           // Información de lista de espera (solo si no está activo)
           if (!credit.isActive) _buildWaitingListInfo(credit),
-
+          const SizedBox(height: 16),
           // Información del cliente
           Card(
             elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -482,18 +408,33 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (credit.client?.telefono != null && credit.client!.telefono.isNotEmpty)
+                        if (credit.client?.clientCategory != null) ...[
+                          ClientCategoryChip(
+                            category: credit.client!.clientCategory,
+                            compact: false,
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        if (credit.client?.telefono != null &&
+                            credit.client!.telefono.isNotEmpty)
                           Text('Teléfono: ${credit.client!.telefono}'),
-                        if (credit.client?.direccion != null && credit.client!.direccion.isNotEmpty) ...[
+                        if (credit.client?.direccion != null &&
+                            credit.client!.direccion.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text('Dirección: ${credit.client!.direccion}'),
                         ],
-                        if (credit.client?.latitud != null && credit.client?.longitud != null) ...[
+                        if (credit.client?.latitud != null &&
+                            credit.client?.longitud != null) ...[
                           const SizedBox(height: 4),
-                          Text('Ubicación GPS: ${credit.client!.latitud!.toStringAsFixed(6)}, ${credit.client!.longitud!.toStringAsFixed(6)}'),
+                          Text(
+                            'Ubicación GPS: ${credit.client!.latitud!.toStringAsFixed(6)}, ${credit.client!.longitud!.toStringAsFixed(6)}',
+                          ),
                         ] else if (_isLoadingDetails) ...[
                           const SizedBox(height: 4),
-                          const Text('Cargando datos de ubicación del cliente...', style: TextStyle(color: Colors.grey)),
+                          const Text(
+                            'Cargando datos de ubicación del cliente...',
+                            style: TextStyle(color: Colors.grey),
+                          ),
                         ],
                         const SizedBox(height: 8),
                         // Acciones de contacto y mapa
@@ -502,15 +443,27 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                             // Llamada normal
                             IconButton(
                               tooltip: 'Llamar',
-                              icon: const Icon(Icons.phone, color: Colors.green),
-                              onPressed: (credit.client?.telefono != null && credit.client!.telefono.isNotEmpty)
+                              icon: const Icon(
+                                Icons.phone,
+                                color: Colors.green,
+                              ),
+                              onPressed:
+                                  (credit.client?.telefono != null &&
+                                      credit.client!.telefono.isNotEmpty)
                                   ? () async {
                                       try {
-                                        await ContactActionsWidget.makePhoneCall(credit.client!.telefono);
+                                        await ContactActionsWidget.makePhoneCall(
+                                          credit.client!.telefono,
+                                        );
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(e.toString()),
+                                              backgroundColor: Colors.red,
+                                            ),
                                           );
                                         }
                                       }
@@ -520,19 +473,30 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                             // WhatsApp
                             IconButton(
                               tooltip: 'WhatsApp',
-                              icon: const Icon(Icons.message, color: Colors.green),
-                              onPressed: (credit.client?.telefono != null && credit.client!.telefono.isNotEmpty)
+                              icon: const Icon(
+                                Icons.message,
+                                color: Colors.green,
+                              ),
+                              onPressed:
+                                  (credit.client?.telefono != null &&
+                                      credit.client!.telefono.isNotEmpty)
                                   ? () async {
                                       try {
                                         await ContactActionsWidget.openWhatsApp(
                                           credit.client!.telefono,
-                                          message: 'Hola ${credit.client!.nombre}, me comunico desde la aplicación.',
+                                          message:
+                                              'Hola ${credit.client!.nombre}, me comunico desde la aplicación.',
                                           context: context,
                                         );
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(e.toString()),
+                                              backgroundColor: Colors.red,
+                                            ),
                                           );
                                         }
                                       }
@@ -543,20 +507,51 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                             IconButton(
                               tooltip: 'Ver ubicación en mapa',
                               icon: const Icon(Icons.map, color: Colors.blue),
-                              onPressed: (credit.client?.latitud != null && credit.client?.longitud != null)
+                              onPressed:
+                                  (credit.client?.latitud != null &&
+                                      credit.client?.longitud != null)
                                   ? () {
+                                      // Crear marcador para la ubicación del cliente
+                                      final clienteMarker = Marker(
+                                        markerId: MarkerId(
+                                          'cliente_${credit.client!.id}',
+                                        ),
+                                        position: LatLng(
+                                          credit.client!.latitud!,
+                                          credit.client!.longitud!,
+                                        ),
+                                        infoWindow: InfoWindow(
+                                          title: credit.client!.nombre,
+                                          snippet:
+                                              'Cliente ${credit.client!.clientCategory ?? 'B'} - ${credit.client!.telefono}',
+                                        ),
+                                        icon:
+                                            BitmapDescriptor.defaultMarkerWithHue(
+                                              BitmapDescriptor.hueBlue,
+                                            ),
+                                      );
+
                                       Navigator.of(context).push(
                                         MaterialPageRoute(
-                                          builder: (context) => ClienteUbicacionScreen(
-                                            cliente: credit.client!,
-                                          ),
+                                          builder: (context) =>
+                                              LocationPickerScreen(
+                                                allowSelection: false,
+                                                // Modo solo visualización
+                                                extraMarkers: {clienteMarker},
+                                                customTitle:
+                                                    'Ubicación de ${credit.client!.nombre}',
+                                              ),
                                         ),
                                       );
                                     }
                                   : () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Este cliente no tiene ubicación GPS registrada'),
+                                          content: Text(
+                                            'Este cliente no tiene ubicación GPS registrada',
+                                          ),
                                           backgroundColor: Colors.orange,
                                         ),
                                       );
@@ -569,7 +564,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                           Align(
                             alignment: Alignment.centerLeft,
                             child: TextButton.icon(
-                              onPressed: _isLoadingDetails ? null : _loadCreditDetails,
+                              onPressed: _isLoadingDetails
+                                  ? null
+                                  : _loadCreditDetails,
                               icon: const Icon(Icons.refresh),
                               label: const Text('Recargar datos del cliente'),
                             ),
@@ -582,41 +579,159 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
               ),
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // Fechas del crédito
-          Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Fechas del Crédito',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+          if (_apiPaymentSchedule != null &&
+              _apiPaymentSchedule!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cronograma de pagos',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDateInfo('Fecha de Inicio', credit.startDate),
-                  const SizedBox(height: 8),
-                  _buildDateInfo('Fecha de Vencimiento', credit.endDate),
-                  const SizedBox(height: 8),
-                  _buildDateInfo('Fecha de Creación', credit.createdAt),
-                ],
+                    const SizedBox(height: 12),
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _apiPaymentSchedule!.length,
+                      separatorBuilder: (_, __) => const Divider(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = _apiPaymentSchedule![index];
+                        Color color;
+                        IconData icon;
+                        switch (item.status) {
+                          case 'paid':
+                            color = Colors.green;
+                            icon = Icons.check_circle;
+                            break;
+                          case 'overdue':
+                            color = Colors.red;
+                            icon = Icons.warning;
+                            break;
+                          default:
+                            color = Colors.blueGrey;
+                            icon = Icons.schedule;
+                            break;
+                        }
+                        return Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundColor: color.withOpacity(0.1),
+                              child: Icon(icon, color: color, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Cuota ${item.installmentNumber} • ${DateFormat('dd/MM/yyyy').format(item.dueDate)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Monto: ${_formatCurrency(item.amount)}',
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: color.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Text(
+                                item.status.toUpperCase(),
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          )
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatCurrency(dynamic value) {
+    try {
+      final num? n = value is num
+          ? value
+          : (value is String ? num.tryParse(value) : null);
+      if (n == null) return 'Bs. 0.00';
+      return 'Bs. ' + NumberFormat('#,##0.00').format(n);
+    } catch (_) {
+      return 'Bs. 0.00';
+    }
+  }
+
+  Widget _buildInfoChip(String label, String value) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: scheme.surfaceVariant.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outline),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurface,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildPaymentsTab(Credito credit) {
-    final payments = credit.payments ?? [];
+    final payments = (_paymentsHistory != null && _paymentsHistory!.isNotEmpty)
+        ? _paymentsHistory!
+        : (credit.payments ?? []);
     final total = credit.totalAmount ?? credit.amount;
 
     return Column(
@@ -633,7 +748,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(16),
+            ),
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -667,10 +784,12 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                     runSpacing: 12,
                     alignment: WrapAlignment.center,
                     children: items
-                        .map((w) => ConstrainedBox(
-                              constraints: const BoxConstraints(minWidth: 120),
-                              child: w,
-                            ))
+                        .map(
+                          (w) => ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 120),
+                            child: w,
+                          ),
+                        )
                         .toList(),
                   ),
                 );
@@ -759,109 +878,12 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     );
   }
 
-  Widget _buildStatusChip(String status) {
-    Color color;
-    String label;
-
-    switch (status) {
-      case 'pending_approval':
-        color = Colors.orange;
-        label = 'Pendiente de Aprobación';
-        break;
-      case 'waiting_delivery':
-        color = Colors.blue;
-        label = 'En Lista de Espera';
-        break;
-      case 'active':
-        color = Colors.green;
-        label = 'Activo';
-        break;
-      case 'completed':
-        color = Colors.blue;
-        label = 'Completado';
-        break;
-      case 'defaulted':
-        color = Colors.red;
-        label = 'En Mora';
-        break;
-      case 'rejected':
-        color = Colors.red;
-        label = 'Rechazado';
-        break;
-      case 'cancelled':
-        color = Colors.grey;
-        label = 'Cancelado';
-        break;
-      default:
-        color = Colors.grey;
-        label = status;
-    }
-
-    return Chip(
-      label: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      backgroundColor: color,
-    );
-  }
-
-  Widget _buildInfoCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.25)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.12),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.9),
-            color.withOpacity(0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentSummary(String title, String value, IconData icon, Color color) {
+  Widget _buildPaymentSummary(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Column(
       children: [
         Icon(icon, color: color, size: 24),
@@ -900,19 +922,6 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
         ),
       ],
     );
-  }
-
-  String _getAttentionReason(Credito credit) {
-    if (credit.endDate.isBefore(DateTime.now())) {
-      return 'crédito vencido';
-    }
-    if (credit.endDate.difference(DateTime.now()).inDays <= 7) {
-      return 'próximo a vencer';
-    }
-    if (credit.balance > credit.amount * 0.8) {
-      return 'poco progreso en pagos';
-    }
-    return 'requiere seguimiento';
   }
 
   Future<void> _editCredit(Credito credit) async {
@@ -988,10 +997,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
               children: [
                 Text(
                   'Estado de Lista de Espera',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 _buildWaitingListStatusChip(credit.status),
               ],
@@ -1197,7 +1205,12 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     );
   }
 
-  Widget _buildWaitingListRow(String label, String value, IconData icon, Color color) {
+  Widget _buildWaitingListRow(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1213,7 +1226,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                   text: '$label ',
                   style: TextStyle(
                     fontWeight: FontWeight.w500,
-                    color: Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black87,
+                    color:
+                        Theme.of(context).textTheme.bodyMedium?.color ??
+                        Colors.black87,
                   ),
                 ),
                 TextSpan(
@@ -1312,10 +1327,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (int i = 0; i < buttons.length; i++) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: buttons[i],
-                ),
+                SizedBox(width: double.infinity, child: buttons[i]),
                 if (i != buttons.length - 1) const SizedBox(height: 8),
               ],
             ],
@@ -1562,7 +1574,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                           context: context,
                           initialDate: selectedDate,
                           firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 365),
+                          ),
                         );
                         if (date != null) {
                           final time = await showTimePicker(
@@ -1704,5 +1718,122 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
         ref.read(creditProvider.notifier).loadCredits();
       }
     }
+  }
+
+  Widget _buildStatusChip(String status) {
+    Color color;
+    String label;
+
+    switch (status) {
+      case 'pending_approval':
+        color = Colors.orange;
+        label = 'Pendiente de Aprobación';
+        break;
+      case 'waiting_delivery':
+        color = Colors.blue;
+        label = 'En Lista de Espera';
+        break;
+      case 'active':
+        color = Colors.green;
+        label = 'Activo';
+        break;
+      case 'completed':
+        color = Colors.blue;
+        label = 'Completado';
+        break;
+      case 'defaulted':
+        color = Colors.red;
+        label = 'En Mora';
+        break;
+      case 'rejected':
+        color = Colors.red;
+        label = 'Rechazado';
+        break;
+      case 'cancelled':
+        color = Colors.grey;
+        label = 'Cancelado';
+        break;
+      default:
+        color = Colors.grey;
+        label = status;
+    }
+
+    return Chip(
+      label: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      backgroundColor: color,
+    );
+  }
+
+  Widget _buildInfoCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        gradient: LinearGradient(
+          colors: [Colors.white.withOpacity(0.9), color.withOpacity(0.05)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getAttentionReason(Credito credit) {
+    if (credit.endDate.isBefore(DateTime.now())) {
+      return 'crédito vencido';
+    }
+    if (credit.endDate.difference(DateTime.now()).inDays <= 7) {
+      return 'próximo a vencer';
+    }
+    if (credit.balance > credit.amount * 0.8) {
+      return 'poco progreso en pagos';
+    }
+    return 'requiere seguimiento';
   }
 }

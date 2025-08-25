@@ -5,6 +5,7 @@ import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/pago_provider.dart';
 import '../../ui/widgets/validation_error_display.dart';
+import '../../ui/widgets/loading_overlay.dart';
 
 class CreditPaymentScreen extends ConsumerStatefulWidget {
   final Credito credit;
@@ -230,6 +231,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     // Escuchar mensajes del PagoProvider dentro de build (requerido por Riverpod)
+    final pagoStateWatch = ref.watch(pagoProvider);
     ref.listen<PagoState>(pagoProvider, (prev, next) {
       if (!mounted) return;
       if (next.errorMessage != null && next.errorMessage!.isNotEmpty) {
@@ -252,27 +254,35 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Información del crédito
-            _buildCreditInfo(),
-            const SizedBox(height: 16),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Información del crédito
+                _buildCreditInfo(),
+                const SizedBox(height: 16),
 
-            // Cronograma de pagos (calendario)
-            _buildPaymentSchedule(),
-            const SizedBox(height: 16),
+                // Cronograma de pagos (calendario)
+                _buildPaymentSchedule(),
+                const SizedBox(height: 16),
 
-            // Formulario de pago
-            _buildPaymentForm(),
-            const SizedBox(height: 16),
+                // Formulario de pago
+                _buildPaymentForm(),
+                const SizedBox(height: 16),
 
-            // Simulación de pago
-            if (_paymentSimulation != null) _buildPaymentSimulation(),
-          ],
-        ),
+                // Simulación de pago
+                if (_paymentSimulation != null) _buildPaymentSimulation(),
+              ],
+            ),
+          ),
+          LoadingOverlay(
+            isLoading: _isLoadingCredit || _isLoadingSchedule || _isProcessing || pagoStateWatch.isLoading,
+            message: _isProcessing ? 'Procesando pago...' : 'Cargando información...'
+          ),
+        ],
       ),
     );
   }

@@ -54,8 +54,9 @@ class ClientNotifier extends StateNotifier<ClientState> {
   Future<void> cargarClientes({
     String? search,
     String? filter,
-    String?
-    cobradorId, // Para cobradores: usar su ID para obtener clientes asignados
+    String? cobradorId, // Para cobradores: usar su ID para obtener clientes asignados
+    String? managerId, // Para managers: su ID
+    bool managerAllClients = true, // Si true: directos + indirectos; si false: solo directos
   }) async {
     if (state.isLoading) return;
 
@@ -90,18 +91,40 @@ class ClientNotifier extends StateNotifier<ClientState> {
               .map((json) => Usuario.fromJson(json))
               .toList();
         }
+      } else if (managerId != null) {
+        // Para manager: decidir si solo directos o todos (directos + indirectos)
+        final response = managerAllClients
+            ? await _clientApiService.getManagerAllClients(
+                managerId,
+                search: search,
+                perPage: 50,
+              )
+            : await _clientApiService.getManagerDirectClients(
+                managerId,
+                search: search,
+                perPage: 50,
+              );
+
+        if (response['success'] == true) {
+          List<dynamic> clientesData = [];
+          final data = response['data'];
+
+          if (data is Map<String, dynamic>) {
+            if (data['data'] is List) {
+              clientesData = data['data'] as List<dynamic>;
+            } else if (data['clients'] is List) {
+              clientesData = data['clients'] as List<dynamic>;
+            }
+          } else if (data is List) {
+            clientesData = data;
+          }
+
+          clientes = clientesData
+              .map((json) => Usuario.fromJson(json))
+              .toList();
+        }
       } else {
-        // Para managers y admins: obtener todos los clientes
-        final queryParams = <String, dynamic>{'role': 'client'};
-
-        if (search != null && search.isNotEmpty) {
-          queryParams['search'] = search;
-        }
-
-        if (filter != null && filter.isNotEmpty) {
-          queryParams['filter'] = filter;
-        }
-
+        // Para admins u otros: obtener todos los clientes generales
         final response = await _userApiService.getUsers(
           search: search,
           filter: filter,
@@ -147,14 +170,7 @@ class ClientNotifier extends StateNotifier<ClientState> {
   }
 
   // Crear cliente
-  Future<bool> crearCliente({
-    required String nombre,
-    String? email, // Ahora es opcional
-    String? password,
-    String? telefono,
-    String? direccion,
-    String? cobradorId, // Para asignar automáticamente al cobrador que lo crea
-  }) async {
+  Future<bool> crearCliente({required String nombre, String? email, String? password, String? telefono, String? direccion, String? cobradorId}) async {
     if (state.isLoading) return false;
 
     state = state.copyWith(isLoading: true, error: null, successMessage: null);

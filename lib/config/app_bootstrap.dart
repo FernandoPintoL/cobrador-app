@@ -14,12 +14,19 @@ class AppBootstrap {
   /// Inicializa variables de entorno, configura WebSocket y notificaciones.
   /// Es idempotente: se puede llamar múltiples veces sin efectos secundarios.
   static Future<void> init() async {
-    if (_initialized) return;
+    if (_initialized) {
+      debugPrint('⚠️ AppBootstrap ya inicializado, saltando...');
+      return;
+    }
+
+    debugPrint('🔧 Iniciando AppBootstrap...');
 
     // 1) Cargar .env (si falla, continuar igualmente)
     try {
       await dotenv.load(fileName: ".env");
       debugPrint("✅ Variables de entorno cargadas correctamente");
+      debugPrint("📋 BASE_URL: ${dotenv.env['BASE_URL']}");
+      debugPrint("📋 WEBSOCKET_URL: ${dotenv.env['WEBSOCKET_URL']}");
     } catch (e) {
       debugPrint("⚠️ Error cargando .env: $e");
     }
@@ -53,5 +60,6 @@ class AppBootstrap {
     }
 
     _initialized = true;
+    debugPrint('✅ AppBootstrap completado exitosamente');
   }
 }

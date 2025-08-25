@@ -1,8 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../ui/utilidades/image_utils.dart';
+import '../../ui/utilidades/phone_utils.dart';
 import '../../datos/modelos/usuario.dart';
+import '../../datos/servicios/user_api_service.dart';
+import '../../datos/servicios/api_service.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../config/role_colors.dart';
@@ -46,12 +52,37 @@ class _ManagerClienteFormScreenState
   bool _ubicacionObtenida = false;
   String _tipoUbicacion = ''; // 'actual' o 'mapa'
 
+  // Imágenes requeridas de CI y opcional foto de perfil
+  File? _idFront;
+  File? _idBack;
+  File? _profileImage;
+  final _picker = ImagePicker();
+
+  // URLs existentes (modo edición)
+  String? _idFrontUrl;
+  String? _idBackUrl;
+  String? _profileImageUrl;
+
   @override
   void initState() {
     super.initState();
     _esEdicion = widget.cliente != null;
 
     if (_esEdicion) {
+      // Usar ApiService para construir correctamente la URL de la imagen de perfil
+      final apiService = ApiService();
+
+      // Si hay una imagen de perfil, construir la URL correcta
+      if (widget.cliente!.profileImage.isNotEmpty) {
+        _profileImageUrl = apiService.getProfileImageUrl(widget.cliente!.profileImage);
+        debugPrint('🖼️ URL de perfil construida: $_profileImageUrl');
+      } else {
+        _profileImageUrl = null;
+        debugPrint('⚠️ No hay imagen de perfil para el cliente');
+      }
+
+      debugPrint('Cargando fotos existentes para el cliente: ${widget.cliente!.nombre}');
+      _cargarFotosExistentes(widget.cliente!.id);
       _nombreController.text = widget.cliente!.nombre;
       _emailController.text = widget.cliente!.email;
       _telefonoController.text = widget.cliente!.telefono;
@@ -98,7 +129,7 @@ class _ManagerClienteFormScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_esEdicion ? 'Editar Cliente' : 'Creares Cliente'),
+        title: Text(_esEdicion ? 'Editar Cliente' : 'Crear Cliente'),
         backgroundColor: RoleColors.managerPrimary,
         foregroundColor: Colors.white,
         elevation: 4,
@@ -111,7 +142,15 @@ class _ManagerClienteFormScreenState
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text('Procesando, por favor espera...'),
+            ],
+          ))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Form(
@@ -175,15 +214,7 @@ class _ManagerClienteFormScreenState
                                 prefixIcon: Icon(Icons.phone),
                               ),
                               keyboardType: TextInputType.phone,
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'El teléfono es obligatorio';
-                                }
-                                if (value.trim().length < 8) {
-                                  return 'El teléfono debe tener al menos 8 dígitos';
-                                }
-                                return null;
-                              },
+                              validator: (value) => PhoneUtils.validatePhone(value, required: true),
                             ),
                             const SizedBox(height: 16),
                             TextFormField(
@@ -305,6 +336,61 @@ class _ManagerClienteFormScreenState
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+
+                    // Carga de imágenes de CI y perfil
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Documentos de Identidad',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _esEdicion
+                                  ? 'Puedes actualizar las fotos del CI si es necesario'
+                                  : 'Anverso y Reverso del CI son obligatorios para crear',
+                              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                _buildImagePicker(
+                                  label: 'CI Anverso*',
+                                  file: _idFront,
+                                  existingUrl: _idFrontUrl,
+                                  onTap: () => _pickImage('id_front'),
+                                ),
+                                const SizedBox(width: 12),
+                                _buildImagePicker(
+                                  label: 'CI Reverso*',
+                                  file: _idBack,
+                                  existingUrl: _idBackUrl,
+                                  onTap: () => _pickImage('id_back'),
+                                ),
+                                const SizedBox(width: 12),
+                                _buildImagePicker(
+                                  label: 'Perfil (opcional)',
+                                  file: _profileImage,
+                                  existingUrl: _profileImageUrl,
+                                  onTap: () => _pickImage('profile'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Las imágenes deben pesar menos de 1MB. Se comprimen automáticamente.',
+                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -509,6 +595,19 @@ class _ManagerClienteFormScreenState
       return;
     }
 
+    // Validar fotos requeridas en creación
+    if (!_esEdicion) {
+      if (_idFront == null || _idBack == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Debes subir las fotos del CI (anverso y reverso)'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -520,31 +619,74 @@ class _ManagerClienteFormScreenState
       }
 
       if (_esEdicion) {
-        await ref
-            .read(userManagementProvider.notifier)
-            .actualizarUsuario(
-              id: widget.cliente!.id,
-              nombre: _nombreController.text.trim(),
-              email: _emailController.text.trim(),
-              ci: _ciController.text.trim(),
-              telefono: _telefonoController.text.trim(),
-              direccion: _direccionController.text.trim(),
-              latitud: _latitud,
-              longitud: _longitud,
-            );
+        // Verificar si hay fotos nuevas para actualizar
+        bool hayFotosNuevas = _idFront != null || _idBack != null || _profileImage != null;
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cliente actualizado exitosamente'),
-              backgroundColor: Colors.green,
-            ),
-          );
+        bool success;
+        if (hayFotosNuevas) {
+          // Usar el método que actualiza con fotos
+          success = await ref
+              .read(userManagementProvider.notifier)
+              .actualizarUsuarioConFotos(
+                id: widget.cliente!.id,
+                nombre: _nombreController.text.trim(),
+                email: _emailController.text.trim(),
+                ci: _ciController.text.trim(),
+                telefono: _telefonoController.text.trim(),
+                direccion: _direccionController.text.trim(),
+                latitud: _latitud,
+                longitud: _longitud,
+                idFront: _idFront,
+                idBack: _idBack,
+                profileImage: _profileImage,
+              );
+        } else {
+          // Usar el método normal sin fotos
+          success = await ref
+              .read(userManagementProvider.notifier)
+              .actualizarUsuario(
+                id: widget.cliente!.id,
+                nombre: _nombreController.text.trim(),
+                email: _emailController.text.trim(),
+                ci: _ciController.text.trim(),
+                telefono: _telefonoController.text.trim(),
+                direccion: _direccionController.text.trim(),
+                latitud: _latitud,
+                longitud: _longitud,
+              );
+        }
+
+        if (success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  hayFotosNuevas
+                    ? 'Cliente y documentos actualizados exitosamente'
+                    : 'Cliente actualizado exitosamente'
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          // Manejar errores
+          final state = ref.read(userManagementProvider);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.error ?? 'Error al actualizar cliente'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return; // No continuar si hubo error
         }
       } else {
-        await ref
+        // Crear nuevo cliente con fotos
+        final success = await ref
             .read(userManagementProvider.notifier)
-            .crearUsuario(
+            .crearUsuarioConFotos(
               nombre: _nombreController.text.trim(),
               email: _emailController.text.trim(),
               ci: _ciController.text.trim(),
@@ -556,18 +698,36 @@ class _ManagerClienteFormScreenState
                   : null,
               latitud: _latitud,
               longitud: _longitud,
+              idFront: _idFront!,
+              idBack: _idBack!,
+              profileImage: _profileImage,
             );
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cliente creado exitosamente'),
-              backgroundColor: Colors.green,
-            ),
-          );
+        if (success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Cliente creado exitosamente'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          // Manejar errores
+          final state = ref.read(userManagementProvider);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.error ?? 'Error al crear cliente'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return; // No continuar si hubo error
         }
       }
 
+      // Llamar callbacks solo si todo fue exitoso
       if (widget.onClienteSaved != null) {
         widget.onClienteSaved!();
       }
@@ -662,6 +822,130 @@ class _ManagerClienteFormScreenState
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Widget _buildImagePicker({required String label, required File? file, String? existingUrl, required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 90,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Builder(
+            builder: (_) {
+              if (file != null) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    file,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  ),
+                );
+              } else if (existingUrl != null && existingUrl.isNotEmpty) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    existingUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  ),
+                );
+              }
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.add_a_photo, size: 20, color: Colors.grey),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<ImageSource?> _selectImageSource() async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Cámara'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              const Divider(height: 0),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galería'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _cargarFotosExistentes(BigInt userId) async {
+    try {
+      final photos = await UserApiService().listUserPhotos(userId);
+      for (final p in photos) {
+        final type = p['type']?.toString();
+        final url = p['url']?.toString() ?? p['full_url']?.toString() ?? p['path_url']?.toString();
+        if (type == 'id_front' && url != null) {
+          _idFrontUrl = url;
+        } else if (type == 'id_back' && url != null) {
+          _idBackUrl = url;
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      // Silencioso, no bloquear el formulario
+      // print('Error al cargar fotos existentes: $e');
+    }
+  }
+
+  Future<void> _pickImage(String type) async {
+    try {
+      final source = await _selectImageSource();
+      if (source == null) return;
+
+      final picked = await _picker.pickImage(source: source, imageQuality: 100);
+      if (picked == null) return;
+      File file = File(picked.path);
+      file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);
+
+      setState(() {
+        if (type == 'id_front') {
+          _idFront = file;
+        } else if (type == 'id_back') {
+          _idBack = file;
+        } else {
+          _profileImage = file;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo seleccionar la imagen: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }

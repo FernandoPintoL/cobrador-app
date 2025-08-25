@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/client_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/contact_actions_widget.dart';
+import '../widgets/role_widgets.dart';
 import 'cliente_form_screen.dart';
 import 'cliente_creditos_screen.dart';
 import 'cliente_perfil_screen.dart';
-import 'cliente_ubicacion_screen.dart';
+import 'location_picker_screen.dart';
 import '../manager/manager_client_assignment_screen.dart';
 
 /// Pantalla genérica para mostrar clientes
@@ -33,8 +35,17 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
 
   // Variables para filtros avanzados (managers)
   String _filtroActual =
-      'todos'; // 'todos', 'por_cobrador', 'directos', 'cobradores'
+      'todos'; // 'todos', 'asignados', 'no_asignados'
   List<Usuario> _clientesFiltrados = [];
+
+  // Nuevas variables para búsqueda avanzada
+  bool _mostrarFiltrosAvanzados = false;
+  String _tipoFiltroActual = 'busqueda_general'; // 'busqueda_general', 'nombre', 'email', 'telefono', 'ci', 'categoria'
+  final TextEditingController _filtroNombreController = TextEditingController();
+  final TextEditingController _filtroEmailController = TextEditingController();
+  final TextEditingController _filtroTelefonoController = TextEditingController();
+  final TextEditingController _filtroCiController = TextEditingController();
+  String _filtroCategoriaSeleccionada = '';
 
   @override
   void initState() {
@@ -57,12 +68,14 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
           .establecerManagerActual(authState.usuario!);
 
       if (widget.cobrador != null) {
-        // Manager viendo clientes de un cobrador específico
+        // Manager viendo clientes de un cobrador específico - USAR ENDPOINT CORRECTO
+        // Usa GET /api/users/{cobradorId}/clients
         ref
             .read(managerProvider.notifier)
-            .cargarClientesDelManager(widget.cobrador!.id.toString());
+            .cargarClientesDelCobrador(widget.cobrador!.id.toString());
       } else {
-        // Manager viendo todos sus clientes
+        // Manager viendo todos sus clientes (directos + de cobradores)
+        // Usa GET /api/users/{managerId}/manager-clients
         ref.read(managerProvider.notifier).cargarClientesDelManager(managerId);
       }
 
@@ -107,14 +120,24 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
     // Aplicar filtros
     _aplicarFiltros(todosLosClientes, currentUserRole);
 
-    // Escuchar cambios en el estado para managers
+    // Escuchar cambios en el estado para managers - CORREGIDO para evitar ciclo infinito
     if (currentUserRole == 'manager') {
       ref.listen<ManagerState>(managerProvider, (previous, next) {
-        if (next.error != null) {
+        // Solo procesar si realmente cambió el error o successMessage
+        if (previous?.error != next.error && next.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(next.error!), backgroundColor: Colors.red),
           );
-          ref.read(managerProvider.notifier).limpiarMensajes();
+          // Usar Future.microtask para evitar modificar el estado durante el build
+          Future.microtask(() => ref.read(managerProvider.notifier).limpiarMensajes());
+        }
+
+        if (previous?.successMessage != next.successMessage && next.successMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(next.successMessage!), backgroundColor: Colors.green),
+          );
+          // Usar Future.microtask para evitar modificar el estado durante el build
+          Future.microtask(() => ref.read(managerProvider.notifier).limpiarMensajes());
         }
       });
     }
@@ -123,8 +146,9 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
       appBar: _buildAppBar(currentUserRole),
       body: Column(
         children: [
+          const SizedBox(height: 8),
           // Estadísticas de clientes
-          _buildEstadisticasClientes(currentUserRole),
+          // _buildEstadisticasClientes(currentUserRole),
 
           // Barra de búsqueda
           _buildBarraBusqueda(),
@@ -147,58 +171,131 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
   }
 
   void _aplicarFiltros(List<Usuario> todosLosClientes, String currentUserRole) {
-    if (currentUserRole != 'manager') {
-      // Para cobradores, solo filtrar por búsqueda
-      _clientesFiltrados = todosLosClientes
-          .where(
-            (cliente) =>
-                cliente.nombre.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ) ||
-                cliente.email.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ) ||
-                cliente.telefono.contains(_searchQuery),
-          )
-          .toList();
-      return;
-    }
+    _searchQuery = _searchController.text;
 
-    // Para managers, aplicar filtros avanzados
+    // Lógica unificada para todos los roles
     List<Usuario> clientesFiltrados = todosLosClientes;
 
-    // Aplicar filtro por búsqueda
-    if (_searchQuery.isNotEmpty) {
-      clientesFiltrados = clientesFiltrados
-          .where(
-            (cliente) =>
-                cliente.nombre.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ) ||
-                cliente.email.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ) ||
-                cliente.telefono.contains(_searchQuery),
-          )
-          .toList();
+    // Aplicar búsqueda avanzada basada en el tipo de filtro
+    if (_mostrarFiltrosAvanzados) {
+      // Usar filtros específicos por campo
+      switch (_tipoFiltroActual) {
+        case 'nombre':
+          final nombreQuery = _filtroNombreController.text;
+          if (nombreQuery.isNotEmpty) {
+            clientesFiltrados = clientesFiltrados
+                .where((cliente) => cliente.nombre.toLowerCase().contains(
+                      nombreQuery.toLowerCase(),
+                    ))
+                .toList();
+          }
+          break;
+        case 'email':
+          final emailQuery = _filtroEmailController.text;
+          if (emailQuery.isNotEmpty) {
+            clientesFiltrados = clientesFiltrados
+                .where((cliente) => cliente.email.toLowerCase().contains(
+                      emailQuery.toLowerCase(),
+                    ))
+                .toList();
+          }
+          break;
+        case 'telefono':
+          final telefonoQuery = _filtroTelefonoController.text;
+          if (telefonoQuery.isNotEmpty) {
+            clientesFiltrados = clientesFiltrados
+                .where((cliente) => cliente.telefono.contains(telefonoQuery))
+                .toList();
+          }
+          break;
+        case 'ci':
+          final ciQuery = _filtroCiController.text;
+          if (ciQuery.isNotEmpty) {
+            clientesFiltrados = clientesFiltrados
+                .where((cliente) => cliente.ci.toLowerCase().contains(
+                      ciQuery.toLowerCase(),
+                    ))
+                .toList();
+          }
+          break;
+        case 'categoria':
+          if (_filtroCategoriaSeleccionada.isNotEmpty) {
+            clientesFiltrados = clientesFiltrados
+                .where((cliente) =>
+                    (cliente.clientCategory?.toLowerCase() ?? '') ==
+                    _filtroCategoriaSeleccionada.toLowerCase())
+                .toList();
+          }
+          break;
+        case 'busqueda_general':
+        default:
+          // Búsqueda general en todos los campos (comportamiento por defecto)
+          if (_searchQuery.isNotEmpty) {
+            clientesFiltrados = clientesFiltrados
+                .where(
+                  (cliente) =>
+                      cliente.nombre.toLowerCase().contains(
+                        _searchQuery.toLowerCase(),
+                      ) ||
+                      cliente.email.toLowerCase().contains(
+                        _searchQuery.toLowerCase(),
+                      ) ||
+                      cliente.telefono.contains(_searchQuery) ||
+                      cliente.ci.toLowerCase().contains(
+                        _searchQuery.toLowerCase(),
+                      ) ||
+                      cliente.id.toString().contains(_searchQuery) ||
+                      (cliente.clientCategory?.toLowerCase() ?? '').contains(
+                        _searchQuery.toLowerCase(),
+                      ),
+                )
+                .toList();
+          }
+          break;
+      }
+    } else {
+      // Búsqueda general tradicional mejorada para todos los roles
+      if (_searchQuery.isNotEmpty) {
+        clientesFiltrados = clientesFiltrados
+            .where(
+              (cliente) =>
+                  cliente.nombre.toLowerCase().contains(
+                    _searchQuery.toLowerCase(),
+                  ) ||
+                  cliente.email.toLowerCase().contains(
+                    _searchQuery.toLowerCase(),
+                  ) ||
+                  cliente.telefono.contains(_searchQuery) ||
+                  cliente.ci.toLowerCase().contains(
+                    _searchQuery.toLowerCase(),
+                  ) ||
+                  cliente.id.toString().contains(_searchQuery) ||
+                  (cliente.clientCategory?.toLowerCase() ?? '').contains(
+                    _searchQuery.toLowerCase(),
+                  ),
+            )
+            .toList();
+      }
     }
 
-    // Aplicar filtro por asignación
-    switch (_filtroActual) {
-      case 'asignados':
-        clientesFiltrados = clientesFiltrados
-            .where((cliente) => cliente.assignedCobradorId != null)
-            .toList();
-        break;
-      case 'no_asignados':
-        clientesFiltrados = clientesFiltrados
-            .where((cliente) => cliente.assignedCobradorId == null)
-            .toList();
-        break;
-      case 'todos':
-      default:
-        // No filtrar por asignación
-        break;
+    // Aplicar filtros específicos del manager (solo para managers)
+    if (currentUserRole == 'manager') {
+      switch (_filtroActual) {
+        case 'asignados':
+          clientesFiltrados = clientesFiltrados
+              .where((cliente) => cliente.assignedCobradorId != null)
+              .toList();
+          break;
+        case 'no_asignados':
+          clientesFiltrados = clientesFiltrados
+              .where((cliente) => cliente.assignedCobradorId == null)
+              .toList();
+          break;
+        case 'todos':
+        default:
+          // No filtrar por asignación
+          break;
+      }
     }
 
     _clientesFiltrados = clientesFiltrados;
@@ -222,11 +319,6 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
             tooltip: 'Filtros',
           ),
         ],
-        IconButton(
-          icon: const Icon(Icons.add),
-          onPressed: () => _mostrarFormularioCliente(currentUserRole),
-          tooltip: 'Agregar Cliente',
-        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           onPressed: () {
@@ -636,15 +728,11 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: RoleColors.cobradorPrimary,
-              foregroundColor: Colors.white,
-              child: Text(
-                widget.cobrador!.nombre.isNotEmpty
-                    ? widget.cobrador!.nombre[0].toUpperCase()
-                    : 'C',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
+            ProfileAvatarWidget(
+              role: 'cobrador',
+              userName: widget.cobrador!.nombre,
+              profileImagePath: widget.cobrador!.profileImage,
+              radius: 25,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -673,27 +761,354 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
   }
 
   Widget _buildBarraBusqueda() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Buscar clientes...',
-          prefixIcon: const Icon(Icons.search),
-          suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() {});
-                  },
-                )
-              : null,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+    final authState = ref.read(authProvider);
+    final currentUserRole = widget.userRole ?? _getUserRole(authState.usuario);
+
+    return Column(
+      children: [
+        // Barra de búsqueda principal
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: _mostrarFiltrosAvanzados
+                  ? 'Use los filtros específicos abajo...'
+                  : 'Buscar por nombre, email, teléfono, CI, ID o categoría...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_searchController.text.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                    ),
+                  // Filtros avanzados disponibles para todos los roles
+                  IconButton(
+                    icon: AnimatedRotation(
+                      turns: _mostrarFiltrosAvanzados ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 300),
+                      child: Icon(
+                        Icons.tune,
+                        color: _mostrarFiltrosAvanzados
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _mostrarFiltrosAvanzados = !_mostrarFiltrosAvanzados;
+                        if (!_mostrarFiltrosAvanzados) {
+                          // Limpiar filtros específicos cuando se desactiva el modo avanzado
+                          _limpiarFiltrosEspecificos();
+                        }
+                      });
+                    },
+                    tooltip: _mostrarFiltrosAvanzados ? 'Ocultar filtros avanzados' : 'Mostrar filtros avanzados',
+                  ),
+                ],
+              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            enabled: !_mostrarFiltrosAvanzados,
+            onChanged: (value) => setState(() {}),
+          ),
         ),
-        onChanged: (value) => setState(() {}),
+
+        // Filtros avanzados con animación (disponible para todos los roles)
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          child: _mostrarFiltrosAvanzados
+              ? _buildFiltrosAvanzados()
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFiltrosAvanzados() {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? theme.colorScheme.surface
+            : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDarkMode
+              ? theme.colorScheme.outline.withOpacity(0.3)
+              : theme.colorScheme.outline.withOpacity(0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header con título y botón de cerrar
+              Row(
+                children: [
+                  Icon(
+                    Icons.filter_alt,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Filtros Específicos',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () {
+                      setState(() {
+                        _mostrarFiltrosAvanzados = false;
+                        _limpiarFiltrosEspecificos();
+                      });
+                    },
+                    tooltip: 'Cerrar filtros',
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(32, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Selector de tipo de filtro con mejor diseño
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDarkMode
+                      ? theme.colorScheme.surfaceVariant.withOpacity(0.3)
+                      : theme.colorScheme.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2),
+                  ),
+                ),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildFiltroChip('busqueda_general', 'General', Icons.search),
+                    _buildFiltroChip('nombre', 'Nombre', Icons.person),
+                    _buildFiltroChip('email', 'Email', Icons.email),
+                    _buildFiltroChip('telefono', 'Teléfono', Icons.phone),
+                    _buildFiltroChip('ci', 'CI', Icons.badge),
+                    _buildFiltroChip('categoria', 'Categoría', Icons.category),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Campo de entrada específico según el tipo seleccionado
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return SlideTransition(
+                    position: animation.drive(
+                      Tween(begin: const Offset(0.3, 0.0), end: Offset.zero)
+                          .chain(CurveTween(curve: Curves.easeOut)),
+                    ),
+                    child: FadeTransition(opacity: animation, child: child),
+                  );
+                },
+                child: Container(
+                  key: ValueKey(_tipoFiltroActual),
+                  child: _buildCampoFiltroEspecifico(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ));
+  }
+
+  Widget _buildFiltroChip(String tipo, String label, IconData icon) {
+    final theme = Theme.of(context);
+    final isSelected = _tipoFiltroActual == tipo;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      child: FilterChip(
+        avatar: Icon(
+          icon,
+          size: 16,
+          color: isSelected
+              ? theme.colorScheme.onPrimary
+              : theme.colorScheme.onSurfaceVariant,
+        ),
+        label: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? theme.colorScheme.onPrimary
+                : theme.colorScheme.onSurfaceVariant,
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        selected: isSelected,
+        onSelected: (selected) {
+          setState(() {
+            _tipoFiltroActual = tipo;
+            _limpiarFiltrosEspecificos();
+          });
+        },
+        selectedColor: theme.colorScheme.primary,
+        backgroundColor: theme.colorScheme.surface,
+        side: BorderSide(
+          color: isSelected
+              ? theme.colorScheme.primary
+              : theme.colorScheme.outline.withOpacity(0.3),
+        ),
+        elevation: isSelected ? 2 : 0,
+        pressElevation: 4,
       ),
     );
+  }
+
+  Widget _buildCampoFiltroEspecifico() {
+    switch (_tipoFiltroActual) {
+      case 'nombre':
+        return TextField(
+          controller: _filtroNombreController,
+          decoration: const InputDecoration(
+            labelText: 'Buscar por nombre',
+            hintText: 'Ingrese el nombre del cliente',
+            prefixIcon: Icon(Icons.person),
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => setState(() {}),
+        );
+      case 'email':
+        return TextField(
+          controller: _filtroEmailController,
+          decoration: const InputDecoration(
+            labelText: 'Buscar por email',
+            hintText: 'Ingrese el email del cliente',
+            prefixIcon: Icon(Icons.email),
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.emailAddress,
+          onChanged: (value) => setState(() {}),
+        );
+      case 'telefono':
+        return TextField(
+          controller: _filtroTelefonoController,
+          decoration: const InputDecoration(
+            labelText: 'Buscar por teléfono',
+            hintText: 'Ingrese el número de teléfono',
+            prefixIcon: Icon(Icons.phone),
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.phone,
+          onChanged: (value) => setState(() {}),
+        );
+      case 'ci':
+        return TextField(
+          controller: _filtroCiController,
+          decoration: const InputDecoration(
+            labelText: 'Buscar por CI',
+            hintText: 'Ingrese la cédula de identidad',
+            prefixIcon: Icon(Icons.badge),
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => setState(() {}),
+        );
+      case 'categoria':
+        return DropdownButtonFormField<String>(
+          value: _filtroCategoriaSeleccionada.isEmpty ? null : _filtroCategoriaSeleccionada,
+          decoration: const InputDecoration(
+            labelText: 'Buscar por categoría',
+            prefixIcon: Icon(Icons.category),
+            border: OutlineInputBorder(),
+          ),
+          items: ['A', 'B', 'C'].map((categoria) {
+            return DropdownMenuItem(
+              value: categoria,
+              child: Text('Categoría $categoria'),
+            );
+          }).toList(),
+          onChanged: (value) {
+            setState(() {
+              _filtroCategoriaSeleccionada = value ?? '';
+            });
+          },
+        );
+      case 'busqueda_general':
+      default:
+        final theme = Theme.of(context);
+        final isDarkMode = theme.brightness == Brightness.dark;
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDarkMode
+                ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+                : Colors.blue[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isDarkMode
+                  ? theme.colorScheme.primary.withOpacity(0.3)
+                  : Colors.blue[200]!,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.info,
+                color: isDarkMode
+                    ? theme.colorScheme.primary
+                    : Colors.blue,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Use la barra de búsqueda principal para buscar en todos los campos a la vez.',
+                  style: TextStyle(
+                    color: isDarkMode
+                        ? theme.colorScheme.onPrimaryContainer
+                        : Colors.blue[800],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+    }
+  }
+
+  void _limpiarFiltrosEspecificos() {
+    _filtroNombreController.clear();
+    _filtroEmailController.clear();
+    _filtroTelefonoController.clear();
+    _filtroCiController.clear();
+    _filtroCategoriaSeleccionada = '';
   }
 
   Widget _buildListaClientes(String role, List<Usuario> clientes) {
@@ -746,15 +1161,13 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
 
   Widget _buildClienteCard(Usuario cliente, String role) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: RoleColors.clientePrimary,
-          foregroundColor: Colors.white,
-          child: Text(
-            cliente.nombre.isNotEmpty ? cliente.nombre[0].toUpperCase() : 'C',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+        leading: ProfileAvatarWidget(
+          role: 'cliente',
+          userName: cliente.nombre,
+          profileImagePath: cliente.profileImage,
+          radius: 25,
         ),
         title: Text(
           cliente.nombre,
@@ -763,17 +1176,19 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(cliente.email),
-            Text(cliente.telefono),
-            if (cliente.roles.isNotEmpty)
+            Text("Email: ${cliente.email}"),
+            Text("Teléfono: ${cliente.telefono}"),
+            Text("CI: ${cliente.ci}"),
+            if (cliente.clientCategory != null)
               Container(
+                margin: const EdgeInsets.only(top: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: RoleColors.clientePrimary,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  cliente.roles.first.toUpperCase(),
+                  'Categoría ${cliente.clientCategory}',
                   style: const TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ),
@@ -803,8 +1218,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
             ),
           ],
         ),
-      ),
-    );
+      ));
   }
 
   List<PopupMenuEntry<String>> _buildMenuItems(Usuario cliente, String role) {
@@ -976,12 +1390,38 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
     final currentUserRole = _getUserRole(authState.usuario);
 
     if (currentUserRole == 'manager') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ClienteUbicacionScreen(cliente: cliente),
-        ),
-      );
+      // Verificar que el cliente tiene coordenadas antes de crear el marcador
+      if (cliente.latitud != null && cliente.longitud != null) {
+        // Crear marcador para la ubicación del cliente
+        final clienteMarker = Marker(
+          markerId: MarkerId('cliente_${cliente.id}'),
+          position: LatLng(cliente.latitud!, cliente.longitud!),
+          infoWindow: InfoWindow(
+            title: cliente.nombre,
+            snippet: 'Cliente ${cliente.clientCategory ?? 'B'} - ${cliente.telefono}',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        );
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => LocationPickerScreen(
+              allowSelection: false, // Modo solo visualización
+              extraMarkers: {clienteMarker},
+              customTitle: 'Ubicación de ${cliente.nombre}',
+            ),
+          ),
+        );
+      } else {
+        // Mostrar mensaje cuando no hay ubicación GPS
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Este cliente no tiene ubicación GPS registrada'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     } else {
       showDialog(
         context: context,
@@ -1010,7 +1450,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
                 Text('Lng: ${cliente.longitud}'),
               ] else ...[
                 const Text(
-                  'No hay información de ubicación disponible',
+                  'No hay informaci��n de ubicación disponible',
                   style: TextStyle(fontStyle: FontStyle.italic),
                 ),
               ],
@@ -1020,12 +1460,27 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
             if (cliente.latitud != null && cliente.longitud != null)
               TextButton(
                 onPressed: () {
-                  // TODO: Implementar navegación al mapa
+                  // Usar LocationPickerScreen en modo vista para cobradores también
                   Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Abrir en mapa - En desarrollo'),
-                      backgroundColor: Colors.blue,
+
+                  final clienteMarker = Marker(
+                    markerId: MarkerId('cliente_${cliente.id}'),
+                    position: LatLng(cliente.latitud!, cliente.longitud!),
+                    infoWindow: InfoWindow(
+                      title: cliente.nombre,
+                      snippet: 'Cliente ${cliente.clientCategory ?? 'B'} - ${cliente.telefono}',
+                    ),
+                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+                  );
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LocationPickerScreen(
+                        allowSelection: false,
+                        extraMarkers: {clienteMarker},
+                        customTitle: 'Ubicación de ${cliente.nombre}',
+                      ),
                     ),
                   );
                 },
@@ -1244,7 +1699,6 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
     }
   }
 
-  // Método para confirmar eliminación de cliente
   void _confirmarEliminarCliente(Usuario cliente) {
     showDialog(
       context: context,
@@ -1290,7 +1744,6 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
     );
   }
 
-  // Método para eliminar cliente
   Future<void> _eliminarCliente(Usuario cliente) async {
     final authState = ref.read(authProvider);
     final currentUserRole = _getUserRole(authState.usuario);
@@ -1333,6 +1786,10 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _filtroNombreController.dispose();
+    _filtroEmailController.dispose();
+    _filtroTelefonoController.dispose();
+    _filtroCiController.dispose();
     super.dispose();
   }
 }

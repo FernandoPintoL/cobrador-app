@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/profile_image_provider.dart';
+import '../../negocio/providers/user_management_provider.dart';
 import '../widgets/profile_image_widget.dart';
 
 class ProfileSettingsScreen extends ConsumerWidget {
@@ -17,21 +18,25 @@ class ProfileSettingsScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Escuchar cambios en el estado de la imagen de perfil
-    ref.listen<ProfileImageState>(profileImageProvider, (previous, next) {
-      if (next.error != null) {
+    ref.listen<ProfileImageState>(profileImageProvider, (previous, next) async {
+      // Manejar errores solo cuando cambian
+      if (previous?.error != next.error && next.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(next.error!), backgroundColor: Colors.red),
         );
-        ref.read(profileImageProvider.notifier).clearError();
+        // No llamar a clearError aquí para evitar bucles de notificación
       }
 
-      if (next.successMessage != null) {
+      // Manejar éxito solo cuando cambia y luego limpiar el mensaje de éxito
+      if (previous?.successMessage != next.successMessage && next.successMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.successMessage!),
             backgroundColor: Colors.green,
           ),
         );
+        // Refrescar datos del usuario para ver la nueva imagen
+        await ref.read(authProvider.notifier).refreshUser();
         ref.read(profileImageProvider.notifier).clearSuccess();
       }
     });
@@ -141,30 +146,42 @@ class ProfileSettingsScreen extends ConsumerWidget {
                       const SizedBox(height: 16),
                       _buildInfoField(
                         context,
+                        ref,
+                        usuario,
                         'Nombre',
                         usuario?.nombre ?? '',
                         Icons.person,
+                        fieldKey: 'name',
                       ),
                       const SizedBox(height: 12),
                       _buildInfoField(
                         context,
+                        ref,
+                        usuario,
                         'Email',
                         usuario?.email ?? '',
                         Icons.email,
+                        fieldKey: 'email',
                       ),
                       const SizedBox(height: 12),
                       _buildInfoField(
                         context,
+                        ref,
+                        usuario,
                         'Teléfono',
                         usuario?.telefono ?? '',
                         Icons.phone,
+                        fieldKey: 'phone',
                       ),
                       const SizedBox(height: 12),
                       _buildInfoField(
                         context,
+                        ref,
+                        usuario,
                         'Dirección',
                         usuario?.direccion ?? '',
                         Icons.location_on,
+                        fieldKey: 'address',
                       ),
                     ],
                   ),
@@ -225,7 +242,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
                         subtitle: const Text('Actualizar tu contraseña'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
-                          // Navegar a pantalla de cambio de contraseña
+                          _showChangePasswordDialog(context, ref);
                         },
                       ),
                       ListTile(
@@ -290,12 +307,16 @@ class ProfileSettingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
   Widget _buildInfoField(
     BuildContext context,
+    WidgetRef ref,
+    dynamic usuario,
     String label,
     String value,
     IconData icon,
+    {required String fieldKey}
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -331,8 +352,66 @@ class ProfileSettingsScreen extends ConsumerWidget {
         ),
         IconButton(
           icon: const Icon(Icons.edit),
-          onPressed: () {
-            // Abrir diálogo de edición
+          onPressed: () async {
+            final controller = TextEditingController(text: value);
+            final newValue = await showDialog<String>(
+              context: context,
+              builder: (context) {
+                return AlertDialog(
+                  title: Text('Editar $label'),
+                  content: TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      hintText: label,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context, controller.text.trim());
+                      },
+                      child: const Text('Guardar'),
+                    ),
+                  ],
+                );
+              },
+            );
+
+            if (newValue == null) return;
+            if (newValue == value) return;
+            if (usuario == null) return;
+
+            final updatedNombre = fieldKey == 'name' ? newValue : (usuario.nombre ?? '');
+            final updatedEmail = fieldKey == 'email' ? newValue : (usuario.email ?? '');
+            final updatedTelefono = fieldKey == 'phone' ? newValue : (usuario.telefono ?? '');
+            final updatedDireccion = fieldKey == 'address' ? newValue : (usuario.direccion ?? '');
+
+            final ok = await ref.read(userManagementProvider.notifier).actualizarUsuario(
+              id: usuario.id,
+              nombre: updatedNombre.isEmpty ? (usuario.nombre ?? '') : updatedNombre,
+              email: updatedEmail.isEmpty ? (usuario.email ?? '') : updatedEmail,
+              ci: usuario.ci ?? '',
+              telefono: updatedTelefono.isEmpty ? (usuario.telefono ?? '') : updatedTelefono,
+              direccion: updatedDireccion.isEmpty ? (usuario.direccion ?? '') : updatedDireccion,
+            );
+
+            if (ok) {
+              // Refrescar usuario
+              await ref.read(authProvider.notifier).refreshUser();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$label actualizado'), backgroundColor: Colors.green),
+              );
+            } else {
+              final umState = ref.read(userManagementProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(umState.error ?? 'Error al actualizar $label'), backgroundColor: Colors.red),
+              );
+            }
           },
         ),
       ],
@@ -408,6 +487,92 @@ class ProfileSettingsScreen extends ConsumerWidget {
       ),
     );
   }
+
+void _showChangePasswordDialog(BuildContext context, WidgetRef ref) {
+  final newPassController = TextEditingController();
+  final confirmController = TextEditingController();
+
+  showDialog<void>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Cambiar Contraseña'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: newPassController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Nueva contraseña',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Confirmar contraseña',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final pass = newPassController.text.trim();
+              final confirm = confirmController.text.trim();
+              if (pass.isEmpty || confirm.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Completa ambos campos'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              if (pass.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('La contraseña debe tener al menos 6 caracteres'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              if (pass != confirm) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Las contraseñas no coinciden'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+
+              final user = ref.read(authProvider).usuario;
+              if (user == null) return;
+
+              final ok = await ref.read(userManagementProvider.notifier).actualizarContrasena(
+                id: user.id,
+                nuevaContrasena: pass,
+              );
+
+              if (ok) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Contraseña actualizada'), backgroundColor: Colors.green),
+                );
+              } else {
+                final state = ref.read(userManagementProvider);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(state.error ?? 'Error al actualizar contraseña'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 class _ImagePickerBottomSheet extends StatelessWidget {

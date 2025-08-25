@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'storage_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -16,8 +17,9 @@ abstract class BaseApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
+        connectTimeout: const Duration(seconds: 10), // Reducido de 30 a 10
+        receiveTimeout: const Duration(seconds: 15), // Reducido de 30 a 15
+        sendTimeout: const Duration(seconds: 10), // Agregado timeout de envío
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -28,9 +30,11 @@ abstract class BaseApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          print('🌐 API Request: ${options.method} ${options.uri}');
-          print('📤 Headers: ${options.headers}');
-          print('📤 Data: ${options.data}');
+          debugPrint('🌐 API Request: ${options.method} ${options.uri}');
+          // debugPrint('📤 Headers: ${options.headers}');
+          if (options.data != null) {
+            debugPrint('📤 Data: ${options.data}');
+          }
 
           if (_token != null) {
             options.headers['Authorization'] = 'Bearer $_token';
@@ -38,16 +42,27 @@ abstract class BaseApiService {
           handler.next(options);
         },
         onResponse: (response, handler) async {
-          print('📥 Response Status: ${response.statusCode}');
-          print('📥 Response Data: ${response.data}');
+          debugPrint('📥 Response Status: ${response.statusCode}');
+          if (response.data != null) {
+            debugPrint('📥 Response Data: ${response.data}');
+          }
           handler.next(response);
         },
         onError: (error, handler) async {
-          print('❌ Error Response Status: ${error.response?.statusCode}');
-          print('❌ Error Response Data: ${error.response?.data}');
-          print('❌ Error Message: ${error.message}');
+          debugPrint('❌ Error Response Status: ${error.response?.statusCode}');
+          debugPrint('❌ Error Response Data: ${error.response?.data}');
+          debugPrint('❌ Error Message: ${error.message}');
+          debugPrint('❌ Error Type: ${error.type}');
+
+          // Manejar timeout y errores de conexión más gracefully
+          if (error.type == DioExceptionType.connectionTimeout ||
+              error.type == DioExceptionType.receiveTimeout ||
+              error.type == DioExceptionType.sendTimeout) {
+            debugPrint('⏱️ Timeout detectado, continuando con fallback');
+          }
 
           if (error.response?.statusCode == 401) {
+            debugPrint('🔐 Token inválido, limpiando sesión...');
             await _logout();
           }
           handler.next(error);
@@ -61,18 +76,18 @@ abstract class BaseApiService {
   }
 
   Future<void> _saveToken(String token) async {
-    print('💾 Guardando token: ${token.substring(0, 20)}...');
+    debugPrint('💾 Guardando token: ${token.substring(0, 20)}...');
     await _storageService.saveToken(token);
     _token = token;
-    print('✅ Token guardado exitosamente');
+    debugPrint('✅ Token guardado exitosamente');
   }
 
   Future<void> _logout() async {
-    print('🧹 Limpiando token en memoria...');
+    debugPrint('🧹 Limpiando token en memoria...');
     _token = null;
-    print('🧹 Limpiando almacenamiento local...');
+    debugPrint('🧹 Limpiando almacenamiento local...');
     await _storageService.clearSession();
-    print('✅ Limpieza local completada');
+    debugPrint('✅ Limpieza local completada');
   }
 
   // Métodos HTTP básicos
@@ -149,6 +164,21 @@ abstract class BaseApiService {
     );
   }
 
+  /// Método genérico para enviar multipart/form-data (múltiples archivos y campos)
+  Future<Response<T>> postFormData<T>(String path, FormData formData) async {
+    await _loadToken();
+    return _dio.post<T>(
+      path,
+      data: formData,
+      options: Options(
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+  }
+
   // Getters para acceso a servicios internos
   StorageService get storageService => _storageService;
 
@@ -163,34 +193,50 @@ abstract class BaseApiService {
 
   /// Obtiene la URL completa de la imagen de perfil
   String getProfileImageUrl(String? profileImage) {
+    // Si no hay imagen, devolver imagen por defecto
     if (profileImage == null || profileImage.isEmpty) {
-      // URL de imagen por defecto
       return '$baseUrl/images/default-avatar.png';
     }
 
-    // Si ya es una URL completa, la devuelve tal como está
-    if (profileImage.startsWith('http://') ||
-        profileImage.startsWith('https://')) {
+    // Si ya es una URL completa, devolverla tal como está
+    if (profileImage.startsWith('http://') || profileImage.startsWith('https://')) {
       return profileImage;
     }
 
-    // Si es una ruta relativa, la convierte en URL completa
-    if (profileImage.startsWith('/')) {
-      return '$baseUrl$profileImage';
+    // Construir URL completa desde baseUrl
+    // Primero obtenemos la URL base del servidor (sin /api)
+    final serverUrl = baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+
+    // Agregar debug logging
+    debugPrint('🖼️ Construyendo URL de imagen:');
+    debugPrint('  - profileImage recibida: "$profileImage"');
+    debugPrint('  - baseUrl: "$baseUrl"');
+    debugPrint('  - serverUrl: "$serverUrl"');
+
+    String finalUrl;
+
+    // Verificar si ya incluye storage/ al inicio
+    if (profileImage.startsWith('storage/') || profileImage.startsWith('/storage/')) {
+      // Ya tiene el prefijo storage, usarla directamente
+      finalUrl = profileImage.startsWith('/') ? '$serverUrl$profileImage' : '$serverUrl/$profileImage';
+    } else {
+      // No tiene storage/, agregarlo
+      finalUrl = '$serverUrl/storage/$profileImage';
     }
 
-    // Si no tiene / al inicio, lo agrega
-    return '$baseUrl/$profileImage';
+    debugPrint('  - URL final construida: "$finalUrl"');
+    return finalUrl;
   }
 
   /// Maneja errores de Dio de forma estandarizada
   String handleDioError(DioException e) {
+    debugPrint('💥 Error login');
     if (e.response != null) {
       final statusCode = e.response!.statusCode;
       final responseData = e.response!.data;
 
-      print('❌ Error Response Status: $statusCode');
-      print('❌ Error Response Data: $responseData');
+      debugPrint('❌ Error Response Status: $statusCode');
+      debugPrint('❌ Error Response Data: $responseData');
 
       // Intentar extraer mensaje de error del servidor
       String errorMessage = 'Error de conexión';

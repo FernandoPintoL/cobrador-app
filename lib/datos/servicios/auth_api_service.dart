@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'base_api_service.dart';
 import '../modelos/usuario.dart';
 
@@ -9,20 +10,17 @@ class AuthApiService extends BaseApiService {
   AuthApiService._internal();
 
   /// Inicia sesión con email/teléfono y contraseña
-  Future<Map<String, dynamic>> login(
-    String emailOrPhone,
-    String password,
-  ) async {
+  Future<Map<String, dynamic>> login(String emailOrPhone, String password) async {
     try {
-      print('🔐 Iniciando login para: $emailOrPhone');
+      // debugPrint('🔐 Iniciando login para: $emailOrPhone');
 
       final response = await post(
         '/login',
         data: {'email_or_phone': emailOrPhone, 'password': password},
       );
 
-      print('📡 Respuesta del servidor: ${response.statusCode}');
-      print('📄 Datos de respuesta: ${response.data}');
+      /*debugPrint('📡 Respuesta del servidor: ${response.statusCode}');
+      debugPrint('📄 Datos de respuesta: ${response.data}');*/
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
@@ -33,37 +31,37 @@ class AuthApiService extends BaseApiService {
 
           // Verificar si el token existe y no es null
           if (responseData['token'] != null) {
-            print(
+            debugPrint(
               '✅ Token recibido: ${responseData['token'].toString().substring(0, 20)}...',
             );
             await saveTokenFromResponse(responseData['token']);
           } else {
-            print('❌ Token no encontrado en la respuesta');
+            debugPrint('❌ Token no encontrado en la respuesta');
             throw Exception('Token no encontrado en la respuesta del servidor');
           }
 
           // Guardar datos del usuario si están disponibles
           if (responseData['user'] != null) {
-            print('👤 Datos de usuario recibidos');
+            debugPrint('👤 Datos de usuario recibidos');
             final usuario = Usuario.fromJson(responseData['user']);
-            print('👤 Datos de usuario recibidos: ${usuario.toJson()}');
+            debugPrint('👤 Datos de usuario recibidos: ${usuario.toJson()}');
             await storageService.saveUser(usuario);
           } else {
-            print('⚠️ No se recibieron datos de usuario');
+            debugPrint('⚠️ No se recibieron datos de usuario');
           }
 
           return data;
         } else {
-          print('❌ Estructura de respuesta inesperada: $data');
+          debugPrint('❌ Estructura de respuesta inesperada: $data');
           throw Exception('Estructura de respuesta inesperada del servidor');
         }
       } else {
-        print('❌ Error en el login: ${response.statusCode} - ${response.data}');
+        debugPrint('❌ Error en el login: ${response.statusCode} - ${response.data}');
         throw Exception('Error en el login: ${response.statusCode}');
       }
     } catch (e) {
-      print('💥 Error de conexión: $e');
-      print('🔍 Stack trace: ${StackTrace.current}');
+      debugPrint('💥 Error de conexión: $e');
+      debugPrint('🔍 Stack trace: ${StackTrace.current}');
 
       // Extraer mensaje de error específico del servidor
       if (e is DioException) {
@@ -76,18 +74,18 @@ class AuthApiService extends BaseApiService {
 
   /// Cierra la sesión del usuario
   Future<void> logout() async {
-    print('🔐 Iniciando logout en AuthApiService...');
+    debugPrint('🔐 Iniciando logout en AuthApiService...');
     try {
-      print('📡 Llamando al endpoint /logout...');
+      debugPrint('📡 Llamando al endpoint /logout...');
       await post('/logout');
-      print('✅ Logout exitoso en el servidor');
+      debugPrint('✅ Logout exitoso en el servidor');
     } catch (e) {
-      print('⚠️ Error en logout del servidor: $e');
+      debugPrint('⚠️ Error en logout del servidor: $e');
       // Continuar con limpieza local incluso si falla el servidor
     } finally {
-      print('🧹 Limpiando datos locales...');
+      debugPrint('🧹 Limpiando datos locales...');
       await clearSession();
-      print('✅ Logout completado en AuthApiService');
+      debugPrint('✅ Logout completado en AuthApiService');
     }
   }
 

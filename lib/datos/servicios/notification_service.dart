@@ -23,7 +23,7 @@ class NotificationService {
     try {
       // Configuración para Android - usar el icono de notificación personalizado
       const AndroidInitializationSettings initializationSettingsAndroid =
-          AndroidInitializationSettings('notification'); // Cambiado a notification.png (sin extensión)
+          AndroidInitializationSettings('@mipmap/ic_launcher'); // Usar el ícono por defecto del launcher para evitar faltantes
 
       // Configuración para iOS
       const DarwinInitializationSettings initializationSettingsIOS =
@@ -33,11 +33,25 @@ class NotificationService {
         requestSoundPermission: true,
       );
 
-      // Configuración general
+      // Configuración para Linux
+      const LinuxInitializationSettings initializationSettingsLinux =
+          LinuxInitializationSettings(defaultActionName: 'Open notification');
+
+      // Configuración para Windows
+      const WindowsInitializationSettings initializationSettingsWindows =
+          WindowsInitializationSettings(
+        appName: 'Cobrador App',
+        appUserModelId: 'Cobrador.CobradorApp.Client.1.0',
+        guid: '{C7E2E6A8-1F2B-4E4B-8E7D-9A0B4E1D1234}',
+      );
+
+      // Configuración general incluyendo Windows
       const InitializationSettings initializationSettings =
           InitializationSettings(
         android: initializationSettingsAndroid,
         iOS: initializationSettingsIOS,
+        linux: initializationSettingsLinux,
+        windows: initializationSettingsWindows,
       );
 
       // Inicializar el plugin
@@ -50,8 +64,22 @@ class NotificationService {
       _isInitialized = initialized ?? false;
 
       if (_isInitialized) {
-        // Solicitar permisos
+        // Solicitar permisos según la plataforma
         await _requestPermissions();
+
+        // En Windows podemos lanzar una notificación de prueba para certificar que está habilitado
+        if (defaultTargetPlatform == TargetPlatform.windows) {
+          try {
+            await showGeneralNotification(
+              title: 'Notificaciones habilitadas',
+              body: 'Las notificaciones locales están activas en Windows ✔',
+              type: 'diagnostic',
+              payload: 'general:diagnostic',
+            );
+          } catch (e) {
+            print('⚠️ No se pudo mostrar la notificación de prueba en Windows: $e');
+          }
+        }
         print('✅ Servicio de notificaciones inicializado correctamente');
       } else {
         print('❌ Error al inicializar servicio de notificaciones');
@@ -60,6 +88,9 @@ class NotificationService {
       return _isInitialized;
     } catch (e) {
       print('❌ Error inicializando notificaciones: $e');
+      // No marcar como inicializado en caso de error; evitar estados inconsistentes
+      _isInitialized = false;
+      print('⚠️ Continuando sin notificaciones; se omitirá mostrar hasta inicializar correctamente');
       return false;
     }
   }
@@ -67,16 +98,18 @@ class NotificationService {
   /// Solicita permisos de notificación
   Future<bool> _requestPermissions() async {
     try {
-      // Solicitar permisos en Android 13+
-      if (await Permission.notification.isDenied) {
-        final status = await Permission.notification.request();
-        if (status.isPermanentlyDenied) {
-          print('⚠️ Permisos de notificación denegados permanentemente');
-          return false;
+      // Android 13+
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        if (await Permission.notification.isDenied) {
+          final status = await Permission.notification.request();
+          if (status.isPermanentlyDenied) {
+            print('⚠️ Permisos de notificación denegados permanentemente (Android)');
+            return false;
+          }
         }
       }
 
-      // Para iOS, solicitar permisos adicionales
+      // iOS
       if (defaultTargetPlatform == TargetPlatform.iOS) {
         await _flutterLocalNotificationsPlugin
             .resolvePlatformSpecificImplementation<
@@ -88,7 +121,14 @@ class NotificationService {
             );
       }
 
-      print('✅ Permisos de notificación concedidos');
+      // Windows
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        // Algunas versiones de Windows no requieren permisos explícitos para notificaciones
+        // y el plugin puede no exponer una API de permisos. Continuamos sin solicitar.
+        print('ℹ️ Windows: no se solicitan permisos explícitos para notificaciones.');
+      }
+
+      print('✅ Permisos de notificación gestionados según plataforma');
       return true;
     } catch (e) {
       print('❌ Error solicitando permisos: $e');
@@ -147,8 +187,11 @@ class NotificationService {
     String? action,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ Servicio de notificaciones no inicializado');
-      return;
+      final ok = await initialize();
+      if (!ok) {
+        print('⚠️ Servicio de notificaciones no inicializado; se omite mostrar (credit)');
+        return;
+      }
     }
 
     final int notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -176,9 +219,13 @@ class NotificationService {
       presentSound: true,
     );
 
+    // Configuración para Windows
+    const WindowsNotificationDetails windowsPlatformSpecifics = WindowsNotificationDetails();
+
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,
+      windows: windowsPlatformSpecifics,
     );
 
     await _flutterLocalNotificationsPlugin.show(
@@ -200,8 +247,11 @@ class NotificationService {
     double? amount,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ Servicio de notificaciones no inicializado');
-      return;
+      final ok = await initialize();
+      if (!ok) {
+        print('⚠️ Servicio de notificaciones no inicializado; se omite mostrar (payment)');
+        return;
+      }
     }
 
     final int notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -227,9 +277,12 @@ class NotificationService {
       presentSound: true,
     );
 
+    const WindowsNotificationDetails windowsPlatformSpecifics = WindowsNotificationDetails();
+
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,
+      windows: windowsPlatformSpecifics,
     );
 
     await _flutterLocalNotificationsPlugin.show(
@@ -251,8 +304,11 @@ class NotificationService {
     String? senderId,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ Servicio de notificaciones no inicializado');
-      return;
+      final ok = await initialize();
+      if (!ok) {
+        print('⚠️ Servicio de notificaciones no inicializado; se omite mostrar (message)');
+        return;
+      }
     }
 
     final int notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -278,9 +334,12 @@ class NotificationService {
       presentSound: true,
     );
 
+    const WindowsNotificationDetails windowsPlatformSpecifics = WindowsNotificationDetails();
+
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,
+      windows: windowsPlatformSpecifics,
     );
 
     await _flutterLocalNotificationsPlugin.show(
@@ -302,8 +361,11 @@ class NotificationService {
     String? payload,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ Servicio de notificaciones no inicializado');
-      return;
+      final ok = await initialize();
+      if (!ok) {
+        print('⚠️ Servicio de notificaciones no inicializado; se omite mostrar (general)');
+        return;
+      }
     }
 
     final int notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -328,9 +390,12 @@ class NotificationService {
       presentSound: true,
     );
 
+    const WindowsNotificationDetails windowsPlatformSpecifics = WindowsNotificationDetails();
+
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,
+      windows: windowsPlatformSpecifics,
     );
 
     await _flutterLocalNotificationsPlugin.show(
@@ -375,7 +440,8 @@ class NotificationService {
 
   /// Abre la configuración de notificaciones del sistema
   Future<void> openNotificationSettings() async {
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.windows) {
       await openAppSettings();
     }
   }

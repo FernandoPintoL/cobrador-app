@@ -1,5 +1,6 @@
 import 'package:cobrador_app/presentacion/cliente/cliente_form_screen.dart';
 import 'package:cobrador_app/presentacion/pantallas/notifications_screen.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/app_bootstrap.dart';
@@ -11,11 +12,21 @@ import 'presentacion/manager/manager_dashboard_screen.dart';
 import 'presentacion/cobrador/cobrador_dashboard_screen.dart';
 
 Future<void> main() async {
+  // Configurar logging para debug
+  if (kDebugMode) {
+    debugPrint('🚀 INICIANDO APLICACIÓN COBRADOR');
+    debugPrint('🔧 Modo Debug activado');
+  }
+
   // Asegurarse de que Flutter esté inicializado
   WidgetsFlutterBinding.ensureInitialized();
 
+  debugPrint('🔧 Flutter inicializado, iniciando AppBootstrap...');
+
   // Centralizar inicialización de servicios
   await AppBootstrap.init();
+
+  debugPrint('✅ AppBootstrap completado, iniciando app...');
 
   runApp(const ProviderScope(child: MyApp()));
 }

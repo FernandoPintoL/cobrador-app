@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../../datos/modelos/usuario.dart';
 import '../../datos/servicios/api_service.dart';
 import '../../datos/servicios/storage_service.dart';
@@ -53,7 +55,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     try {
       final hasSession = await _storageService.hasValidSession();
-      print('🔍 DEBUG: hasValidSession = $hasSession');
+      debugPrint('🔍 DEBUG: hasValidSession = $hasSession');
 
       if (hasSession) {
         // Obtener usuario desde almacenamiento local primero
@@ -67,15 +69,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
           // Intentar restaurar sesión con el servidor
           try {
             final restored = await _apiService.restoreSession();
-            print('🔍 DEBUG: restoreSession = $restored');
+            debugPrint('🔍 DEBUG: restoreSession = $restored');
 
             if (restored) {
               // Si la restauración fue exitosa, actualizar usuario desde el servidor
               await refreshUser();
             }
           } catch (e) {
-            print('⚠️ Error al restaurar sesión con el servidor: $e');
-            print('⚠️ Continuando con usuario del almacenamiento local');
+            debugPrint('⚠️ Error al restaurar sesión con el servidor: $e');
+            debugPrint('⚠️ Continuando con usuario del almacenamiento local');
           }
 
           // Usar el usuario del almacenamiento local o el actualizado
@@ -92,19 +94,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
           // Conectar WebSocket para sesión restaurada
           _connectWebSocketIfAvailable();
 
-          print('✅ Usuario restaurado exitosamente');
+          debugPrint('✅ Usuario restaurado exitosamente');
           return;
         } else {
-          print('⚠️ Usuario no válido en almacenamiento local');
+          debugPrint('⚠️ Usuario no válido en almacenamiento local');
           await _storageService.clearSession();
         }
       }
 
       // No hay sesión válida
-      print('⚠️ No hay sesión válida, inicializando sin usuario');
+      debugPrint('⚠️ No hay sesión válida, inicializando sin usuario');
       state = state.copyWith(isLoading: false, isInitialized: true);
     } catch (e) {
-      print('❌ Error durante la inicialización: $e');
+      debugPrint('❌ Error durante la inicialización: $e');
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),
@@ -113,11 +115,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login(
-    String emailOrPhone,
-    String password, {
-    bool rememberMe = false,
-  }) async {
+  Future<void> login(String emailOrPhone, String password, {bool rememberMe = false}) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -133,20 +131,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
       Usuario? usuario;
       if (response['user'] != null) {
         usuario = Usuario.fromJson(response['user']);
-        print('🔍 DEBUG: Usuario obtenido de la respuesta del servidor:');
-        print('  - Usuario: ${usuario.nombre}');
-        print('  - Email: ${usuario.email}');
-        print('  - Roles: ${usuario.roles}');
+        debugPrint('🔍 DEBUG: Usuario obtenido de la respuesta del servidor:');
+        debugPrint('  - Usuario: ${usuario.nombre}');
+        debugPrint('  - Email: ${usuario.email}');
+        debugPrint('  - Roles: ${usuario.roles}');
       } else {
         usuario = await _storageService.getUser();
-        print('🔍 DEBUG: Usuario obtenido del almacenamiento local:');
-        print('  - Usuario: ${usuario?.nombre}');
-        print('  - Email: ${usuario?.email}');
-        print('  - Roles: ${usuario?.roles}');
+        debugPrint('🔍 DEBUG: Usuario obtenido del almacenamiento local:');
+        debugPrint('  - Usuario: ${usuario?.nombre}');
+        debugPrint('  - Email: ${usuario?.email}');
+        debugPrint('  - Roles: ${usuario?.roles}');
       }
 
       if (usuario != null) {
-        print('✅ Login exitoso, guardando usuario en el estado');
+        debugPrint('✅ Login exitoso, guardando usuario en el estado');
         state = state.copyWith(usuario: usuario, isLoading: false);
 
         // Conectar WebSocket después del login exitoso
@@ -155,7 +153,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         throw Exception('No se pudo obtener información del usuario');
       }
     } catch (e) {
-      print('Error en el provider login: $e');
+      debugPrint('Error en el provider login: $e');
       // Extraer solo el mensaje de la excepción, no toda la información de stack
       String errorMessage = 'Error desconocido';
 
@@ -172,7 +170,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    print('🚪 Iniciando proceso de logout...');
+    debugPrint('🚪 Iniciando proceso de logout...');
     state = state.copyWith(isLoading: true);
 
     try {
@@ -180,21 +178,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _disconnectWebSocket();
 
       // Llamar al endpoint de logout si hay conexión
-      print('📡 Llamando al endpoint de logout...');
+      debugPrint('📡 Llamando al endpoint de logout...');
       await _apiService.logout();
-      print('✅ Logout exitoso en el servidor');
+      debugPrint('✅ Logout exitoso en el servidor');
     } catch (e) {
       // Si no hay conexión, continuar con el logout local
-      print('⚠️ Error al hacer logout en el servidor: $e');
-      print('⚠️ Continuando con logout local...');
+      debugPrint('⚠️ Error al hacer logout en el servidor: $e');
+      debugPrint('⚠️ Continuando con logout local...');
     } finally {
       // Limpiar sesión local
-      print('🧹 Limpiando sesión local...');
+      debugPrint('🧹 Limpiando sesión local...');
       await _storageService.clearSession();
 
       // Resetear estado completamente
       state = const AuthState(isInitialized: true);
-      print('✅ Logout completado - Estado reseteado');
+      debugPrint('✅ Logout completado - Estado reseteado');
     }
   }
 
@@ -203,20 +201,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final response = await _apiService.getMe();
       if (response['user'] != null) {
         final usuario = Usuario.fromJson(response['user']);
-        print('🔄 Usuario actualizado desde el servidor:');
-        print('  - Usuario: ${usuario.nombre}');
-        print('  - Email: ${usuario.email}');
-        print('  - Roles: ${usuario.roles}');
+        debugPrint('🔄 Usuario actualizado desde el servidor:');
+        debugPrint('  - Usuario: ${usuario.nombre}');
+        debugPrint('  - Email: ${usuario.email}');
+        debugPrint('  - Roles: ${usuario.roles}');
 
         // Guardar el usuario actualizado en almacenamiento local
         await _storageService.saveUser(usuario);
 
         state = state.copyWith(usuario: usuario);
-        print('✅ Usuario actualizado exitosamente');
+        debugPrint('✅ Usuario actualizado exitosamente');
       }
     } catch (e) {
-      print('⚠️ Error al actualizar usuario desde el servidor: $e');
-      print('⚠️ Manteniendo usuario actual del almacenamiento local');
+      debugPrint('⚠️ Error al actualizar usuario desde el servidor: $e');
+      debugPrint('⚠️ Manteniendo usuario actual del almacenamiento local');
       // Si no se puede actualizar, mantener el usuario actual
     }
   }
@@ -247,21 +245,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   // Método para debug: limpiar sesión y forzar nuevo login
   Future<void> forceNewLogin() async {
-    print('🔄 Forzando nuevo login...');
+    debugPrint('🔄 Forzando nuevo login...');
     await clearSession();
-    print('✅ Sesión limpiada, usuario debe hacer login nuevamente');
+    debugPrint('✅ Sesión limpiada, usuario debe hacer login nuevamente');
   }
 
   // Método para validar y corregir sesión si es necesario
   Future<void> validateAndFixSession() async {
     if (state.usuario != null) {
-      print('⁉️ Validando sesión actual...');
-      print('  - Usuario: ${state.usuario!.nombre}');
-      print('  - Roles: ${state.usuario!.roles}');
+      debugPrint('⁉️ Validando sesión actual...');
+      debugPrint('  - Usuario: ${state.usuario!.nombre}');
+      debugPrint('  - Roles: ${state.usuario!.roles}');
 
       // Verificar que el usuario tiene roles válidos
       if (state.usuario!.roles.isEmpty) {
-        print('❌ Usuario sin roles, limpiando sesión');
+        debugPrint('❌ Usuario sin roles, limpiando sesión');
         await clearSession();
         return;
       }
@@ -273,12 +271,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
           state.usuario!.tieneRol('cobrador');
 
       if (!hasValidRole) {
-        print('❌ Usuario sin roles válidos, limpiando sesión');
+        debugPrint('❌ Usuario sin roles válidos, limpiando sesión');
         await clearSession();
         return;
       }
 
-      print('✅ Sesión válida');
+      debugPrint('✅ Sesión válida');
     }
   }
 
@@ -303,12 +301,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
           userType: userType,
           userName: user.nombre ?? 'Usuario'
         );
-        print('🔌 Iniciando conexión WebSocket para $userType: ${user.nombre}');
+        debugPrint('🔌 Iniciando conexión WebSocket para $userType: ${user.nombre}');
       } catch (e) {
-        print('⚠️ Error al conectar WebSocket: $e');
+        debugPrint('⚠️ Error al conectar WebSocket: $e');
       }
     } else {
-      print('⚠️ No se puede conectar WebSocket: ref o usuario es null');
+      debugPrint('⚠️ No se puede conectar WebSocket: ref o usuario es null');
     }
   }
 
@@ -318,9 +316,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       try {
         final wsNotifier = _ref!.read(webSocketProvider.notifier);
         wsNotifier.disconnect();
-        print('🔌 WebSocket desconectado');
+        debugPrint('🔌 WebSocket desconectado');
       } catch (e) {
-        print('⚠️ Error al desconectar WebSocket: $e');
+        debugPrint('⚠️ Error al desconectar WebSocket: $e');
       }
     }
   }

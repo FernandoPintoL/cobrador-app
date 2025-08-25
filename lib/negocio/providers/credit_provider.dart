@@ -7,6 +7,7 @@ import '../../datos/modelos/credito.dart';
 import 'auth_provider.dart';
 import 'websocket_provider.dart';
 import 'pago_provider.dart';
+import '../utils/schedule_utils.dart';
 
 // Estado del provider de créditos
 class CreditState {
@@ -160,7 +161,12 @@ class CreditNotifier extends StateNotifier<CreditState> {
     required DateTime endDate,
     double? interestRate,
     double? totalAmount,
-    double? installmentAmount}) async {
+    double? installmentAmount,
+    int? totalInstallments,
+    double? latitude,
+    double? longitude,
+    DateTime? scheduledDeliveryDate,
+  }) async {
     try {
       state = state.copyWith(
         isLoading: true,
@@ -169,10 +175,11 @@ class CreditNotifier extends StateNotifier<CreditState> {
       );
       print('🔄 Iniciando proceso de creación de crédito...');
 
-      // Asegurar regla de negocio: créditos diarios duran exactamente 24 días de pago (Lun-Sáb)
+      // Ajustar regla de negocio: créditos diarios usan la duración manual (Lun–Sáb)
       DateTime normalizedEndDate = endDate;
       if (frequency == 'daily') {
-        normalizedEndDate = _computeDailyEndDateFromStart(startDate);
+        final count = totalInstallments ?? 24;
+        normalizedEndDate = ScheduleUtils.computeDailyEndDate(startDate, count);
       }
 
       final creditData = <String, dynamic>{
@@ -185,6 +192,11 @@ class CreditNotifier extends StateNotifier<CreditState> {
         'status': 'pending_approval', // Estado inicial para lista de espera
       };
 
+      // Si se define una fecha programada de entrega, enviarla (permite mismo día si backend lo autoriza)
+      if (scheduledDeliveryDate != null) {
+        creditData['scheduled_delivery_date'] = scheduledDeliveryDate.toIso8601String();
+      }
+
       if (interestRate != null && interestRate > 0) {
         creditData['interest_rate'] = interestRate;
       }
@@ -195,6 +207,15 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
       if (installmentAmount != null) {
         creditData['installment_amount'] = installmentAmount;
+      }
+      if (totalInstallments != null) {
+        creditData['total_installments'] = totalInstallments;
+      }
+      if (latitude != null) {
+        creditData['latitude'] = latitude;
+      }
+      if (longitude != null) {
+        creditData['longitude'] = longitude;
       }
 
       print('🚀 Enviando datos al servidor: $creditData');
@@ -221,18 +242,37 @@ class CreditNotifier extends StateNotifier<CreditState> {
       } else {
         throw Exception(response['message'] ?? 'Error al crear crédito');
       }
-    } catch (e) {
-      print('❌ Error al crear crédito: $e');
+    } on ApiException catch (e) {
+      print('❌ ApiException al crear crédito: ${e.message}');
 
-      String errorMessage = 'Error al crear crédito';
-      if (e.toString().contains('422')) {
-        errorMessage = 'Datos de entrada inválidos';
-      } else if (e.toString().contains('403')) {
-        errorMessage =
-            'No tienes permisos para crear créditos para este cliente';
+      // Construir mensaje: usar message o primer error de validación si existe
+      String errorMessage = e.message;
+      Map<String, dynamic> validationErrors = {};
+      if (e.hasValidationErrors) {
+        validationErrors = e.validationErrors;
+        // Si hay errores de validación, priorizar un mensaje amigable
+        if (validationErrors.isNotEmpty) {
+          // Tomar el primer campo y su primer error para mostrar
+          final firstKey = validationErrors.keys.first;
+          final firstList = validationErrors[firstKey];
+          if (firstList is List && firstList.isNotEmpty) {
+            errorMessage = firstList.first.toString();
+          }
+        }
       }
 
-      state = state.copyWith(isLoading: false, errorMessage: errorMessage);
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: errorMessage,
+        validationErrors: validationErrors,
+      );
+      return false;
+    } catch (e) {
+      print('❌ Error al crear crédito: $e');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Error al crear crédito: $e',
+      );
       return false;
     }
   }
@@ -250,6 +290,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
     DateTime? endDate,
     double? totalAmount,
     double? installmentAmount,
+    int? totalInstallments,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       state = state.copyWith(
@@ -271,17 +314,23 @@ class CreditNotifier extends StateNotifier<CreditState> {
         creditData['start_date'] = startDate.toIso8601String().split('T')[0];
       if (endDate != null) {
         var normalizedEnd = endDate;
-        // Si es o seguirá siendo diario, forzar fin en 24 días de pago (Lun–Sáb) desde startDate disponible
-        final freq = frequency ?? state.credits.firstWhere((c) => c.id == creditId, orElse: () => throw Exception('Crédito no encontrado')).frequency;
-        final start = startDate ?? state.credits.firstWhere((c) => c.id == creditId, orElse: () => throw Exception('Crédito no encontrado')).startDate;
+        // Si es o seguirá siendo diario, ajustar fin con la cantidad indicada (Lun–Sáb) desde startDate disponible
+        final existing = state.credits.firstWhere((c) => c.id == creditId, orElse: () => throw Exception('Crédito no encontrado'));
+        final freq = frequency ?? existing.frequency;
+        final start = startDate ?? existing.startDate;
         if (freq == 'daily') {
-          normalizedEnd = _computeDailyEndDateFromStart(start);
+          final count = totalInstallments ?? _inferInstallmentsFromAmounts(totalAmount, installmentAmount) ?? 24;
+          normalizedEnd = ScheduleUtils.computeDailyEndDate(start, count);
         }
         creditData['end_date'] = normalizedEnd.toIso8601String().split('T')[0];
       }
       if (totalAmount != null) creditData['total_amount'] = totalAmount;
       if (installmentAmount != null)
         creditData['installment_amount'] = installmentAmount;
+
+      if (totalInstallments != null) creditData['total_installments'] = totalInstallments;
+      if (latitude != null) creditData['latitude'] = latitude;
+      if (longitude != null) creditData['longitude'] = longitude;
 
       final response = await _creditApiService.updateCredit(
         creditId,
@@ -377,8 +426,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
       final response = await _creditApiService.getClientCredits(clientId);
 
       if (response['success'] == true) {
-        final data = response['data'];
-        final creditsData = data['data'] as List? ?? [];
+        // El endpoint /credits/client/{client} devuelve los créditos directamente en 'data'
+        // no en una estructura paginada como 'data.data'
+        final creditsData = response['data'] as List? ?? [];
 
         final credits = creditsData
             .map(
@@ -390,9 +440,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         state = state.copyWith(
           credits: credits,
           isLoading: false,
-          currentPage: data['current_page'] ?? 1,
-          totalPages: data['last_page'] ?? 1,
-          totalItems: data['total'] ?? 0,
+          // Para este endpoint no hay paginación, todos los créditos vienen juntos
+          currentPage: 1,
+          totalPages: 1,
+          totalItems: credits.length,
         );
 
         print('✅ ${credits.length} créditos del cliente cargados exitosamente');
@@ -685,17 +736,13 @@ class CreditNotifier extends StateNotifier<CreditState> {
     }
   }
 
-  /// Calcula la fecha de vencimiento final para créditos diarios (24 días de pago Lun–Sáb)
-  DateTime _computeDailyEndDateFromStart(DateTime start) {
-    int payments = 0;
-    DateTime current = start;
-    while (payments < 24) {
-      current = current.add(const Duration(days: 1));
-      if (current.weekday != DateTime.sunday) {
-        payments++;
-      }
-    }
-    return current;
+
+  /// Intenta inferir el número de cuotas a partir de totalAmount e installmentAmount
+  int? _inferInstallmentsFromAmounts(double? totalAmount, double? installmentAmount) {
+    if (totalAmount == null || installmentAmount == null || installmentAmount <= 0) return null;
+    final est = (totalAmount / installmentAmount).round();
+    if (est <= 0) return null;
+    return est;
   }
 
   /// Genera un cronograma de pagos local basado en los datos del crédito
@@ -712,8 +759,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
     // Determinar número de cuotas y frecuencia basado en el tipo
     switch (credit.frequency) {
       case 'daily':
-        // 24 cuotas, pagos de lunes a sábado. Primer pago al día siguiente de la entrega.
-        installments = 24;
+        // Inferir cantidad de cuotas diarias a partir de montos si es posible; si no, 24 por defecto.
+        final inferred = _inferInstallmentsFromAmounts(credit.totalAmount, credit.installmentAmount);
+        installments = inferred ?? 24;
         daysBetweenPayments = 1; // iteramos por días, pero saltaremos domingos abajo
         break;
       case 'weekly':

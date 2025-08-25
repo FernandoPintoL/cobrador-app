@@ -6,6 +6,8 @@ import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
 import '../../ui/widgets/validation_error_display.dart'; // Importar widget de errores
+import '../../ui/widgets/loading_overlay.dart';
+import '../../ui/widgets/client_category_chip.dart';
 import 'credit_detail_screen.dart';
 import 'credit_form_screen.dart';
 
@@ -158,6 +160,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           isScrollable: true,
+          tabAlignment: MediaQuery.of(context).size.width > 600 ? TabAlignment.center : TabAlignment.start,
           tabs: [
             Tab(
               text: 'Activos ('
@@ -185,40 +188,46 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           ],
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // Resumen de lista de espera
-          /*if (creditState.waitingListSummary != null)
-            _buildSummaryCard(creditState.waitingListSummary!),*/
+          Column(
+            children: [
+              // Resumen de lista de espera
+              /*if (creditState.waitingListSummary != null)
+                _buildSummaryCard(creditState.waitingListSummary!),*/
 
-          // Contenido de las pestañas
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildCreditsList(
-                  creditState.credits.where((c) => c.status == 'active').toList(),
-                  'active',
+              // Contenido de las pestañas
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildCreditsList(
+                      creditState.credits.where((c) => c.status == 'active').toList(),
+                      'active',
+                    ),
+                    _buildCreditsList(
+                      creditState.pendingApprovalCredits,
+                      'pending_approval',
+                    ),
+                    _buildCreditsList(
+                      creditState.waitingDeliveryCredits,
+                      'waiting_delivery',
+                    ),
+                    _buildCreditsList(
+                      creditState.readyForDeliveryCredits,
+                      'ready_for_delivery',
+                    ),
+                    _buildCreditsList(
+                      creditState.overdueDeliveryCredits,
+                      'overdue_delivery',
+                    ),
+                  ],
                 ),
-                _buildCreditsList(
-                  creditState.pendingApprovalCredits,
-                  'pending_approval',
-                ),
-                _buildCreditsList(
-                  creditState.waitingDeliveryCredits,
-                  'waiting_delivery',
-                ),
-                _buildCreditsList(
-                  creditState.readyForDeliveryCredits,
-                  'ready_for_delivery',
-                ),
-                _buildCreditsList(
-                  creditState.overdueDeliveryCredits,
-                  'overdue_delivery',
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
+          // Overlay de carga cuando haya peticiones en curso
+          LoadingOverlay(isLoading: creditState.isLoading, message: 'Cargando créditos...'),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -244,11 +253,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(_getEmptyStateIcon(listType), size: 64, color: Colors.grey),
+            Icon(_getEmptyStateIcon(listType), size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(
               _getEmptyStateMessage(listType),
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
@@ -286,6 +295,13 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
+                          'Crédito #${credit.id}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
                           credit.client?.nombre ??
                               'Cliente #${credit.clientId}',
                           style: const TextStyle(
@@ -293,13 +309,15 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Text(
-                          'Crédito #${credit.id}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                        // categoría del cliente (chip)
+                        if (credit.client?.clientCategory != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: ClientCategoryChip(
+                              category: credit.client!.clientCategory,
+                              compact: true,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -328,7 +346,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                             'Creado por: ${credit.creator!.nombre}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                       ],
@@ -339,7 +357,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                     children: [
                       Text(
                         DateFormat('dd/MM/yyyy').format(credit.createdAt),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                       if (credit.scheduledDeliveryDate != null)
                         Text(
@@ -363,7 +381,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   decoration: BoxDecoration(
                     color: Colors.amberAccent.withValues(alpha: 25),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 77)),
+                    border: Border.all(color: Colors.orangeAccent.withValues(alpha: 77)),
                   ),
                   child: const Row(
                     children: [
@@ -455,42 +473,57 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   }
 
   Widget _buildStatusChip(String status) {
-    Color color;
+    Color backgroundColor;
+    Color borderColor;
+    Color textColor;
     String label;
+
+    // Obtener el brightness del tema actual
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     switch (status) {
       case 'pending_approval':
-        color = Colors.orangeAccent;
+        backgroundColor = isDarkMode ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.1);
+        borderColor = isDarkMode ? Colors.orange.shade300 : Colors.orange.shade600;
+        textColor = isDarkMode ? Colors.orange.shade300 : Colors.orange.shade700;
         label = 'Pendiente';
         break;
       case 'waiting_delivery':
-        color = Colors.blue;
+        backgroundColor = isDarkMode ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.withValues(alpha: 0.1);
+        borderColor = isDarkMode ? Colors.blue.shade300 : Colors.blue.shade600;
+        textColor = isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700;
         label = 'En Espera';
         break;
       case 'active':
-        color = Colors.green;
+        backgroundColor = isDarkMode ? Colors.green.withValues(alpha: 0.2) : Colors.green.withValues(alpha: 0.1);
+        borderColor = isDarkMode ? Colors.green.shade300 : Colors.green.shade600;
+        textColor = isDarkMode ? Colors.green.shade300 : Colors.green.shade700;
         label = 'Activo';
         break;
       case 'rejected':
-        color = Colors.red;
+        backgroundColor = isDarkMode ? Colors.red.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.1);
+        borderColor = isDarkMode ? Colors.red.shade300 : Colors.red.shade600;
+        textColor = isDarkMode ? Colors.red.shade300 : Colors.red.shade700;
         label = 'Rechazado';
         break;
       default:
-        color = Colors.grey;
+        backgroundColor = isDarkMode ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.1);
+        borderColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600;
+        textColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700;
         label = status;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 25),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color),
+        border: Border.all(color: borderColor),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: color,
+          color: textColor,
           fontWeight: FontWeight.bold,
           fontSize: 10,
         ),
@@ -563,7 +596,6 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
   Color _getDeliveryDateColor(Credito credit) {
     if (credit.scheduledDeliveryDate == null) return Colors.grey;
-
     if (credit.isOverdueForDelivery) {
       return Colors.red;
     } else if (credit.isReadyForDelivery) {
@@ -679,7 +711,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
+                      border: Border.all(color: Theme.of(context).colorScheme.outline),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(

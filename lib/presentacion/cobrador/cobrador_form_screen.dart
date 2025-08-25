@@ -1,10 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../ui/utilidades/image_utils.dart';
+import '../../ui/utilidades/phone_utils.dart';
 import '../../datos/modelos/usuario.dart';
+import '../../datos/servicios/user_api_service.dart';
+import '../../datos/servicios/api_service.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../cliente/location_picker_screen.dart';
+import '../pantallas/change_password_screen.dart';
+import '../widgets/validation_error_widgets.dart';
 
 class CobradorFormScreen extends ConsumerStatefulWidget {
   final Usuario? cobrador; // null para crear, con datos para editar
@@ -40,12 +48,38 @@ class _ManagerCobradorFormScreenState
   double? _longitud;
   bool _ubicacionObtenida = false;
 
+  // Imágenes requeridas de CI y opcional foto de perfil
+  File? _idFront;
+  File? _idBack;
+  File? _profileImage;
+  final _picker = ImagePicker();
+
+  // URLs existentes (modo edición)
+  String? _idFrontUrl;
+  String? _idBackUrl;
+  String? _profileImageUrl;
+
   @override
   void initState() {
     super.initState();
     _isEditMode = widget.cobrador != null;
 
     if (_isEditMode) {
+      // Usar ApiService para construir correctamente la URL de la imagen de perfil
+      final apiService = ApiService();
+
+      // Si hay una imagen de perfil, construir la URL correcta
+      if (widget.cobrador!.profileImage.isNotEmpty) {
+        _profileImageUrl = apiService.getProfileImageUrl(widget.cobrador!.profileImage);
+        debugPrint('🖼️ URL de perfil construida: $_profileImageUrl');
+      } else {
+        _profileImageUrl = null;
+        debugPrint('⚠️ No hay imagen de perfil para el cobrador');
+      }
+
+      debugPrint('Cargando fotos existentes para el cobrador: ${widget.cobrador!.nombre}');
+      _cargarFotosExistentes(widget.cobrador!.id);
+
       _nombreController.text = widget.cobrador!.nombre;
       _emailController.text = widget.cobrador!.email;
       _telefonoController.text = widget.cobrador!.telefono;
@@ -161,8 +195,8 @@ class _ManagerCobradorFormScreenState
                 },
               ),
               const SizedBox(height: 16),
-
-              TextFormField(
+              if(!_isEditMode)
+                TextFormField(
                 controller: _passwordController,
                 decoration: InputDecoration(
                   labelText: _isEditMode
@@ -205,8 +239,29 @@ class _ManagerCobradorFormScreenState
                   return null;
                 },
               ),
+                const SizedBox(height: 16),
+
+              // CI obligatorio
+              TextFormField(
+                controller: _ciController,
+                decoration: const InputDecoration(
+                  labelText: 'CI (Cédula de identidad) *',
+                  prefixIcon: Icon(Icons.badge),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Por favor ingresa el CI';
+                  }
+                  if (value.trim().length < 5) {
+                    return 'El CI debe tener al menos 5 caracteres';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
 
+              // telefono
               TextFormField(
                 controller: _telefonoController,
                 decoration: const InputDecoration(
@@ -215,12 +270,7 @@ class _ManagerCobradorFormScreenState
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.phone,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa el teléfono';
-                  }
-                  return null;
-                },
+                validator: (value) => PhoneUtils.validatePhone(value, required: true),
               ),
               const SizedBox(height: 16),
 
@@ -252,7 +302,62 @@ class _ManagerCobradorFormScreenState
                   return null;
                 },
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+
+              // Carga de imágenes de CI y perfil
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Documentos de Identidad',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _isEditMode
+                            ? 'Puedes actualizar las fotos del CI si es necesario'
+                            : 'Anverso y Reverso del CI son obligatorios para crear',
+                        style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _buildImagePicker(
+                            label: 'CI Anverso*',
+                            file: _idFront,
+                            existingUrl: _idFrontUrl,
+                            onTap: () => _pickImage('id_front'),
+                          ),
+                          const SizedBox(width: 12),
+                          _buildImagePicker(
+                            label: 'CI Reverso*',
+                            file: _idBack,
+                            existingUrl: _idBackUrl,
+                            onTap: () => _pickImage('id_back'),
+                          ),
+                          const SizedBox(width: 12),
+                          _buildImagePicker(
+                            label: 'Perfil (opcional)',
+                            file: _profileImage,
+                            existingUrl: _profileImageUrl,
+                            onTap: () => _pickImage('profile'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Las imágenes deben pesar menos de 1MB. Se comprimen automáticamente.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
 
               // Botones de acción
               Row(
@@ -281,6 +386,21 @@ class _ManagerCobradorFormScreenState
                   ),
                 ],
               ),
+
+              // Botón adicional para cambiar contraseña en modo edición
+              if (_isEditMode) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _mostrarDialogoContrasena,
+                  icon: const Icon(Icons.lock_reset),
+                  label: const Text('Cambiar Contraseña'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange,
+                    side: const BorderSide(color: Colors.orange),
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 16),
 
               // Mostrar errores de validación si los hay
@@ -347,6 +467,14 @@ class _ManagerCobradorFormScreenState
   Future<void> _guardarCobrador() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Validar fotos requeridas en creación
+    if (!_isEditMode) {
+      if (_idFront == null || _idBack == null) {
+        _mostrarError('Debes subir las fotos del CI (anverso y reverso)');
+        return;
+      }
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -361,37 +489,82 @@ class _ManagerCobradorFormScreenState
       }
 
       if (_isEditMode) {
-        // Actualizar cobrador existente
-        final success = await ref
-            .read(userManagementProvider.notifier)
-            .actualizarUsuario(
-              id: widget.cobrador!.id,
-              nombre: _nombreController.text.trim(),
-              email: _emailController.text.trim(),
-              ci: _ciController.text.trim(),
-              telefono: _telefonoController.text.trim(),
-              direccion: _direccionController.text.trim(),
-              password: _passwordController.text.isNotEmpty
-                  ? _passwordController.text
-                  : null,
-              latitud: _latitud,
-              longitud: _longitud,
-            );
+        // Verificar si hay fotos nuevas para actualizar
+        bool hayFotosNuevas = _idFront != null || _idBack != null || _profileImage != null;
+
+        bool success;
+        if (hayFotosNuevas) {
+          // Usar el método que actualiza con fotos
+          success = await ref
+              .read(userManagementProvider.notifier)
+              .actualizarUsuarioConFotos(
+                id: widget.cobrador!.id,
+                nombre: _nombreController.text.trim(),
+                email: _emailController.text.trim(),
+                ci: _ciController.text.trim(),
+                telefono: _telefonoController.text.trim(),
+                direccion: _direccionController.text.trim(),
+                password: _passwordController.text.isNotEmpty
+                    ? _passwordController.text
+                    : null,
+                latitud: _latitud,
+                longitud: _longitud,
+                idFront: _idFront,
+                idBack: _idBack,
+                profileImage: _profileImage,
+              );
+        } else {
+          // Usar el método normal sin fotos
+          success = await ref
+              .read(userManagementProvider.notifier)
+              .actualizarUsuario(
+                id: widget.cobrador!.id,
+                nombre: _nombreController.text.trim(),
+                email: _emailController.text.trim(),
+                ci: _ciController.text.trim(),
+                telefono: _telefonoController.text.trim(),
+                direccion: _direccionController.text.trim(),
+                password: _passwordController.text.isNotEmpty
+                    ? _passwordController.text
+                    : null,
+                latitud: _latitud,
+                longitud: _longitud,
+              );
+        }
 
         if (success) {
-          _mostrarExito('Cobrador actualizado exitosamente');
+          _mostrarExito(
+            hayFotosNuevas
+              ? 'Cobrador y documentos actualizados exitosamente'
+              : 'Cobrador actualizado exitosamente'
+          );
           // Recargar datos del manager
           await ref
               .read(managerProvider.notifier)
               .cargarCobradoresAsignados(managerId);
           widget.onCobradorSaved?.call();
           Navigator.pop(context);
+        } else {
+          final state = ref.read(userManagementProvider);
+          if (state.fieldErrors != null && state.fieldErrors!.isNotEmpty) {
+            ValidationErrorDialog.show(
+              context,
+              title: 'Error de validación',
+              message: 'Por favor corrija los siguientes errores:',
+              fieldErrors: state.fieldErrors!,
+            );
+          } else {
+            ValidationErrorSnackBar.show(
+              context,
+              message: state.error ?? 'Error al actualizar cobrador',
+            );
+          }
         }
       } else {
-        // Crear nuevo cobrador
+        // Crear nuevo cobrador con fotos
         final success = await ref
             .read(userManagementProvider.notifier)
-            .crearUsuario(
+            .crearUsuarioConFotos(
               nombre: _nombreController.text.trim(),
               email: _emailController.text.trim(),
               ci: _ciController.text.trim(),
@@ -401,19 +574,34 @@ class _ManagerCobradorFormScreenState
               roles: ['cobrador'],
               latitud: _latitud,
               longitud: _longitud,
+              idFront: _idFront!,
+              idBack: _idBack!,
+              profileImage: _profileImage,
             );
 
         if (success) {
           _mostrarExito('Cobrador creado exitosamente');
-          // Asignar el cobrador al manager después de crearlo
-          // TODO: Implementar asignación automática al manager
-
           // Recargar datos del manager
           await ref
               .read(managerProvider.notifier)
               .cargarCobradoresAsignados(managerId);
           widget.onCobradorSaved?.call();
           Navigator.pop(context);
+        } else {
+          final state = ref.read(userManagementProvider);
+          if (state.fieldErrors != null && state.fieldErrors!.isNotEmpty) {
+            ValidationErrorDialog.show(
+              context,
+              title: 'Error de validación',
+              message: 'Por favor corrija los siguientes errores:',
+              fieldErrors: state.fieldErrors!,
+            );
+          } else {
+            ValidationErrorSnackBar.show(
+              context,
+              message: state.error ?? 'Error al crear cobrador',
+            );
+          }
         }
       }
     } catch (e) {
@@ -434,6 +622,7 @@ class _ManagerCobradorFormScreenState
         title: const Text('Eliminar Cobrador'),
         content: Text(
           '¿Estás seguro de que deseas eliminar a ${widget.cobrador!.nombre}? Esta acción no se puede deshacer.',
+          style: TextStyle(color: Colors.white)
         ),
         actions: [
           TextButton(
@@ -492,13 +681,151 @@ class _ManagerCobradorFormScreenState
 
   void _mostrarExito(String mensaje) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje), backgroundColor: Colors.green),
+      SnackBar(content: Text(mensaje, style: TextStyle(color: Colors.white)), backgroundColor: Colors.green),
     );
   }
 
   void _mostrarError(String mensaje) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
+      SnackBar(content: Text(mensaje, style: TextStyle(color: Colors.white)), backgroundColor: Colors.red),
+    );
+  }
+
+  Widget _buildImagePicker({required String label, required File? file, String? existingUrl, required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 90,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Builder(
+            builder: (_) {
+              if (file != null) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    file,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  ),
+                );
+              } else if (existingUrl != null && existingUrl.isNotEmpty) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    existingUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  ),
+                );
+              }
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.add_a_photo, size: 20, color: Colors.grey),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<ImageSource?> _selectImageSource() async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Cámara'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              const Divider(height: 0),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galería'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _cargarFotosExistentes(BigInt userId) async {
+    try {
+      final photos = await UserApiService().listUserPhotos(userId);
+      debugPrint('Fotos existentes cargadas: $photos');
+      for (final p in photos) {
+        final type = p['type']?.toString();
+        final url = p['url']?.toString() ?? p['full_url']?.toString() ?? p['path_url']?.toString();
+        if (type == 'id_front' && url != null) {
+          _idFrontUrl = url;
+          debugPrint('Foto CI Anverso URL: '+_idFrontUrl.toString());
+        } else if (type == 'id_back' && url != null) {
+          _idBackUrl = url;
+          debugPrint('Foto CI Reverso URL: '+_idBackUrl.toString());
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      // Silencioso
+    }
+  }
+
+  Future<void> _pickImage(String type) async {
+    try {
+      final source = await _selectImageSource();
+      if (source == null) return;
+
+      final picked = await _picker.pickImage(source: source, imageQuality: 100);
+      if (picked == null) return;
+      File file = File(picked.path);
+      file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);
+
+      setState(() {
+        if (type == 'id_front') {
+          _idFront = file;
+        } else if (type == 'id_back') {
+          _idBack = file;
+        } else {
+          _profileImage = file;
+        }
+      });
+    } catch (e) {
+      _mostrarError('No se pudo seleccionar la imagen: $e');
+    }
+  }
+
+  Future<void> _mostrarDialogoContrasena() async {
+    if(widget.cobrador == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ChangePasswordScreen(
+          targetUser: widget.cobrador!,
+          onPasswordChanged: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Contraseña cambiada exitosamente')),
+            );
+          },
+        ),
+      ),
     );
   }
 }

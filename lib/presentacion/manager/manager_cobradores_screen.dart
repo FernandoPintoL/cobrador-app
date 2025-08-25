@@ -8,6 +8,7 @@ import '../../negocio/providers/user_management_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
+import '../pantallas/change_password_screen.dart';
 import '../cliente/clientes_screen.dart'; // Nueva pantalla genérica
 import '../cobrador/cobrador_form_screen.dart';
 import 'manager_client_assignment_screen.dart';
@@ -109,16 +110,6 @@ class _ManagerCobradoresScreenState
         role: 'manager',
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_add),
-            onPressed: () => _navegarCrearCobrador(),
-            tooltip: 'Crear Cobrador',
-          ),
-          /* IconButton(
-            icon: const Icon(Icons.business_center),
-            onPressed: () => _navegarAClientesDirectos(),
-            tooltip: 'Mis Clientes Directos',
-          ), */
-          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _cargarDatos,
             tooltip: 'Actualizar',
@@ -127,8 +118,9 @@ class _ManagerCobradoresScreenState
       ),
       body: Column(
         children: [
+          const SizedBox(height: 8),
           // Estadísticas rápidas
-          _buildEstadisticasCard(managerState),
+          // _buildEstadisticasCard(managerState),
 
           // Barra de búsqueda
           _buildBarraBusqueda(),
@@ -136,6 +128,12 @@ class _ManagerCobradoresScreenState
           // Lista de cobradores asignados
           Expanded(child: _buildListaCobradores(managerState)),
         ],
+      ),
+      floatingActionButton: RoleFloatingActionButton(
+        role: 'manager',
+        onPressed: () => _navegarCrearCobrador(),
+        tooltip: 'Crear Cobrador',
+        child: const Icon(Icons.person_add),
       ),
     );
   }
@@ -226,7 +224,14 @@ class _ManagerCobradoresScreenState
 
   Widget _buildListaCobradores(ManagerState managerState) {
     if (managerState.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text('Cargando cobradores...'),
+          SizedBox(height: 16),
+          CircularProgressIndicator(),
+        ],
+      ));
     }
 
     if (managerState.cobradoresAsignados.isEmpty) {
@@ -270,9 +275,10 @@ class _ManagerCobradoresScreenState
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: RoleAvatarWidget(
+        leading: ProfileAvatarWidget(
           role: 'cobrador',
           userName: cobrador.nombre,
+          profileImagePath: cobrador.profileImage,
           radius: 25,
         ),
         title: Text(
@@ -341,6 +347,14 @@ class _ManagerCobradoresScreenState
                   ),
                 ),
                 const PopupMenuItem(
+                  value: 'change_password',
+                  child: ListTile(
+                    leading: Icon(Icons.lock_reset, color: Colors.orange),
+                    title: Text('Cambiar Contraseña'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuItem(
                   value: 'editar',
                   child: ListTile(
                     leading: Icon(Icons.edit, color: Colors.blue),
@@ -395,6 +409,9 @@ class _ManagerCobradoresScreenState
         break;
       case 'remover':
         _confirmarRemoverCobrador(cobrador);
+        break;
+      case 'change_password':
+        _navegarACambiarContrasena(cobrador);
         break;
     }
   }
@@ -476,11 +493,15 @@ class _ManagerCobradoresScreenState
   }
 
   void _navegarAClientesCobrador(Usuario cobrador) {
+    // Navegar a la pantalla de clientes especificando que se van a mostrar
+    // los clientes de un cobrador específico desde el perfil del manager
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            ClientesScreen(userRole: 'manager', cobrador: cobrador),
+        builder: (context) => ClientesScreen(
+          userRole: 'manager',
+          cobrador: cobrador,
+        ),
       ),
     );
   }
@@ -547,6 +568,21 @@ class _ManagerCobradoresScreenState
     showDialog(
       context: context,
       builder: (context) => const AsignacionCobradoresDialog(),
+    );
+  }
+
+  void _navegarACambiarContrasena(Usuario cobrador) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ChangePasswordScreen(
+          targetUser: cobrador,
+          onPasswordChanged: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Contraseña cambiada exitosamente')),
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -661,9 +697,10 @@ class _AsignacionCobradoresDialogState
                               Text(cobrador.telefono),
                           ],
                         ),
-                        secondary: RoleAvatarWidget(
+                        secondary: ProfileAvatarWidget(
                           role: 'cobrador',
                           userName: cobrador.nombre,
+                          profileImagePath: cobrador.profileImage,
                           radius: 20,
                         ),
                       );

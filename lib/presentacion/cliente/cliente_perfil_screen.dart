@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
+import '../../negocio/providers/user_management_provider.dart';
+import '../../ui/widgets/response_viewer_dialog.dart';
+import '../widgets/profile_image_widget.dart';
 import 'cliente_creditos_screen.dart';
-import 'cliente_ubicacion_screen.dart';
+import 'location_picker_screen.dart';
 
 class ClientePerfilScreen extends ConsumerWidget {
   final Usuario cliente;
@@ -19,6 +23,14 @@ class ClientePerfilScreen extends ConsumerWidget {
         title: 'Perfil de ${cliente.nombre}',
         role: 'manager',
         actions: [
+          /*IconButton(
+            icon: const Icon(Icons.category),
+            tooltip: 'Ver categorías',
+            onPressed: () async {
+              final resp = await ref.read(userManagementProvider.notifier).fetchClientCategories();
+              ResponseViewerDialog.show(context, Map<String, dynamic>.from(resp), title: 'Categorías disponibles');
+            },
+          ),*/
           if (cliente.telefono.isNotEmpty)
             ContactActionsWidget.buildContactButton(
               context: context,
@@ -44,24 +56,10 @@ class ClientePerfilScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: RoleColors.clientePrimary,
-                      radius: 40,
-                      backgroundImage: cliente.profileImage.isNotEmpty
-                          ? NetworkImage(cliente.profileImage)
-                          : null,
-                      child: cliente.profileImage.isEmpty
-                          ? Text(
-                              cliente.nombre.isNotEmpty
-                                  ? cliente.nombre[0].toUpperCase()
-                                  : 'C',
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            )
-                          : null,
+                    // Usar widget que resuelve correctamente la URL de imagen de perfil
+                    ProfileImageWidget(
+                      profileImage: cliente.profileImage,
+                      size: 80,
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -73,22 +71,45 @@ class ClientePerfilScreen extends ConsumerWidget {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: RoleColors.clientePrimary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Cliente',
-                        style: TextStyle(
-                          color: RoleColors.clientePrimary,
-                          fontWeight: FontWeight.w500,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: RoleColors.clientePrimary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'Cliente',
+                            style: TextStyle(
+                              color: RoleColors.clientePrimary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${cliente.clientCategory ?? 'B'} - ${cliente.clientCategoryName}',
+                            style: const TextStyle(
+                              color: Colors.purple,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -122,6 +143,7 @@ class ClientePerfilScreen extends ConsumerWidget {
                     _buildInfoRow('Nombre', cliente.nombre),
                     _buildInfoRow('Email', cliente.email),
                     _buildInfoRow('Roles', cliente.roles.join(', ')),
+                    _buildInfoRow('Categoría', cliente.clientCategoryName),
                     if (cliente.telefono.isNotEmpty)
                       _buildInfoRow('Teléfono', cliente.telefono),
                     if (cliente.direccion.isNotEmpty)
@@ -177,6 +199,22 @@ class ClientePerfilScreen extends ConsumerWidget {
                       Colors.orange,
                       () => _contactClient(context),
                     ),
+                    const SizedBox(height: 8),
+                    _buildActionTile(
+                      'Cambiar Categoría',
+                      'Actualizar categoría del cliente (A/B/C)',
+                      Icons.category,
+                      Colors.purple,
+                      () => _changeCategory(context, ref),
+                    ),
+                    const SizedBox(height: 8),
+                    /*_buildActionTile(
+                      'Ver Estadísticas de Categorías',
+                      'Mostrar conteos por categoría del sistema',
+                      Icons.bar_chart,
+                      Colors.teal,
+                      () => _showCategoryStats(context, ref),
+                    ),*/
                   ],
                 ),
               ),
@@ -266,6 +304,58 @@ class ClientePerfilScreen extends ConsumerWidget {
     );
   }
 
+  void _changeCategory(BuildContext context, WidgetRef ref) async {
+    final current = (cliente.clientCategory ?? 'B').toUpperCase();
+    String selected = current;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cambiar categoría'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              value: 'A',
+              groupValue: selected,
+              title: const Text('A - Cliente VIP'),
+              onChanged: (v) => {selected = v!, Navigator.of(context).pop()},
+            ),
+            RadioListTile<String>(
+              value: 'B',
+              groupValue: selected,
+              title: const Text('B - Cliente Normal'),
+              onChanged: (v) => {selected = v!, Navigator.of(context).pop()},
+            ),
+            RadioListTile<String>(
+              value: 'C',
+              groupValue: selected,
+              title: const Text('C - Mal Cliente'),
+              onChanged: (v) => {selected = v!, Navigator.of(context).pop()},
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+        ],
+      ),
+    );
+
+    if (selected != current) {
+      final resp = await ref.read(userManagementProvider.notifier).updateClientCategoryApi(
+            clientId: cliente.id,
+            category: selected,
+          );
+      // Mostrar respuesta del endpoint
+      ResponseViewerDialog.show(context, Map<String, dynamic>.from(resp), title: 'Respuesta: actualizar categoría');
+    }
+  }
+
+  Future<void> _showCategoryStats(BuildContext context, WidgetRef ref) async {
+    final resp = await ref.read(userManagementProvider.notifier).fetchCategoryStatistics();
+  ResponseViewerDialog.show(context, Map<String, dynamic>.from(resp), title: 'Estadísticas de categorías');
+  }
+
   void _navigateToCredits(BuildContext context) {
     Navigator.push(
       context,
@@ -277,10 +367,25 @@ class ClientePerfilScreen extends ConsumerWidget {
 
   void _showOnMap(BuildContext context) {
     if (cliente.latitud != null && cliente.longitud != null) {
+      // Crear marcador para la ubicación del cliente
+      final clienteMarker = Marker(
+        markerId: MarkerId('cliente_${cliente.id}'),
+        position: LatLng(cliente.latitud!, cliente.longitud!),
+        infoWindow: InfoWindow(
+          title: cliente.nombre,
+          snippet: 'Cliente ${cliente.clientCategory ?? 'B'} - ${cliente.telefono}',
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      );
+
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ClienteUbicacionScreen(cliente: cliente),
+          builder: (context) => LocationPickerScreen(
+            allowSelection: false, // Modo solo visualización
+            extraMarkers: {clienteMarker},
+            customTitle: 'Ubicación de ${cliente.nombre}',
+          ),
         ),
       );
     } else {

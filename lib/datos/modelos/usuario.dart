@@ -13,6 +13,7 @@ class Usuario {
   final DateTime fechaCreacion;
   final DateTime fechaActualizacion;
   final List<String> roles;
+  final String? clientCategory; // 'A', 'B', or 'C'
 
   Usuario({
     required this.id,
@@ -29,6 +30,7 @@ class Usuario {
     required this.fechaCreacion,
     required this.fechaActualizacion,
     required this.roles,
+    this.clientCategory,
   });
 
   factory Usuario.fromJson(Map<String, dynamic> json) {
@@ -96,21 +98,35 @@ class Usuario {
         fechaActualizacion = DateTime.now();
       }
 
+      // Parsear coordenadas con debug
+      double? latitud = _parseDouble(json['latitude']) ??
+                       _parseDouble(json['latitud']) ??
+                       json['location']?['coordinates']?[1]?.toDouble();
+
+      double? longitud = _parseDouble(json['longitude']) ??
+                        _parseDouble(json['longitud']) ??
+                        json['location']?['coordinates']?[0]?.toDouble();
+
+      // Debug de coordenadas
+      print('🗺️ DEBUG coordenadas - Usuario: ${json['name']} | Lat: $latitud | Lng: $longitud');
+      print('🗺️ JSON original - latitude: ${json['latitude']} | longitude: ${json['longitude']}');
+
       return Usuario(
         id: id,
         assignedCobradorId: assignedCobradorId,
         assignedManagerId: assignedManagerId,
         nombre: json['name']?.toString() ?? '',
-        profileImage: json['profile_image']?.toString() ?? '',
+        profileImage: (json['profile_image_url']?.toString() ?? json['profile_image']?.toString() ?? ''),
         email: json['email']?.toString() ?? '',
         telefono: json['phone']?.toString() ?? '',
         direccion: json['address']?.toString() ?? '',
         ci: json['ci']?.toString() ?? '',
-        latitud: json['location']?['coordinates']?[1]?.toDouble(),
-        longitud: json['location']?['coordinates']?[0]?.toDouble(),
+        latitud: latitud,
+        longitud: longitud,
         fechaCreacion: fechaCreacion,
         fechaActualizacion: fechaActualizacion,
         roles: roles,
+        clientCategory: json['client_category']?.toString(),
       );
     } catch (e) {
       print('❌ ERROR parsing Usuario.fromJson: $e');
@@ -129,6 +145,7 @@ class Usuario {
         fechaCreacion: DateTime.now(),
         fechaActualizacion: DateTime.now(),
         roles: ['client'],
+        clientCategory: 'B',
       );
     }
   }
@@ -144,6 +161,7 @@ class Usuario {
       'phone': telefono,
       'address': direccion,
       'ci': ci,
+      'client_category': clientCategory,
       'location': latitud != null && longitud != null
           ? {
               'type': 'Point',
@@ -169,6 +187,7 @@ class Usuario {
       'phone': telefono,
       'address': direccion,
       'ci': ci,
+      'client_category': clientCategory,
       'location': latitud != null && longitud != null
           ? {
               'type': 'Point',
@@ -210,6 +229,7 @@ class Usuario {
     DateTime? fechaCreacion,
     DateTime? fechaActualizacion,
     List<String>? roles,
+    String? clientCategory,
   }) {
     return Usuario(
       id: id ?? this.id,
@@ -226,6 +246,7 @@ class Usuario {
       fechaCreacion: fechaCreacion ?? this.fechaCreacion,
       fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
       roles: roles ?? this.roles,
+      clientCategory: clientCategory ?? this.clientCategory,
     );
   }
 
@@ -237,8 +258,41 @@ class Usuario {
   @override
   int get hashCode => id.hashCode;
 
+  String get clientCategoryName {
+    switch ((clientCategory ?? 'B').toUpperCase()) {
+      case 'A':
+        return 'Cliente VIP';
+      case 'C':
+        return 'Mal Cliente';
+      default:
+        return 'Cliente Normal';
+    }
+  }
+
+  bool get isVipClient => (clientCategory ?? 'B').toUpperCase() == 'A';
+  bool get isNormalClient => (clientCategory ?? 'B').toUpperCase() == 'B';
+  bool get isBadClient => (clientCategory ?? 'B').toUpperCase() == 'C';
+
   @override
   String toString() {
-    return 'Usuario{id: $id, nombre: $nombre, email: $email, ci: $ci, roles: $roles}';
+    return 'Usuario{id: $id, nombre: $nombre, email: $email, ci: $ci, roles: $roles, clientCategory: $clientCategory}';
+  }
+
+  // Función auxiliar para parsear doubles de forma segura
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) {
+      try {
+        return double.parse(value);
+      } catch (e) {
+        print('⚠️ Warning: No se pudo parsear "$value" como double: $e');
+        return null;
+      }
+    }
+
+    return null;
   }
 }
