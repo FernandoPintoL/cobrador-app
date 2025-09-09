@@ -1,3 +1,7 @@
+# ⚠️ DEPRECADO: Configuración Socket.IO (no usada)
+
+Esta guía corresponde a la antigua configuración con Socket.IO. La app actual usa Laravel Reverb (Pusher). No seguir esta guía para nuevas instalaciones.
+
 # 🚀 Resumen de Configuración para Producción WebSocket
 
 ## ✅ Cambios Realizados

@@ -87,6 +87,13 @@ abstract class BaseApiService {
     _token = null;
     debugPrint('🧹 Limpiando almacenamiento local...');
     await _storageService.clearSession();
+    // Marcar que se requiere re-autenticación (pedir contraseña nuevamente)
+    try {
+      await _storageService.setRequiresReauth(true);
+      debugPrint('🔐 requiresReauth=true establecido tras 401');
+    } catch (e) {
+      debugPrint('⚠️ No se pudo establecer requiresReauth: $e');
+    }
     debugPrint('✅ Limpieza local completada');
   }
 

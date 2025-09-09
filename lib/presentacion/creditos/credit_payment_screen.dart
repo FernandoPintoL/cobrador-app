@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/pago_provider.dart';
+import '../../negocio/utils/schedule_utils.dart';
 import '../../ui/widgets/validation_error_display.dart';
 import '../../ui/widgets/loading_overlay.dart';
 
@@ -52,36 +53,19 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
     return suggested.isFinite && suggested > 0 ? suggested : rawInstallment;
   }
 
+  // Fecha de referencia centralizada en ScheduleUtils.referenceDate()
+  DateTime _referenceDate() => ScheduleUtils.referenceDate();
+
   int? _findCurrentInstallmentNumber() {
     final schedule = _paymentSchedule;
     if (schedule == null || schedule.isEmpty) return null;
-
-    DateTime normalize(DateTime d) => DateTime(d.year, d.month, d.day);
-    final today = normalize(DateTime.now());
-
-    final unpaid = schedule.where((ins) => !_isInstallmentPaid(ins)).toList();
-    if (unpaid.isEmpty) return null;
-
-    // Excluir vencidos para "actual"
-    final notOverdue = unpaid.where((ins) => !ins.isOverdue).toList();
-    if (notOverdue.isEmpty) return null;
-
-    // Preferir cuotas que vencen hoy
-    final dueToday = notOverdue
-        .where((ins) => normalize(ins.dueDate) == today)
-        .toList();
-    if (dueToday.isNotEmpty) {
-      dueToday.sort((a, b) => a.installmentNumber.compareTo(b.installmentNumber));
-      return dueToday.first.installmentNumber;
-    }
-
-    // Si no hay para hoy, tomar la próxima futura más cercana por fecha
-    notOverdue.sort((a, b) {
-      final cmp = a.dueDate.compareTo(b.dueDate);
-      if (cmp != 0) return cmp;
-      return a.installmentNumber.compareTo(b.installmentNumber);
-    });
-    return notOverdue.first.installmentNumber;
+    return ScheduleUtils.findCurrentInstallmentNumber<PaymentSchedule>(
+      schedule,
+      getDueDate: (x) => x.dueDate,
+      getInstallmentNumber: (x) => x.installmentNumber,
+      isPaid: (x) => _isInstallmentPaid(x),
+      refDate: _referenceDate(),
+    );
   }
 
   @override
@@ -183,24 +167,33 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
     });
 
     if (result != null) {
-      // Recargar cronograma después del pago exitoso
-      await _loadPaymentSchedule();
-      // Mostrar resultado del pago
+      // Pago exitoso: regresar a la pantalla anterior y solicitar actualización
       if (mounted) {
-        _showPaymentResult(result);
+        Navigator.pop(context, true);
+        return;
       }
-      // Limpiar formulario
-      _amountController.clear();
-      _notesController.clear();
-      setState(() {
-        _paymentSimulation = null;
-      });
     }
   }
 
-  void _showPaymentResult(Map<String, dynamic> result) {
-    final analysis = result['payment_analysis'];
-    final message = analysis['message'] ?? 'Pago procesado exitosamente';
+  void _showPaymentResult(Map<String, dynamic>? result) {
+    final dynamic analysisDyn = (result ?? const {})['payment_analysis'];
+    final Map<String, dynamic>? analysis =
+        analysisDyn is Map<String, dynamic> ? analysisDyn : null;
+
+    final String message = (analysis != null && analysis['message'] is String)
+        ? (analysis!['message'] as String)
+        : 'Pago procesado exitosamente';
+
+    final String? type = analysis != null && analysis['type'] is String
+        ? analysis!['type'] as String
+        : null;
+    final int? installmentsCovered =
+        analysis != null && analysis['installments_covered'] is int
+            ? analysis!['installments_covered'] as int?
+            : null;
+    final double? excessAmount = analysis != null && analysis['excess_amount'] is num
+        ? (analysis!['excess_amount'] as num).toDouble()
+        : null;
 
     showDialog(
       context: context,
@@ -212,10 +205,10 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
           children: [
             Text(message),
             const SizedBox(height: 8),
-            if (analysis['type'] == 'multiple_installments')
-              Text('Cuotas cubiertas: ${analysis['installments_covered']}'),
-            if (analysis['excess_amount'] != null)
-              Text('Exceso: Bs. ${analysis['excess_amount']}'),
+            if (type == 'multiple_installments' && installmentsCovered != null)
+              Text('Cuotas cubiertas: $installmentsCovered'),
+            if (excessAmount != null)
+              Text('Exceso: Bs. ${excessAmount.toStringAsFixed(2)}'),
           ],
         ),
         actions: [
@@ -251,8 +244,6 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
           'Procesar Pagos',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
       ),
       body: Stack(
         children: [
@@ -299,6 +290,7 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
 
     final c = _effectiveCredit;
     print("🪙 credit: "+c.toJson().toString());
+    final String? id = c.id != null ? '#${c.id}' : null;
     // Usar valores seguros calculando total con interés si es necesario
     final totalAmountSafe = c.totalAmount ??
         (c.interestRate != null ? c.amount * (1 + (c.interestRate! / 100)) : c.amount);
@@ -310,11 +302,23 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Información del Crédito',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Información del Crédito',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  id != null ? ' $id' : '',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontStyle: FontStyle.italic,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
 
@@ -443,13 +447,27 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
 
     return Column(
       children: [
+        // Fecha actual de referencia
+        Builder(builder: (context) {
+          final refDate = _referenceDate();
+          final isSunday = DateTime.now().weekday == DateTime.sunday;
+          final label = 'Fecha de referencia: ' + DateFormat('dd/MM/yyyy').format(refDate);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(label, style: const TextStyle(fontSize: 12)),
+            ),
+          );
+        }),
+
         // Leyenda
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildLegendItem(Colors.green, 'Pagado'),
             _buildLegendItem(Colors.grey.shade300, 'Pendiente'),
-            _buildLegendItem(Colors.lightBlueAccent, 'Actual'),
+            _buildLegendItem(Colors.lightBlueAccent, 'Actual (día de referencia)'),
             _buildLegendItem(Colors.red, 'Vencido'),
           ],
         ),
@@ -519,17 +537,24 @@ class _CreditPaymentScreenState extends ConsumerState<CreditPaymentScreen> {
     Color textColor = Colors.white;
 
     final consideredPaid = _isInstallmentPaid(installment);
-    final isCurrent = !consideredPaid && !installment.isOverdue &&
+
+    // Determinar estados usando utilidades centralizadas
+    final refDate = _referenceDate();
+    final due = ScheduleUtils.normalize(installment.dueDate);
+
+    final isCurrent = !consideredPaid && (due == refDate) &&
         _currentInstallmentNumber != null &&
         installment.installmentNumber == _currentInstallmentNumber;
 
+    final isOverdueLocal = !consideredPaid && (due.isBefore(refDate));
+
     if (consideredPaid) {
       backgroundColor = Colors.green;
-    } else if (installment.isOverdue) {
-      backgroundColor = Colors.red;
     } else if (isCurrent) {
       backgroundColor = Colors.lightBlueAccent;
       textColor = Colors.black;
+    } else if (isOverdueLocal) {
+      backgroundColor = Colors.red;
     } else {
       backgroundColor = Colors.grey.shade300;
       textColor = Colors.black87;

@@ -190,6 +190,18 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
             actionText = 'aprobado';
             title = '✅ Crédito Aprobado';
             message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+            // Mostrar si es de entrega inmediata
+            try {
+              final immediate = (data['entrega_inmediata'] == true) ||
+                  (data['credit'] is Map && data['credit']['entrega_inmediata'] == true) ||
+                  (data['credit'] is Map && data['credit']['immediate_delivery'] == true) ||
+                  (data['credit'] is Map && data['credit']['immediateDelivery'] == true);
+              if (immediate == true) {
+                message = '$message • Entrega inmediata: Sí';
+              } else if (data.containsKey('entrega_inmediata') || (data['credit'] is Map && (data['credit'] as Map).containsKey('entrega_inmediata'))) {
+                message = '$message • Entrega inmediata: No';
+              }
+            } catch (_) {}
             break;
           case 'delivered':
             actionText = 'entregado';
@@ -427,6 +439,25 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
     );
   }
 
+  /// Notificar cambios de ciclo de vida de un crédito (created/approved/rejected/delivered)
+  void notifyCreditLifecycle({
+    required String action,
+    required int creditId,
+    String? targetUserId,
+    Map<String, dynamic>? credit,
+    String? userType,
+    String? message,
+  }) {
+    _wsService.sendCreditLifecycle(
+      action: action,
+      creditId: creditId.toString(),
+      targetUserId: targetUserId,
+      credit: credit,
+      userType: userType,
+      message: message,
+    );
+  }
+
   /// Notificar pago realizado (compatibilidad)
   void notifyPaymentMade(Map<String, dynamic> paymentData) {
     final paymentId = (paymentData['paymentId'] ?? paymentData['id'])?.toString();
@@ -454,6 +485,10 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
       notes: notes,
       additionalData: paymentData,
     );
+    // Además, actualizar localmente para que la UI reaccione aunque el backend no emita evento
+    try {
+      state = state.copyWith(lastPaymentUpdate: paymentData);
+    } catch (_) {}
   }
 
   /// Desconectar

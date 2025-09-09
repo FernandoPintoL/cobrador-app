@@ -1,3 +1,7 @@
+# ⚠️ DEPRECADO: Documentación Socket.IO (no usada)
+
+Esta documentación corresponde a una implementación antigua basada en Socket.IO. La app actual usa Laravel Reverb (protocolo Pusher) con pusher_channels_flutter/laravel_echo. No seguir esta guía.
+
 # 🎉 Implementación WebSocket Completa - Resumen Final
 
 ## 📋 Estado Completado al 100%

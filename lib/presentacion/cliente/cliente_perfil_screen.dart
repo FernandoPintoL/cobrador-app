@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
@@ -10,6 +11,8 @@ import '../../ui/widgets/response_viewer_dialog.dart';
 import '../widgets/profile_image_widget.dart';
 import 'cliente_creditos_screen.dart';
 import 'location_picker_screen.dart';
+import '../../datos/servicios/base_api_service.dart';
+import '../../datos/servicios/user_api_service.dart';
 
 class ClientePerfilScreen extends ConsumerWidget {
   final Usuario cliente;
@@ -152,6 +155,11 @@ class ClientePerfilScreen extends ConsumerWidget {
                 ),
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            // Fotos de CI registradas
+            _ClientIdPhotosSection(cliente: cliente),
 
             const SizedBox(height: 16),
 
@@ -418,5 +426,217 @@ class ClientePerfilScreen extends ConsumerWidget {
         ),
       );
     }
+  }
+}
+
+class _ClientIdPhotosSection extends StatelessWidget {
+  final Usuario cliente;
+  const _ClientIdPhotosSection({required this.cliente});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: UserApiService().listUserPhotos(cliente.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: const [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 12),
+                  Text('Cargando fotos de CI...'),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'No se pudieron cargar las fotos de CI: ${snapshot.error}',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final photos = (snapshot.data ?? []);
+        // Filtrar fotos relacionadas al CI (id card)
+        List<Map<String, dynamic>> ciPhotos = photos.where((p) {
+          final type = (p['type'] ?? p['category'] ?? p['tag'] ?? '').toString().toLowerCase();
+          return type.contains('id') || type.contains('ci') || type.contains('carnet');
+        }).map((e) => Map<String, dynamic>.from(e)).toList();
+
+        // Si la API no envía tipos y hay fotos, mostrarlas todas como respaldo
+        if (ciPhotos.isEmpty && photos.isNotEmpty) {
+          ciPhotos = photos.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+
+        if (ciPhotos.isEmpty) {
+          // Si no hay fotos de CI ni fotos en general, no mostrar nada
+          return const SizedBox.shrink();
+        }
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.badge, color: Colors.teal),
+                    SizedBox(width: 8),
+                    Text(
+                      'Fotos de CI',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 1.3,
+                  ),
+                  itemCount: ciPhotos.length,
+                  itemBuilder: (context, index) {
+                    final item = ciPhotos[index];
+                    final url = _resolvePhotoUrl(item);
+                    final label = (item['type'] ?? '').toString().toLowerCase();
+                    final pretty = label.contains('front') || label.contains('anverso')
+                        ? 'Anverso'
+                        : (label.contains('back') || label.contains('reverso'))
+                            ? 'Reverso'
+                            : 'Documento';
+
+                    return _IdPhotoTile(url: url, label: pretty);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _resolvePhotoUrl(Map<String, dynamic> item) {
+    final dynamic directUrl = item['url'] ?? item['image_url'];
+    if (directUrl is String && directUrl.startsWith('http')) {
+      return directUrl;
+    }
+    final String? path = (item['path'] ?? item['file_path'] ?? item['image'])?.toString();
+    if (path == null || path.isEmpty) return UserApiService().getProfileImageUrl('');
+
+    // Construir URL similar a getProfileImageUrl
+    final serverUrl = BaseApiService.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+    if (path.startsWith('http')) return path;
+    if (path.startsWith('/')) {
+      // Si ya empieza con '/', asumir que es ruta absoluta del servidor
+      return '$serverUrl$path';
+    }
+    // Asegurar prefijo storage
+    final full = path.startsWith('storage/') ? path : 'storage/$path';
+    return '$serverUrl/$full';
+  }
+}
+
+class _IdPhotoTile extends StatelessWidget {
+  final String url;
+  final String label;
+  const _IdPhotoTile({required this.url, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => _openViewer(context, url, label),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CachedNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.cover,
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                color: Colors.black54,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.zoom_in, size: 14, color: Colors.white70),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openViewer(BuildContext context, String url, String label) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4,
+              child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

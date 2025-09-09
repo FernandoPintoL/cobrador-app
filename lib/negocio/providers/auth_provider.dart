@@ -54,6 +54,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true);
 
     try {
+      // Si se requiere re-autenticación (por logout parcial), no restaurar sesión
+      final requiresReauth = await _storageService.getRequiresReauth();
+      if (requiresReauth) {
+        debugPrint('🔐 requiresReauth=true: mostrando Login (solo contraseña si hay identificador)');
+        state = state.copyWith(isLoading: false, isInitialized: true, usuario: null);
+        return;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error verificando requiresReauth: $e');
+    }
+
+    try {
       final hasSession = await _storageService.hasValidSession();
       debugPrint('🔍 DEBUG: hasValidSession = $hasSession');
 
@@ -127,6 +139,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Guardar fecha de último login
       await _storageService.setLastLogin(DateTime.now());
 
+      // Guardar identificador para login rápido (para mostrar solo contraseña luego)
+      await _storageService.setSavedIdentifier(emailOrPhone);
+
       // Obtener usuario desde la respuesta o desde almacenamiento local
       Usuario? usuario;
       if (response['user'] != null) {
@@ -149,6 +164,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         // Conectar WebSocket después del login exitoso
         _connectWebSocketIfAvailable();
+
+        // Limpiar flag de re-autenticación tras login exitoso
+        await _storageService.clearRequiresReauth();
       } else {
         throw Exception('No se pudo obtener información del usuario');
       }
@@ -193,6 +211,65 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Resetear estado completamente
       state = const AuthState(isInitialized: true);
       debugPrint('✅ Logout completado - Estado reseteado');
+    }
+  }
+
+  /// Cierre de sesión parcial: se elimina solo el usuario local, conservando token
+  /// y el identificador guardado para que el login pida solo contraseña.
+  Future<void> partialLogout() async {
+    debugPrint('🚪 Cerrando sesión parcialmente (LOGOUT INMEDIATO)...');
+    try {
+      // Desconectar WebSocket inmediatamente
+      _disconnectWebSocket();
+
+      // Limpiar completamente la sesión actual pero preservar identificador
+      String? savedIdentifier = await _storageService.getSavedIdentifier();
+      debugPrint('📧 Identificador a preservar: $savedIdentifier');
+
+      // Limpiar TODO (incluyendo token) para forzar re-autenticación completa
+      await _storageService.clearSession();
+
+      // Restaurar solo el identificador si existía
+      if (savedIdentifier != null && savedIdentifier.isNotEmpty) {
+        await _storageService.setSavedIdentifier(savedIdentifier);
+        debugPrint('✅ Identificador restaurado: $savedIdentifier');
+      }
+
+      // Marcar que se requiere re-autenticación completa
+      await _storageService.setRequiresReauth(true);
+
+      // Limpiar estado completamente
+      state = const AuthState(isInitialized: true, usuario: null);
+
+      debugPrint('✅ LOGOUT PARCIAL COMPLETADO - Session cerrada completamente');
+      debugPrint('🔐 Usuario debe re-autenticarse completamente');
+    } catch (e) {
+      debugPrint('❌ Error en logout parcial: $e');
+      // En caso de error, forzar limpieza completa
+      await _storageService.clearSession();
+      state = const AuthState(isInitialized: true, usuario: null);
+    }
+  }
+
+  /// Cierre de sesión completo para cambiar de cuenta. Limpia todo e incluye
+  /// el identificador guardado para forzar ingresar email/teléfono nuevamente.
+  Future<void> logoutFull() async {
+    debugPrint('🚪 Iniciando logout FULL (cambio de cuenta)...');
+    state = state.copyWith(isLoading: true);
+    try {
+      _disconnectWebSocket();
+      debugPrint('📡 Llamando al endpoint de logout (full)...');
+      await _apiService.logout();
+    } catch (e) {
+      debugPrint('⚠️ Error al hacer logout full en el servidor: $e');
+    } finally {
+      debugPrint('🧹 Limpiando sesión local (full)...');
+      await _storageService.clearSession();
+      await _storageService.clearSavedIdentifier();
+      // Asegurar que no quede el flag de re-autenticación de un logout parcial previo
+      await _storageService.clearRequiresReauth();
+      state = const AuthState(isInitialized: true);
+      debugPrint('✅ Logout FULL completado - Estado reseteado');
     }
   }
 
@@ -267,8 +344,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Verificar que al menos uno de los roles principales está presente
       final hasValidRole =
           state.usuario!.tieneRol('admin') ||
-          state.usuario!.tieneRol('manager') ||
-          state.usuario!.tieneRol('cobrador');
+              state.usuario!.tieneRol('manager') ||
+              state.usuario!.tieneRol('cobrador');
 
       if (!hasValidRole) {
         debugPrint('❌ Usuario sin roles válidos, limpiando sesión');
@@ -297,9 +374,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
 
         wsNotifier.connectWithUser(
-          userId: user.id.toString(),
-          userType: userType,
-          userName: user.nombre ?? 'Usuario'
+            userId: user.id.toString(),
+            userType: userType,
+            userName: user.nombre ?? 'Usuario'
         );
         debugPrint('🔌 Iniciando conexión WebSocket para $userType: ${user.nombre}');
       } catch (e) {

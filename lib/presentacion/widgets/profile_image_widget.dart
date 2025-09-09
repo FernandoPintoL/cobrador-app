@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../negocio/servicios/allowed_apps_helper.dart';
 import 'dart:io';
 import '../../datos/servicios/api_service.dart';
 
@@ -227,8 +228,7 @@ class _ImagePickerBottomSheet extends StatelessWidget {
     Navigator.pop(context);
 
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
+      final XFile? image = await AllowedAppsHelper.openCameraSecurely(
         source: source,
         maxWidth: 1024,
         maxHeight: 1024,

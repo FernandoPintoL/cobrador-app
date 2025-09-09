@@ -19,24 +19,42 @@ class CreditApiService extends BaseApiService {
     int? cobradorId,
     String? status,
     String? search,
+    String? frequency, // CSV: daily,weekly,biweekly,monthly
+    String? startDateFrom,
+    String? startDateTo,
+    String? endDateFrom,
+    String? endDateTo,
+    double? amountMin,
+    double? amountMax,
+    double? totalAmountMin,
+    double? totalAmountMax,
+    double? balanceMin,
+    double? balanceMax,
     int page = 1,
-    int perPage = 50,
+    int perPage = 15,
   }) async {
     try {
-      print('📋 Obteniendo créditos...');
-
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
       if (clientId != null) queryParams['client_id'] = clientId;
       if (cobradorId != null) queryParams['cobrador_id'] = cobradorId;
       if (status != null && status.isNotEmpty) queryParams['status'] = status;
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
+      if (frequency != null && frequency.isNotEmpty) queryParams['frequency'] = frequency;
+      if (startDateFrom != null && startDateFrom.isNotEmpty) queryParams['start_date_from'] = startDateFrom;
+      if (startDateTo != null && startDateTo.isNotEmpty) queryParams['start_date_to'] = startDateTo;
+      if (endDateFrom != null && endDateFrom.isNotEmpty) queryParams['end_date_from'] = endDateFrom;
+      if (endDateTo != null && endDateTo.isNotEmpty) queryParams['end_date_to'] = endDateTo;
+      if (amountMin != null) queryParams['amount_min'] = amountMin;
+      if (amountMax != null) queryParams['amount_max'] = amountMax;
+      if (totalAmountMin != null) queryParams['total_amount_min'] = totalAmountMin;
+      if (totalAmountMax != null) queryParams['total_amount_max'] = totalAmountMax;
+      if (balanceMin != null) queryParams['balance_min'] = balanceMin;
+      if (balanceMax != null) queryParams['balance_max'] = balanceMax;
 
       final response = await get('/credits', queryParameters: queryParams);
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos obtenidos exitosamente');
         return data;
       } else {
         throw Exception('Error al obtener créditos: ${response.statusCode}');
@@ -50,14 +68,9 @@ class CreditApiService extends BaseApiService {
   /// Crea un nuevo crédito
   Future<Map<String, dynamic>> createCredit(Map<String, dynamic> creditData) async {
     try {
-      print('➕ Creando nuevo crédito...');
-      print('📋 Datos a enviar: $creditData');
-
       final response = await post('/credits', data: creditData);
-
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Crédito creado exitosamente');
         return data;
       } else {
         throw ApiException(
@@ -80,7 +93,6 @@ class CreditApiService extends BaseApiService {
       } else if (e.message != null) {
         message = e.message!;
       }
-
       print('❌ Error al crear crédito (ApiException): $message');
       throw ApiException(
         message: message,
@@ -97,13 +109,9 @@ class CreditApiService extends BaseApiService {
   /// Obtiene un crédito específico
   Future<Map<String, dynamic>> getCredit(int creditId) async {
     try {
-      print('🔍 Obteniendo crédito: $creditId');
-
       final response = await get('/credits/$creditId');
-
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Crédito obtenido exitosamente');
         return data;
       } else {
         throw Exception('Error al obtener crédito: ${response.statusCode}');
@@ -120,14 +128,9 @@ class CreditApiService extends BaseApiService {
     Map<String, dynamic> creditData,
   ) async {
     try {
-      print('✏️ Actualizando crédito: $creditId');
-      print('📋 Datos a actualizar: $creditData');
-
       final response = await put('/credits/$creditId', data: creditData);
-
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Crédito actualizado exitosamente');
         return data;
       } else {
         throw Exception('Error al actualizar crédito: ${response.statusCode}');
@@ -141,13 +144,9 @@ class CreditApiService extends BaseApiService {
   /// Elimina un crédito
   Future<Map<String, dynamic>> deleteCredit(int creditId) async {
     try {
-      print('🗑️ Eliminando crédito: $creditId');
-
       final response = await delete('/credits/$creditId');
-
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Crédito eliminado exitosamente');
         return data;
       } else {
         throw Exception('Error al eliminar crédito: ${response.statusCode}');
@@ -162,17 +161,30 @@ class CreditApiService extends BaseApiService {
   Future<Map<String, dynamic>> getClientCredits(
     int clientId, {
     String? status,
-    String? search,
+    String? frequency, // CSV
+    String? startDateFrom,
+    String? startDateTo,
+    String? endDateFrom,
+    String? endDateTo,
+    double? amountMin,
+    double? amountMax,
+    double? balanceMin,
+    double? balanceMax,
     int page = 1,
     int perPage = 50,
   }) async {
     try {
-      print('📋 Obteniendo créditos del cliente: $clientId');
-
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
       if (status != null && status.isNotEmpty) queryParams['status'] = status;
-      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+      if (frequency != null && frequency.isNotEmpty) queryParams['frequency'] = frequency;
+      if (startDateFrom != null && startDateFrom.isNotEmpty) queryParams['start_date_from'] = startDateFrom;
+      if (startDateTo != null && startDateTo.isNotEmpty) queryParams['start_date_to'] = startDateTo;
+      if (endDateFrom != null && endDateFrom.isNotEmpty) queryParams['end_date_from'] = endDateFrom;
+      if (endDateTo != null && endDateTo.isNotEmpty) queryParams['end_date_to'] = endDateTo;
+      if (amountMin != null) queryParams['amount_min'] = amountMin;
+      if (amountMax != null) queryParams['amount_max'] = amountMax;
+      if (balanceMin != null) queryParams['balance_min'] = balanceMin;
+      if (balanceMax != null) queryParams['balance_max'] = balanceMax;
 
       final response = await get(
         '/credits/client/$clientId',
@@ -181,7 +193,6 @@ class CreditApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos del cliente obtenidos exitosamente');
         return data;
       } else {
         throw Exception(
@@ -199,17 +210,30 @@ class CreditApiService extends BaseApiService {
     int cobradorId, {
     String? status,
     String? search,
+    String? frequency, // CSV
+    String? startDateFrom,
+    String? startDateTo,
+    String? endDateFrom,
+    String? endDateTo,
+    double? amountMin,
+    double? amountMax,
+    double? balanceMin,
+    double? balanceMax,
     int page = 1,
-    int perPage = 50,
-  }) async {
+    int perPage = 15}) async {
     try {
-      print('📋 Obteniendo créditos del cobrador: $cobradorId');
-
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
       if (status != null && status.isNotEmpty) queryParams['status'] = status;
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
-
+      if (frequency != null && frequency.isNotEmpty) queryParams['frequency'] = frequency;
+      if (startDateFrom != null && startDateFrom.isNotEmpty) queryParams['start_date_from'] = startDateFrom;
+      if (startDateTo != null && startDateTo.isNotEmpty) queryParams['start_date_to'] = startDateTo;
+      if (endDateFrom != null && endDateFrom.isNotEmpty) queryParams['end_date_from'] = endDateFrom;
+      if (endDateTo != null && endDateTo.isNotEmpty) queryParams['end_date_to'] = endDateTo;
+      if (amountMin != null) queryParams['amount_min'] = amountMin;
+      if (amountMax != null) queryParams['amount_max'] = amountMax;
+      if (balanceMin != null) queryParams['balance_min'] = balanceMin;
+      if (balanceMax != null) queryParams['balance_max'] = balanceMax;
       final response = await get(
         '/credits/cobrador/$cobradorId',
         queryParameters: queryParams,
@@ -217,7 +241,6 @@ class CreditApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos del cobrador obtenidos exitosamente');
         return data;
       } else {
         throw Exception(
@@ -233,13 +256,9 @@ class CreditApiService extends BaseApiService {
   /// Obtiene estadísticas de créditos de un cobrador
   Future<Map<String, dynamic>> getCobradorStats(int cobradorId) async {
     try {
-      print('📊 Obteniendo estadísticas del cobrador: $cobradorId');
-
       final response = await get('/credits/cobrador/$cobradorId/stats');
-
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Estadísticas del cobrador obtenidas exitosamente');
         return data;
       } else {
         throw Exception(
@@ -258,22 +277,17 @@ class CreditApiService extends BaseApiService {
     int perPage = 50,
   }) async {
     try {
-      print('⚠️ Obteniendo créditos que requieren atención...');
-
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
       final response = await get(
         '/credits-requiring-attention',
         queryParameters: queryParams,
       );
-
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos que requieren atención obtenidos exitosamente');
         return data;
       } else {
         throw Exception(
-          'Error al obtener créditos que requieren atención: ${response.statusCode}',
+          '❌ Error al obtener créditos que requieren atención: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -285,17 +299,13 @@ class CreditApiService extends BaseApiService {
   /// Obtiene el cronograma de pagos de un crédito
   Future<Map<String, dynamic>> getCreditPaymentSchedule(int creditId) async {
     try {
-      print('📅 Obteniendo cronograma de pagos para crédito: $creditId');
-
       final response = await get('/credits/$creditId/payment-schedule');
-
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Cronograma de pagos obtenido exitosamente');
         return data;
       } else {
         throw Exception(
-          'Error al obtener cronograma de pagos: ${response.statusCode}',
+          '❌ Error al obtener cronograma de pagos: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -307,17 +317,13 @@ class CreditApiService extends BaseApiService {
   /// Obtiene detalles extendidos de un crédito
   Future<Map<String, dynamic>> getCreditDetails(int creditId) async {
     try {
-      print('🔍 Obteniendo detalles del crédito: $creditId');
-
       final response = await get('/credits/$creditId/details');
-
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Detalles del crédito obtenidos exitosamente');
         return data;
       } else {
         throw Exception(
-          'Error al obtener detalles del crédito: ${response.statusCode}',
+          '❌ Error al obtener detalles del crédito: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -336,10 +342,7 @@ class CreditApiService extends BaseApiService {
     int perPage = 50,
   }) async {
     try {
-      print('📋 Obteniendo créditos pendientes de aprobación...');
-
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
       final response = await get(
         '/credits/waiting-list/pending-approval',
         queryParameters: queryParams,
@@ -347,11 +350,10 @@ class CreditApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos pendientes de aprobación obtenidos exitosamente');
         return data;
       } else {
         throw Exception(
-          'Error al obtener créditos pendientes de aprobación: ${response.statusCode}',
+          '❌ Error al obtener créditos pendientes de aprobación: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -366,10 +368,7 @@ class CreditApiService extends BaseApiService {
     int perPage = 50,
   }) async {
     try {
-      print('📋 Obteniendo créditos en lista de espera...');
-
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
       final response = await get(
         '/credits/waiting-list/waiting-delivery',
         queryParameters: queryParams,
@@ -377,11 +376,10 @@ class CreditApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos en lista de espera obtenidos exitosamente');
         return data;
       } else {
         throw Exception(
-          'Error al obtener créditos en lista de espera: ${response.statusCode}',
+          '❌ Error al obtener créditos en lista de espera: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -396,10 +394,7 @@ class CreditApiService extends BaseApiService {
     int perPage = 50,
   }) async {
     try {
-      print('📋 Obteniendo créditos listos para entrega hoy...');
-
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
       final response = await get(
         '/credits/waiting-list/ready-today',
         queryParameters: queryParams,
@@ -407,7 +402,6 @@ class CreditApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos listos para entrega hoy obtenidos exitosamente');
         return data;
       } else {
         throw Exception(
@@ -426,10 +420,7 @@ class CreditApiService extends BaseApiService {
     int perPage = 50,
   }) async {
     try {
-      print('📋 Obteniendo créditos con entrega atrasada...');
-
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
-
       final response = await get(
         '/credits/waiting-list/overdue-delivery',
         queryParameters: queryParams,
@@ -437,11 +428,10 @@ class CreditApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Créditos con entrega atrasada obtenidos exitosamente');
         return data;
       } else {
         throw Exception(
-          'Error al obtener créditos con entrega atrasada: ${response.statusCode}',
+          '❌ Error al obtener créditos con entrega atrasada: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -453,13 +443,10 @@ class CreditApiService extends BaseApiService {
   /// Obtiene resumen de lista de espera
   Future<Map<String, dynamic>> getWaitingListSummary() async {
     try {
-      print('📊 Obteniendo resumen de lista de espera...');
-
       final response = await get('/credits/waiting-list/summary');
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Resumen de lista de espera obtenido exitosamente');
         return data;
       } else {
         throw Exception(
@@ -479,8 +466,6 @@ class CreditApiService extends BaseApiService {
     String? notes,
   }) async {
     try {
-      print('✅ Aprobando crédito para entrega: $creditId');
-
       final data = {
         'scheduled_delivery_date': scheduledDeliveryDate.toIso8601String(),
         if (notes != null && notes.isNotEmpty) 'notes': notes,
@@ -493,7 +478,6 @@ class CreditApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         final responseData = response.data as Map<String, dynamic>;
-        print('✅ Crédito aprobado para entrega exitosamente');
         return responseData;
       } else {
         throw Exception(
@@ -523,18 +507,13 @@ class CreditApiService extends BaseApiService {
     required String reason,
   }) async {
     try {
-      print('❌ Rechazando crédito: $creditId');
-
       final data = {'reason': reason};
-
       final response = await post(
         '/credits/$creditId/waiting-list/reject',
         data: data,
       );
-
       if (response.statusCode == 200) {
         final responseData = response.data as Map<String, dynamic>;
-        print('✅ Crédito rechazado exitosamente');
         return responseData;
       } else {
         throw Exception('Error al rechazar crédito: ${response.statusCode}');
@@ -585,13 +564,10 @@ class CreditApiService extends BaseApiService {
     String? reason,
   }) async {
     try {
-      print('📅 Reprogramando entrega del crédito: $creditId');
-
       final data = {
         'scheduled_delivery_date': newScheduledDate.toIso8601String(),
         if (reason != null && reason.isNotEmpty) 'reason': reason,
       };
-
       final response = await post(
         '/credits/$creditId/waiting-list/reschedule',
         data: data,
@@ -599,11 +575,10 @@ class CreditApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         final responseData = response.data as Map<String, dynamic>;
-        print('✅ Fecha de entrega reprogramada exitosamente');
         return responseData;
       } else {
         throw Exception(
-          'Error al reprogramar fecha de entrega: ${response.statusCode}',
+          '❌ Error al reprogramar fecha de entrega: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -615,17 +590,14 @@ class CreditApiService extends BaseApiService {
   /// Obtiene el estado de entrega de un crédito
   Future<Map<String, dynamic>> getCreditDeliveryStatus(int creditId) async {
     try {
-      print('📋 Obteniendo estado de entrega del crédito: $creditId');
-
       final response = await get('/credits/$creditId/waiting-list/status');
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        print('✅ Estado de entrega obtenido exitosamente');
         return data;
       } else {
         throw Exception(
-          'Error al obtener estado de entrega: ${response.statusCode}',
+          '❌ Error al obtener estado de entrega: ${response.statusCode}',
         );
       }
     } catch (e) {

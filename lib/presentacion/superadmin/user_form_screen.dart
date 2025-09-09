@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../negocio/servicios/allowed_apps_helper.dart';
 import '../../ui/utilidades/image_utils.dart';
 import '../../ui/utilidades/phone_utils.dart';
 import '../../negocio/providers/user_management_provider.dart';
@@ -92,6 +94,13 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
         _cargarCobradores();
       });
     }
+
+    // Intento automático de obtener ubicación actual al abrir (solo en creación)
+    if (widget.usuario == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _autoObtenerUbicacionActual();
+      });
+    }
   }
 
   @override
@@ -115,6 +124,50 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
       setState(() {
         _ubicacionTexto = 'No seleccionada';
       });
+    }
+  }
+
+  Future<void> _autoObtenerUbicacionActual() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          final direccion = [
+            place.street,
+            place.subLocality,
+            place.locality,
+            place.administrativeArea,
+          ].where((e) => e != null && e.isNotEmpty).join(', ');
+          if (direccion.isNotEmpty) {
+            _direccionController.text = direccion;
+          }
+        }
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() {
+        _latitud = position.latitude;
+        _longitud = position.longitude;
+        _actualizarTextoUbicacion();
+      });
+    } catch (_) {
+      // silencioso
     }
   }
 
@@ -273,6 +326,11 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                 prefixIcon: Icon(Icons.person),
                 border: OutlineInputBorder(),
               ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r"[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s']"),
+                ),
+              ],
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'El nombre es requerido';
@@ -317,6 +375,11 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                 prefixIcon: Icon(Icons.badge),
                 border: OutlineInputBorder(),
               ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r'[A-Za-z0-9]'),
+                ),
+              ],
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'El CI es requerido';
@@ -468,6 +531,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                 prefixIcon: Icon(Icons.phone),
                 border: OutlineInputBorder(),
               ),
+              inputFormatters: [PhoneUtils.inputFormatter()],
               validator: (value) => PhoneUtils.validatePhone(value, required: false),
             ),
             const SizedBox(height: 16),
@@ -874,7 +938,10 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
       final source = await _selectImageSource();
       if (source == null) return;
 
-      final picked = await _picker.pickImage(source: source, imageQuality: 100);
+      final XFile? picked = await AllowedAppsHelper.openCameraSecurely(
+              source: source,
+              imageQuality: 100,
+            );
       if (picked == null) return;
       File file = File(picked.path);
       file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import '../../negocio/servicios/allowed_apps_helper.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/profile_image_provider.dart';
 import '../../negocio/providers/user_management_provider.dart';
@@ -218,7 +219,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              /*const SizedBox(height: 24),
 
               // Sección de seguridad
               Card(
@@ -258,10 +259,10 @@ class ProfileSettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 24),*/
 
               // Sección de notificaciones
-              Card(
+              /*Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -300,7 +301,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 20),*/
             ],
           ),
         ),
@@ -617,8 +618,7 @@ class _ImagePickerBottomSheet extends StatelessWidget {
     Navigator.pop(context);
 
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
+      final XFile? image = await AllowedAppsHelper.openCameraSecurely(
         source: source,
         maxWidth: 1024,
         maxHeight: 1024,
@@ -634,6 +634,7 @@ class _ImagePickerBottomSheet extends StatelessWidget {
         SnackBar(
           content: Text('Error al seleccionar imagen: $e'),
           backgroundColor: Colors.red,
+
         ),
       );
     }

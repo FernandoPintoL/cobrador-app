@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../../datos/servicios/storage_service.dart';
+import '../superadmin/admin_dashboard_screen.dart';
+import '../manager/manager_dashboard_screen.dart';
+import '../cobrador/cobrador_dashboard_screen.dart';
+import '../creditos/credit_type_screen.dart';
+
+// Importación explícita del AuthState si no está disponible
+// ignore_for_file: unused_import
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -15,7 +23,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _rememberMe = false;
-  String? _lastShownError; // Para evitar mostrar el mismo error repetidamente
+  String? _lastShownError;
+  String? _savedIdentifier;
 
   @override
   void dispose() {
@@ -25,15 +34,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final storage = StorageService();
+      final saved = await storage.getSavedIdentifier();
+      if (mounted) {
+        setState(() {
+          _savedIdentifier = saved;
+          if (saved != null) {
+            _emailOrPhoneController.text = saved;
+          }
+        });
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Escuchar cambios en el estado de autenticación para mostrar errores
-    ref.listen<AuthState>(authProvider, (previous, next) {
+    // Escuchar cambios en AuthState para actualizar errores y el estado de savedIdentifier
+    ref.listen<AuthState>(authProvider, (previous, next) async {
+      // Si el usuario se autenticó, navegar al dashboard correspondiente según su rol
+      if (mounted && next.isAuthenticated && next.usuario != null && (previous == null || !previous.isAuthenticated)) {
+        // Determinar ruta/destino por rol principal
+        Widget destination;
+        final roles = next.usuario!.roles;
+        if (roles.contains('admin')) {
+          destination = const AdminDashboardScreen();
+        } else if (roles.contains('manager')) {
+          destination = const CreditTypeScreen();
+        } else {
+          destination = const CreditTypeScreen();
+        }
+        // Reemplazar la pila para evitar volver al login
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => destination),
+          (route) => false,
+        );
+        return;
+      }
+      // Si el usuario ya no está autenticado y el estado está inicializado,
+      // recargamos el identificador guardado para decidir si mostramos el campo email
+      if (mounted && next.usuario == null && next.isInitialized) {
+        final storage = StorageService();
+        final saved = await storage.getSavedIdentifier();
+        if (_savedIdentifier != saved) {
+          setState(() {
+            _savedIdentifier = saved;
+            if (saved == null) {
+              _emailOrPhoneController.clear();
+            } else {
+              _emailOrPhoneController.text = saved;
+            }
+          });
+        }
+      }
+
       if (next.error != null && next.error != _lastShownError && mounted) {
         _lastShownError = next.error;
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.error!, style: TextStyle(color: Colors.white)),
+            content: Text(next.error!, style: const TextStyle(color: Colors.white)),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
             action: SnackBarAction(
@@ -41,7 +103,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               textColor: Colors.white,
               onPressed: () {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                // Limpiar el error al cerrar el SnackBar
                 ref.read(authProvider.notifier).clearError();
                 _lastShownError = null;
               },
@@ -49,7 +110,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         );
 
-        // Limpiar el error después de un delay para evitar ciclos infinitos
         Future.delayed(const Duration(seconds: 4), () {
           if (mounted && ref.read(authProvider).error == next.error) {
             ref.read(authProvider.notifier).clearError();
@@ -57,95 +117,155 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           }
         });
       } else if (next.error == null) {
-        // Reset _lastShownError cuando no hay error
         _lastShownError = null;
       }
     });
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final borderColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
-        ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Card(
-                elevation: 8,
+                elevation: 0,
+                margin: const EdgeInsets.symmetric(horizontal: 0),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(32.0),
+                  padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Logo o ícono
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF667eea),
-                          borderRadius: BorderRadius.circular(40),
-                        ),
-                        child: const Icon(
-                          Icons.account_balance_wallet,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
 
-                      // Título
-                      const Text(
-                        'Cobrador App',
+                      /*Text(
+                        'facebook',
                         style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2d3748),
+                          fontFamily: 'Poppins',
+                          color: const Color(0xFF1877F2),
+                          fontSize: 44,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -1,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Inicia sesión para continuar',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Color(0xFF718096),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
+                      ),*/
 
-                      // Formulario
+                      TextButton(
+                        onPressed: () async {
+                          final storage = StorageService();
+                          await storage.clearSavedIdentifier();
+                          if (mounted) {
+                            setState(() {
+                              _savedIdentifier = null;
+                              _emailOrPhoneController.clear();
+                            });
+                          }
+                        },
+                        child: const Text('facebook', style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: const Color(0xFF1877F2),
+                          fontSize: 44,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -1,
+                        )),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Text(
+                        'Iniciar sesión Facebook',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? onSurface.withValues(alpha: 0.9) : const Color(0xFF1C1E21),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
                       Form(
                         key: _formKey,
                         child: Column(
                           children: [
-                            TextFormField(
-                              controller: _emailOrPhoneController,
-                              decoration: const InputDecoration(
-                                labelText: 'Correo electrónico o teléfono',
-                                prefixIcon: Icon(Icons.email),
-                                border: OutlineInputBorder(),
+                            if (_savedIdentifier == null) ...[
+                              TextFormField(
+                                controller: _emailOrPhoneController,
+                                decoration: const InputDecoration(
+                                  hintText: 'Email or phone number',
+                                  border: OutlineInputBorder(),
+                                ),
+                                keyboardType: TextInputType.emailAddress,
+                                validator: (value) {
+                                  if (_savedIdentifier != null) return null;
+                                  if (value == null || value.isEmpty) {
+                                    return 'Por favor ingresa tu email o teléfono';
+                                  }
+                                  return null;
+                                },
                               ),
-                              keyboardType: TextInputType.emailAddress,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Por favor ingresa tu correo o teléfono';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
+                              const SizedBox(height: 16),
+                            ],
+
+                            /*if (_savedIdentifier != null) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: borderColor),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: isDark ? const Color(0xFF1E1E1E) : Colors.grey.shade50,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.person, color: isDark ? Colors.grey.shade400 : Colors.grey),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Continuar como:',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                            ),
+                                          ),
+                                          Text(
+                                            _savedIdentifier ?? 'Usuario',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: onSurface,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () async {
+                                        final storage = StorageService();
+                                        await storage.clearSavedIdentifier();
+                                        if (mounted) {
+                                          setState(() {
+                                            _savedIdentifier = null;
+                                            _emailOrPhoneController.clear();
+                                          });
+                                        }
+                                      },
+                                      child: const Text('Cambiar'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],*/
+
                             TextFormField(
                               controller: _passwordController,
                               decoration: InputDecoration(
-                                labelText: 'Contraseña',
-                                prefixIcon: const Icon(Icons.lock),
+                                hintText: 'Password',
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword
@@ -161,6 +281,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 border: const OutlineInputBorder(),
                               ),
                               obscureText: _obscurePassword,
+                              autofocus: _savedIdentifier != null,
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
                                   return 'Por favor ingresa tu contraseña';
@@ -170,33 +291,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 }
                                 return null;
                               },
+                              onFieldSubmitted: (_) => _handleLogin(),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 32),
 
-                            // Checkbox "Recordarme"
-                            Row(
-                              children: [
-                                Checkbox(
-                                  value: _rememberMe,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _rememberMe = value ?? false;
-                                    });
-                                  },
-                                  activeColor: const Color(0xFF667eea),
-                                ),
-                                const Text(
-                                  'Recordarme',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Color(0xFF718096),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Botón de login
                             SizedBox(
                               width: double.infinity,
                               height: 50,
@@ -204,14 +302,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 builder: (context, ref, child) {
                                   final authState = ref.watch(authProvider);
                                   return ElevatedButton(
-                                    onPressed: authState.isLoading
-                                        ? null
-                                        : _handleLogin,
+                                    onPressed: authState.isLoading ? null : _handleLogin,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF667eea),
+                                      backgroundColor: const Color(0xFF1877F2),
                                       foregroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
                                     ),
                                     child: authState.isLoading
@@ -220,17 +316,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                             height: 20,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                    Colors.white,
-                                                  ),
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                             ),
                                           )
-                                        : const Text(
-                                            'Iniciar Sesión',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
+                                        : Text(
+                                            _savedIdentifier != null ? 'Continuar' : 'Iniciar sesión',
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                   );
@@ -252,17 +345,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _handleLogin() async {
-    if (_formKey.currentState?.validate() ?? false) {
-      final emailOrPhone = _emailOrPhoneController.text.trim();
-      final password = _passwordController.text;
-
-      await ref
-          .read(authProvider.notifier)
-          .login(emailOrPhone, password, rememberMe: _rememberMe);
-
-      // No necesitamos navegar manualmente - el MyApp se encargará
-      // de detectar el cambio de estado y mostrar el dashboard correcto
-      // según el rol del usuario a través de _buildDashboardByRole()
+    if (_savedIdentifier == null && !(_formKey.currentState?.validate() ?? false)) {
+      return;
     }
+
+    if (_passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor ingresa tu contraseña'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final emailOrPhone = _savedIdentifier ?? _emailOrPhoneController.text.trim();
+    final password = _passwordController.text;
+
+    await ref.read(authProvider.notifier).login(emailOrPhone, password, rememberMe: _rememberMe);
   }
 }

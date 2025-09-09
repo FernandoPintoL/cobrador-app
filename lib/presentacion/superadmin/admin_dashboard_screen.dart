@@ -6,6 +6,7 @@ import 'user_management_screen.dart';
 import 'cobrador_assignment_screen.dart';
 import '../widgets/user_stats_widget.dart';
 import '../pantallas/profile_settings_screen.dart';
+import '../widgets/logout_dialog.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -35,7 +36,10 @@ class AdminDashboardScreen extends ConsumerWidget {
           const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authProvider.notifier).logout(),
+            tooltip: 'Cerrar sesión',
+            onPressed: () async {
+              await showLogoutOptions(context: context, ref: ref);
+            },
           ),
         ],
       ),

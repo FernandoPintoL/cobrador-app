@@ -385,49 +385,4 @@ class PaymentApiService extends BaseApiService {
       );
     }
   }
-
-  /// Simula un pago para un crédito específico
-  Future<Map<String, dynamic>> simulatePayment(
-    int creditId,
-    double amount,
-  ) async {
-    try {
-      print('🧮 Simulando pago para crédito: $creditId, monto: $amount');
-
-      final response = await post(
-        '/credits/$creditId/simulate-payment',
-        data: {'amount': amount},
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        print('✅ Simulación de pago completada');
-        return data;
-      } else {
-        throw ApiException(
-          message: 'Error al simular pago',
-          statusCode: response.statusCode,
-          errorData: response.data,
-        );
-      }
-    } on DioException catch (e) {
-      final status = e.response?.statusCode;
-      final data = e.response?.data;
-      String message = 'Error al simular pago';
-      if (data is Map<String, dynamic>) {
-        if (data['message'] != null) message = data['message'].toString();
-        else if (data['error'] != null) message = data['error'].toString();
-      }
-      print('❌ Error al simular pago: $message');
-      throw ApiException(
-        message: message,
-        statusCode: status,
-        errorData: data,
-        originalError: e,
-      );
-    } catch (e) {
-      print('❌ Error al simular pago: $e');
-      throw ApiException(message: 'Error al simular pago: $e', originalError: e);
-    }
-  }
 }

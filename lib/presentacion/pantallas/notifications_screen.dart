@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../../negocio/providers/credit_provider.dart';
+import '../creditos/credit_detail_screen.dart';
 import '../widgets/websocket_widgets.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -13,69 +15,23 @@ class NotificationsScreen extends ConsumerStatefulWidget {
       _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
-    with TickerProviderStateMixin {
-  late TabController _tabController;
-
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final wsState = ref.watch(webSocketProvider);
-    final authState = ref.watch(authProvider);
-
-    // Determinar tabs/filters según el rol antes de construir el Scaffold
-    final bool isManager = authState.isManager == true;
-    final List<Map<String, dynamic>> tabs = [
-      {
-        'filter': 'all',
-        'label': 'Todas',
-        'icon': Icons.all_inbox,
-      },
-      {
-        'filter': 'unread',
-        'label': 'Sin Leer',
-        'icon': Icons.mark_email_unread,
-      },
-      if (isManager)
-        {
-          'filter': 'cobrador',
-          'label': 'Cobradores',
-          'icon': Icons.person_pin,
-        },
-      if (isManager)
-        {
-          'filter': 'cliente',
-          'label': 'Clientes',
-          'icon': Icons.business,
-        },
-      {
-        'filter': 'payment',
-        'label': 'Pagos',
-        'icon': Icons.payment,
-      },
-      {
-        'filter': 'system',
-        'label': 'Sistema',
-        'icon': Icons.settings,
-      },
-    ];
-
-    // Asegurar que el TabController tenga el mismo length que las tabs actuales
-    if (_tabController.length != tabs.length) {
-      _tabController.dispose();
-      _tabController = TabController(length: tabs.length, vsync: this);
-    }
+    final authState = ref.watch(authProvider); // aún usado para menú admin y estado
+    // Ya no usamos tabs superiores; mostraremos una única lista. Si en el futuro
+    // se desea filtrar, se podría añadir un filtro en menú.
 
     return Scaffold(
       appBar: AppBar(
@@ -83,8 +39,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           'Notificaciones',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
+        /*backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,*/
         actions: [
           // Estado de conexión WebSocket
           Padding(
@@ -132,35 +88,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             ],
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.white,
-          isScrollable: tabs.length > 4,
-          tabs: tabs
-              .map(
-                (t) => Tab(
-                  icon: Badge(
-                    label: Text(
-                      '${_getFilteredNotifications(wsState, t['filter'] as String).length}',
-                    ),
-                    child: Icon(t['icon'] as IconData),
-                  ),
-                  text: t['label'] as String,
-                ),
-              )
-              .toList(),
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: tabs
-            .map(
-              (t) => _buildNotificationsList(t['filter'] as String),
-            )
-            .toList(),
-      ),
+      body: _buildNotificationsList('all'),
       floatingActionButton: !wsState.isConnected
           ? FloatingActionButton(
               onPressed: () async {
@@ -314,7 +243,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       margin: const EdgeInsets.only(bottom: 8),
       elevation: isUnread ? 4 : 1,
       child: InkWell(
-        onTap: () => _markAsRead(notification),
+        onTap: () => _onNotificationTap(notification),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -493,6 +422,70 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   void _markAsRead(AppNotification notification) {
     if (!notification.isRead) {
       ref.read(webSocketProvider.notifier).markAsRead(notification.id);
+    }
+  }
+
+  int? _extractCreditId(AppNotification n) {
+    final data = n.data;
+    if (data == null) return null;
+    try {
+      // Common paths: data['credit']['id'] or data['creditId'] or data['credit_id']
+      final creditFromObj = data['credit'];
+      dynamic idCandidate;
+      if (creditFromObj is Map<String, dynamic>) {
+        idCandidate = creditFromObj['id'] ?? creditFromObj['credit_id'];
+      }
+      idCandidate ??= data['creditId'] ?? data['credit_id'];
+      if (idCandidate == null) return null;
+      final idStr = idCandidate.toString();
+      final parsed = int.tryParse(idStr);
+      return parsed;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _onNotificationTap(AppNotification notification) async {
+    // 1) Mark as read
+    _markAsRead(notification);
+
+    // 2) Try to open credit detail if this notif relates to a credit
+    final creditId = _extractCreditId(notification);
+    if (creditId == null) {
+      // If not a credit notification, keep default behavior (nothing else)
+      return;
+    }
+
+    // Optional: quick feedback
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final loadingSnack = SnackBar(
+      content: Text('Abriendo crédito #$creditId...'),
+      duration: const Duration(seconds: 2),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(loadingSnack);
+
+    // 3) Fetch credit details
+    final credit = await ref.read(creditProvider.notifier).fetchCreditById(creditId);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (!mounted) return;
+
+    if (credit != null) {
+      // 4) Navigate to detail screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CreditDetailScreen(credit: credit),
+        ),
+      );
+    } else {
+      // Show error if not found
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo abrir el crédito #$creditId'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 

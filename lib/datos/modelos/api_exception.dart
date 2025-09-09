@@ -1,5 +1,3 @@
-import 'package:dio/dio.dart';
-
 /// Excepción personalizada para errores de API
 class ApiException implements Exception {
   /// Mensaje de error principal

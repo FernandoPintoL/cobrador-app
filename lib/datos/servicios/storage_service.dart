@@ -7,6 +7,8 @@ class StorageService {
   static const String _userKey = 'user_data';
   static const String _rememberMeKey = 'remember_me';
   static const String _lastLoginKey = 'last_login';
+  static const String _savedIdentifierKey = 'saved_identifier';
+  static const String _requiresReauthKey = 'requires_reauth'; // Nuevo flag para re-autenticación
 
   // Guardar token de autenticación
   Future<void> saveToken(String token) async {
@@ -105,6 +107,24 @@ class StorageService {
     return token != null && user != null;
   }
 
+  // Guardar identificador (email o teléfono) del usuario para login rápido
+  Future<void> setSavedIdentifier(String identifier) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_savedIdentifierKey, identifier);
+  }
+
+  // Obtener identificador guardado
+  Future<String?> getSavedIdentifier() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_savedIdentifierKey);
+  }
+
+  // Limpiar identificador guardado
+  Future<void> clearSavedIdentifier() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_savedIdentifierKey);
+  }
+
   // Limpiar toda la sesión
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
@@ -116,6 +136,14 @@ class StorageService {
     // await prefs.remove(_rememberMeKey);
 
     print('🧹 Sesión limpiada completamente');
+  }
+
+  // Limpiar solo los datos del usuario (para sesiones parciales)
+  Future<void> clearUserOnly() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_userKey);
+
+    print('🧹 Datos del usuario limpiados (sesión parcial)');
   }
 
   // Obtener información de la sesión
@@ -132,5 +160,25 @@ class StorageService {
       'lastLogin': lastLogin?.toIso8601String(),
       'user': user?.toJson(),
     };
+  }
+
+  /// Establecer flag de re-autenticación requerida
+  Future<void> setRequiresReauth(bool required) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_requiresReauthKey, required);
+    print('🔐 Flag requiresReauth establecido en: $required');
+  }
+
+  /// Obtener flag de re-autenticación requerida
+  Future<bool> getRequiresReauth() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_requiresReauthKey) ?? false;
+  }
+
+  /// Limpiar flag de re-autenticación
+  Future<void> clearRequiresReauth() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_requiresReauthKey);
+    print('🔐 Flag requiresReauth eliminado');
   }
 }

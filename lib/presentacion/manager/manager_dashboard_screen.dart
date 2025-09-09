@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/manager_provider.dart';
+import '../widgets/logout_dialog.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../config/role_colors.dart';
 import '../creditos/credit_type_screen.dart';
@@ -97,7 +98,11 @@ class _ManagerDashboardScreenState
           const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authProvider.notifier).logout(),
+            tooltip: 'Cerrar sesión',
+            onPressed: () async {
+              // Mostrar opciones: cancelar, salir, cerrar sesión completa
+              await showLogoutOptions(context: context, ref: ref);
+            },
           ),
         ],
       ),

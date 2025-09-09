@@ -20,6 +20,13 @@ class NotificationService {
   Future<bool> initialize() async {
     if (_isInitialized) return true;
 
+    // Las notificaciones locales no son compatibles en Flutter Web.
+    if (kIsWeb) {
+      print('ℹ️ Notificaciones locales no compatibles en Web. Se omite inicialización.');
+      _isInitialized = false;
+      return false;
+    }
+
     try {
       // Configuración para Android - usar el icono de notificación personalizado
       const AndroidInitializationSettings initializationSettingsAndroid =
@@ -98,6 +105,10 @@ class NotificationService {
   /// Solicita permisos de notificación
   Future<bool> _requestPermissions() async {
     try {
+      if (kIsWeb) {
+        // En web no hay permisos para este plugin
+        return false;
+      }
       // Android 13+
       if (defaultTargetPlatform == TargetPlatform.android) {
         if (await Permission.notification.isDenied) {
@@ -179,19 +190,29 @@ class NotificationService {
     }
   }
 
-  /// Muestra una notificación de crédito
+  /// Muestra una notificación de crédito (solo foreground)
   Future<void> showCreditNotification({
     required String title,
     required String body,
     String? creditId,
     String? action,
   }) async {
+    if (kIsWeb) {
+      print('ℹ️ showCreditNotification omitido en Web.');
+      return;
+    }
     if (!_isInitialized) {
       final ok = await initialize();
       if (!ok) {
         print('⚠️ Servicio de notificaciones no inicializado; se omite mostrar (credit)');
         return;
       }
+    }
+
+    // Mostrar notificaciones aunque la app no esté en primer plano
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
+      print('ℹ️ App en estado $lifecycleState. Se mostrará notificación de crédito igualmente.');
     }
 
     final int notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -239,19 +260,29 @@ class NotificationService {
     print('🏦 Notificación de crédito mostrada: $title');
   }
 
-  /// Muestra una notificación de pago
+  /// Muestra una notificación de pago (solo foreground)
   Future<void> showPaymentNotification({
     required String title,
     required String body,
     String? paymentId,
     double? amount,
   }) async {
+    if (kIsWeb) {
+      print('ℹ️ showPaymentNotification omitido en Web.');
+      return;
+    }
     if (!_isInitialized) {
       final ok = await initialize();
       if (!ok) {
         print('⚠️ Servicio de notificaciones no inicializado; se omite mostrar (payment)');
         return;
       }
+    }
+
+    // Mostrar notificaciones aunque la app no esté en primer plano
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
+      print('ℹ️ App en estado $lifecycleState. Se mostrará notificación de pago igualmente.');
     }
 
     final int notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -296,19 +327,29 @@ class NotificationService {
     print('💰 Notificación de pago mostrada: $title');
   }
 
-  /// Muestra una notificación de mensaje
+  /// Muestra una notificación de mensaje (solo foreground)
   Future<void> showMessageNotification({
     required String title,
     required String body,
     String? messageId,
     String? senderId,
   }) async {
+    if (kIsWeb) {
+      print('ℹ️ showMessageNotification omitido en Web.');
+      return;
+    }
     if (!_isInitialized) {
       final ok = await initialize();
       if (!ok) {
         print('⚠️ Servicio de notificaciones no inicializado; se omite mostrar (message)');
         return;
       }
+    }
+
+    // Mostrar notificaciones aunque la app no esté en primer plano
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
+      print('ℹ️ App en estado $lifecycleState. Se mostrará notificación de mensaje igualmente.');
     }
 
     final int notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -353,19 +394,29 @@ class NotificationService {
     print('💬 Notificación de mensaje mostrada: $title');
   }
 
-  /// Muestra una notificación general
+  /// Muestra una notificación general (solo cuando la app está en primer plano)
   Future<void> showGeneralNotification({
     required String title,
     required String body,
     String? type,
     String? payload,
   }) async {
+    if (kIsWeb) {
+      print('ℹ️ showGeneralNotification omitido en Web.');
+      return;
+    }
     if (!_isInitialized) {
       final ok = await initialize();
       if (!ok) {
         print('⚠️ Servicio de notificaciones no inicializado; se omite mostrar (general)');
         return;
       }
+    }
+
+    // Mostrar notificaciones aunque la app no esté en primer plano
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
+      print('ℹ️ App en estado $lifecycleState. Se mostrará notificación general igualmente.');
     }
 
     final int notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -428,6 +479,9 @@ class NotificationService {
 
   /// Verifica si las notificaciones están habilitadas
   Future<bool> areNotificationsEnabled() async {
+    if (kIsWeb) {
+      return false;
+    }
     if (defaultTargetPlatform == TargetPlatform.android) {
       return await _flutterLocalNotificationsPlugin
               .resolvePlatformSpecificImplementation<
@@ -440,6 +494,9 @@ class NotificationService {
 
   /// Abre la configuración de notificaciones del sistema
   Future<void> openNotificationSettings() async {
+    if (kIsWeb) {
+      return;
+    }
     if (defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.windows) {
       await openAppSettings();

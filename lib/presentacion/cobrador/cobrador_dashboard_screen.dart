@@ -10,6 +10,7 @@ import '../widgets/profile_image_widget.dart';
 import '../widgets/websocket_widgets.dart';
 import '../pantallas/profile_settings_screen.dart';
 import '../pantallas/notifications_screen.dart';
+import '../widgets/logout_dialog.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import '../creditos/credit_type_screen.dart';
 import 'package:intl/intl.dart';
@@ -114,7 +115,10 @@ class _CobradorDashboardScreenState
           const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authProvider.notifier).logout(),
+            tooltip: 'Cerrar sesión',
+            onPressed: () async {
+              await showLogoutOptions(context: context, ref: ref);
+            },
           ),
         ],
       ),

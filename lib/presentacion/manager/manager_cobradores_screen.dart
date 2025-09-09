@@ -242,19 +242,19 @@ class _ManagerCobradoresScreenState
             Icon(Icons.person_off, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'No tienes cobradores asignados',
+              'Aún no tienes cobradores registrados',
               style: TextStyle(fontSize: 18, color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
             Text(
-              'Usa el botón + para asignar cobradores',
+              'Usa el botón + para crear un nuevo cobrador',
               style: TextStyle(color: Colors.grey[500]),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: () => _mostrarDialogoAsignacion(),
+              onPressed: () => _navegarCrearCobrador(),
               icon: const Icon(Icons.person_add),
-              label: const Text('Asignar Cobradores'),
+              label: const Text('Crear Cobrador'),
             ),
           ],
         ),

@@ -49,6 +49,8 @@ class PagoNotifier extends StateNotifier<PagoState> {
     required double amount,
     String paymentType = 'cash',
     String? notes,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       // Validaciones previas requeridas por backend
@@ -91,6 +93,9 @@ class PagoNotifier extends StateNotifier<PagoState> {
       );
       // ignore: avoid_print
       print('🔄 Procesando pago (PagoProvider) para crédito: $creditId');
+      if (latitude != null && longitude != null) {
+        print('📍 Ubicación del pago: $latitude, $longitude');
+      }
 
       // Fecha en formato YYYY-MM-DD
       final String paymentDate = DateTime.now().toIso8601String().split('T')[0];
@@ -125,8 +130,17 @@ class PagoNotifier extends StateNotifier<PagoState> {
         'payment_date': paymentDate,
         'installment_number': installmentNumber,
       };
+
+      // Agregar datos opcionales
       if (notes != null && notes.isNotEmpty) paymentData['notes'] = notes;
       if (clientId != null) paymentData['client_id'] = clientId;
+
+      // Agregar ubicación si está disponible
+      if (latitude != null && longitude != null) {
+        paymentData['latitude'] = latitude;
+        paymentData['longitude'] = longitude;
+        print('✅ Ubicación agregada al pago: $latitude, $longitude');
+      }
 
       final response = await _paymentApiService.createPaymentForCredit(
         creditId,
@@ -152,87 +166,72 @@ class PagoNotifier extends StateNotifier<PagoState> {
           isLoading: false,
           successMessage: 'Pago procesado exitosamente',
         );
-        // ignore: avoid_print
-        print('✅ Pago procesado exitosamente (PagoProvider)');
+
         return result;
       } else {
-        throw Exception(response['message'] ?? 'Error al procesar pago');
+        final errorMessage = response['message'] ?? 'Error desconocido al procesar el pago';
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: errorMessage,
+        );
+        return response;
       }
     } catch (e) {
       // ignore: avoid_print
-      print('❌ Error al procesar pago (PagoProvider): $e');
-      String errorMessage = 'Error al procesar pago';
-      Map<String, dynamic> validation = const {};
-      if (e is ApiException) {
-        errorMessage = e.message;
-        validation = e.validationErrors;
-      } else {
-        final errorText = e.toString();
-        if (errorText.contains('422')) {
-          errorMessage = 'Datos de pago inválidos';
-        } else if (errorText.contains('404')) {
-          errorMessage = 'Crédito no encontrado';
-        }
+      print('❌ Error procesando pago: $e');
+
+      String errorMessage = 'Error al procesar el pago';
+      if (e.toString().contains('422')) {
+        errorMessage = 'Datos del pago inválidos';
+      } else if (e.toString().contains('404')) {
+        errorMessage = 'Crédito no encontrado';
+      } else if (e.toString().contains('403')) {
+        errorMessage = 'No tienes permisos para procesar este pago';
       }
+
       state = state.copyWith(
         isLoading: false,
         errorMessage: errorMessage,
-        validationErrors: validation,
       );
+
       return null;
     }
   }
 
-  /// Simula un pago sin efectuarlo
-  Future<PaymentAnalysis?> simulatePaymentForCredit({
-    required int creditId,
-    required double amount,
-  }) async {
-    try {
-      // ignore: avoid_print
-      print('🔄 Simulando pago (PagoProvider) para crédito: $creditId');
-      final response = await _paymentApiService.simulatePayment(creditId, amount);
-      if (response['success'] == true) {
-        final analysisData = response['data'];
-        // ignore: avoid_print
-        print('✅ Simulación de pago completada (PagoProvider)');
-        return PaymentAnalysis.fromJson(analysisData);
-      } else {
-        throw Exception(response['message'] ?? 'Error al simular pago');
-      }
-    } catch (e) {
-      // ignore: avoid_print
-      print('❌ Error al simular pago (PagoProvider): $e');
-      state = state.copyWith(errorMessage: 'Error al simular pago: $e');
-      return null;
-    }
-  }
-
-  void _notifyPaymentUpdate(
-    Map<String, dynamic> paymentResult,
-    Credito credit,
-  ) {
+  void _notifyPaymentUpdate(Map<String, dynamic> paymentResult, Credito credit) {
     try {
       final authState = _ref.read(authProvider);
       final wsNotifier = _ref.read(webSocketProvider.notifier);
 
       if (authState.usuario != null) {
+        // Estructura plana requerida por notifyPaymentMade
+        final paymentId = paymentResult['payment']?['id']?.toString() ?? paymentResult['id']?.toString();
+        final montoDyn = paymentResult['payment']?['amount'] ?? paymentResult['amount'];
+        final double amount = montoDyn is num ? montoDyn.toDouble() : double.tryParse(montoDyn?.toString() ?? '') ?? 0.0;
+        final cobradorId = authState.usuario!.id.toString();
+        final clientId = (credit.clientId ?? paymentResult['client_id'])?.toString();
+        // Manager asignado para notificar (cuando el pago es exitoso)
+        final managerId = authState.usuario!.assignedManagerId?.toString();
+
         wsNotifier.notifyPaymentMade({
-          'payment': {
-            'id': paymentResult['payment']?['id'],
-            'amount': paymentResult['payment']?['amount'],
-            'notes': paymentResult['payment']?['notes'],
-            'credit_id': credit.id,
-            'cobrador_id': authState.usuario!.id,
-            'client_id': credit.clientId,
-            'client_name': credit.client?.nombre ?? 'Cliente',
-          },
+          'paymentId': paymentId,
+          'amount': amount,
+          'cobradorId': cobradorId,
+          'clientId': clientId,
+          'status': paymentResult['payment']?['status'] ?? 'completed',
+          'notes': paymentResult['payment']?['notes'],
+          // Destinatario preferente de la notificación (manager)
+          if (managerId != null) 'targetUserId': managerId,
+          'userType': 'cobrador',
+          // Mantener datos adicionales para futuros usos/debug
+          'payment': paymentResult['payment'] ?? paymentResult,
           'credit': {
             'id': credit.id,
             'client_name': credit.client?.nombre ?? 'Cliente',
             'balance': credit.balance,
           },
           'action': 'payment_made',
+          'message': 'Pago registrado por el cobrador',
           'timestamp': DateTime.now().toIso8601String(),
         });
         // ignore: avoid_print

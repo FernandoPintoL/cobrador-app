@@ -3,6 +3,7 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/client_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
@@ -24,6 +25,7 @@ class CreditFormScreen extends ConsumerStatefulWidget {
 }
 
 class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
+  final Map<String, String> _fieldErrors = {};
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _interestRateController = TextEditingController();
@@ -36,6 +38,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   final _durationDaysController = TextEditingController(text: '24');
   final _latitudeController = TextEditingController();
   final _longitudeController = TextEditingController();
+  final _addressController = TextEditingController();
   final _scheduledDeliveryDateController = TextEditingController();
 
   Usuario? _selectedClient;
@@ -302,7 +305,23 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       setState(() {
         _latitudeController.text = pos.latitude.toStringAsFixed(6);
         _longitudeController.text = pos.longitude.toStringAsFixed(6);
+        _fieldErrors.remove('latitude');
+        _fieldErrors.remove('longitude');
       });
+      // intentar obtener dirección legible
+      try {
+        final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+        if (placemarks.isNotEmpty) {
+          final p = placemarks[0];
+          final dir = [p.street, p.subLocality, p.locality, p.administrativeArea]
+              .where((e) => e != null && e!.isNotEmpty)
+              .map((e) => e!)
+              .join(', ');
+          setState(() {
+            _addressController.text = dir;
+          });
+        }
+      } catch (_) {}
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -332,10 +351,14 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       if (result is Map) {
         final lat = result['latitud'] as double?;
         final lng = result['longitud'] as double?;
+        final dir = result['direccion'] as String?;
         if (lat != null && lng != null) {
           setState(() {
             _latitudeController.text = lat.toStringAsFixed(6);
             _longitudeController.text = lng.toStringAsFixed(6);
+            _addressController.text = dir ?? '';
+            _fieldErrors.remove('latitude');
+            _fieldErrors.remove('longitude');
           });
         }
       }
@@ -435,12 +458,41 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     _durationDaysController.dispose();
     _latitudeController.dispose();
     _longitudeController.dispose();
+    _addressController.dispose();
     _scheduledDeliveryDateController.dispose();
     super.dispose();
   }
 
   bool _hasLocation() {
     return _latitudeController.text.isNotEmpty && _longitudeController.text.isNotEmpty;
+  }
+
+  void _setFieldErrorsFromMessage(String msg) {
+    final lower = msg.toLowerCase();
+    setState(() {
+      _fieldErrors.clear();
+      if (lower.contains('client') || lower.contains('cliente')) {
+        _fieldErrors['client'] = msg;
+      }
+      if (lower.contains('monto')) {
+        _fieldErrors['amount'] = msg;
+      }
+      if (lower.contains('saldo') || lower.contains('total')) {
+        _fieldErrors['balance'] = msg;
+      }
+      if (lower.contains('duración') || lower.contains('duracion') || lower.contains('días') || lower.contains('dias')) {
+        _fieldErrors['duration'] = msg;
+      }
+      if (lower.contains('latitud') || lower.contains('ubicación') || lower.contains('ubicacion')) {
+        _fieldErrors['latitude'] = msg;
+      }
+      if (lower.contains('longitud') || lower.contains('ubicación') || lower.contains('ubicacion')) {
+        _fieldErrors['longitude'] = msg;
+      }
+      if (lower.contains('entrega') || lower.contains('fecha')) {
+        _fieldErrors['scheduledDeliveryDate'] = msg;
+      }
+    });
   }
 
   @override
@@ -451,6 +503,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     // Escuchar y mostrar mensajes del backend (errores/éxitos)
     ref.listen<CreditState>(creditProvider, (previous, next) {
       if (previous?.errorMessage != next.errorMessage && next.errorMessage != null) {
+        _setFieldErrorsFromMessage(next.errorMessage!);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.errorMessage!),
@@ -469,6 +522,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       }
 
       if (previous?.successMessage != next.successMessage && next.successMessage != null) {
+        setState(() {
+          _fieldErrors.clear();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.successMessage!),
@@ -493,8 +549,8 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           widget.credit != null ? 'Editar Crédito' : 'Nuevo Crédito',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
+        // backgroundColor: Theme.of(context).colorScheme.primary,
+        // foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           // Botón de ubicación GPS
@@ -533,7 +589,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
               // Geolocalización opcional
               // Estado de ubicación
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
                 decoration: BoxDecoration(
                   color: _hasLocation()
                       ? Colors.green.withValues(alpha: 0.1)
@@ -691,7 +747,14 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                           builder: (_) => const ClienteFormScreen(),
                                         ),
                                       );
-                                      if (result == true) {
+                                      if (result is Usuario) {
+                                        // Si se devolvió el usuario creado, seleccionarlo directamente
+                                        setState(() {
+                                          _selectedClient = result;
+                                          _fieldErrors.remove('client');
+                                        });
+                                        _loadClients();
+                                      } else if (result == true) {
                                         // Recargar clientes automáticamente después de crear uno nuevo
                                         await Future.delayed(
                                           const Duration(milliseconds: 300),
@@ -707,6 +770,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                         if (clientList.isNotEmpty) {
                                           setState(() {
                                             _selectedClient = clientList.last;
+                                            _fieldErrors.remove('client');
                                           });
                                         }
                                       }
@@ -717,25 +781,31 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                             : DropdownSearch<Usuario>(
                                 items: clientState.clientes,
                                 selectedItem: _selectedClient,
-                                itemAsString: (Usuario u) =>
-                                    '${u.nombre} - CI: ${u.ci} - ${u.telefono}',
+                                itemAsString: (Usuario u) {
+                                  final cat = (u.clientCategory ?? 'B').toUpperCase();
+                                  return '${u.nombre} (Cat. $cat) - CI: ${u.ci} - ${u.telefono}';
+                                },
                                 filterFn: (usuario, searchText) {
-                                  // Buscar por nombre, CI o teléfono
+                                  // Buscar por nombre, CI, teléfono o categoría (A/B/C)
                                   final searchLower = searchText.toLowerCase();
+                                  final cat = (usuario.clientCategory ?? '').toLowerCase();
                                   return usuario.nombre.toLowerCase().contains(searchLower) ||
                                          usuario.ci.toLowerCase().contains(searchLower) ||
-                                         usuario.telefono.toLowerCase().contains(searchLower);
+                                         usuario.telefono.toLowerCase().contains(searchLower) ||
+                                         cat.contains(searchLower);
                                 },
                                 dropdownDecoratorProps: DropDownDecoratorProps(
                                   dropdownSearchDecoration: InputDecoration(
                                     labelText: 'Cliente *',
-                                    border: OutlineInputBorder(),
-                                    prefixIcon: Icon(Icons.person),
+                                    border: const OutlineInputBorder(),
+                                    prefixIcon: const Icon(Icons.person),
+                                    errorText: _fieldErrors['client'],
                                   ),
                                 ),
                                 onChanged: (Usuario? value) {
                                   setState(() {
                                     _selectedClient = value;
+                                    _fieldErrors.remove('client');
                                   });
                                 },
                                 validator: (Usuario? value) {
@@ -800,7 +870,13 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                                     ),
                                                   ),
                                                 );
-                                                if (result == true) {
+                                                if (result is Usuario) {
+                                                  setState(() {
+                                                    _selectedClient = result;
+                                                    _fieldErrors.remove('client');
+                                                  });
+                                                  _loadClients();
+                                                } else if (result == true) {
                                                   await Future.delayed(
                                                     const Duration(
                                                       milliseconds: 300,
@@ -819,6 +895,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                                     setState(() {
                                                       _selectedClient =
                                                           clientList.last;
+                                                      _fieldErrors.remove('client');
                                                     });
                                                   }
                                                 }
@@ -881,8 +958,6 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                               ],
                             ),
                           ),
-
-                        const SizedBox(height: 16),
                       ] else ...[
                         // Mostrar cliente en modo solo lectura para edición
                         TextFormField(
@@ -896,98 +971,95 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                           ),
                           readOnly: true,
                         ),
-                        const SizedBox(height: 16),
                       ],
                       const SizedBox(height: 16,),
                       // Monto del crédito
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _amountController,
-                              decoration: const InputDecoration(
-                                labelText: 'Monto del Crédito *',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.attach_money),
-                                prefixText: 'Bs. ',
-                                helperText: 'Monto principal del crédito sin intereses',
-                              ),
-                              keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Por favor ingresa el monto';
-                                }
-                                final amount = double.tryParse(value);
-                                if (amount == null || amount <= 0) {
-                                  return 'Por favor ingresa un monto válido';
-                                }
-                                // Validación por categoría del cliente (A/B/C)
-                                final category = _selectedClient?.clientCategory?.toUpperCase() ?? 'B';
-                                double maxAmount = 5000;
-                                switch (category) {
-                                  case 'A':
-                                    maxAmount = 10000;
-                                    break;
-                                  case 'C':
-                                    maxAmount = 2000;
-                                    break;
-                                  default:
-                                    maxAmount = 5000;
-                                }
-                                if (amount > maxAmount) {
-                                  return 'Para categoría $category el monto máximo es Bs. ${maxAmount.toStringAsFixed(0)}';
-                                }
-                                return null;
-                              },
-                              onChanged: (value) {
-                                _updateCalculations();
-                              },
-                            ),
+                      TextFormField(
+                        controller: _amountController,
+                        decoration: InputDecoration(
+                          labelText: 'Monto del Crédito *',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.attach_money),
+                          prefixText: 'Bs. ',
+                          helperText: 'Monto principal del crédito sin intereses',
+                          errorText: _fieldErrors['amount'],
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Por favor ingresa el monto';
+                          }
+                          final amount = double.tryParse(value);
+                          if (amount == null || amount <= 0) {
+                            return 'Por favor ingresa un monto válido';
+                          }
+                          // Validación por categoría del cliente (A/B/C)
+                          final category = _selectedClient?.clientCategory?.toUpperCase() ?? 'B';
+                          double maxAmount = 5000;
+                          switch (category) {
+                            case 'A':
+                              maxAmount = 10000;
+                              break;
+                            case 'C':
+                              maxAmount = 2000;
+                              break;
+                            default:
+                              maxAmount = 5000;
+                          }
+                          if (amount > maxAmount) {
+                            return 'Para categoría $category el monto máximo es Bs. ${maxAmount.toStringAsFixed(0)}';
+                          }
+                          return null;
+                        },
+                        onChanged: (value) {
+                          setState(() {
+                            _fieldErrors.remove('amount');
+                          });
+                          _updateCalculations();
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      // Saldo actual (Total con interés) - Calculado automáticamente
+                      TextFormField(
+                        controller: _balanceController,
+                        decoration: InputDecoration(
+                          labelText: 'Saldo Total a Pagar *',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.account_balance_wallet),
+                          prefixText: 'Bs. ',
+                          helperText:
+                          'Calculado automáticamente (monto + intereses)',
+                          suffixIcon: const Icon(
+                            Icons.calculate,
+                            color: Colors.green,
                           ),
-                          const SizedBox(width: 16),
-                          // Saldo actual (Total con interés) - Calculado automáticamente
-                          Expanded(
-                            child: TextFormField(
-                              controller: _balanceController,
-                              decoration: const InputDecoration(
-                                labelText: 'Saldo Total a Pagar *',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.account_balance_wallet),
-                                prefixText: 'Bs. ',
-                                helperText:
-                                    'Calculado automáticamente (monto + intereses)',
-                                suffixIcon: Icon(
-                                  Icons.calculate,
-                                  color: Colors.green,
-                                ),
-                              ),
-                              readOnly:
-                                  true, // Solo lectura, se calcula automáticamente
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'El saldo se calcula automáticamente';
-                                }
-                                final balance = double.tryParse(value);
-                                if (balance == null || balance < 0) {
-                                  return 'Error en el cálculo automático';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ],
+                          errorText: _fieldErrors['balance'],
+                        ),
+                        readOnly:
+                        true, // Solo lectura, se calcula automáticamente
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'El saldo se calcula automáticamente';
+                          }
+                          final balance = double.tryParse(value);
+                          if (balance == null || balance < 0) {
+                            return 'Error en el cálculo automático';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
                       // dias de duracion
                       TextFormField(
                         controller: _durationDaysController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Días de duración (cuotas diarias) *',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.timelapse),
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.timelapse),
                           helperText: 'Cuenta solo lunes a sábado (se salta domingos) para calcular la fecha de fin',
+                          errorText: _fieldErrors['duration'],
                         ),
                         keyboardType: const TextInputType.numberWithOptions(decimal: false, signed: false),
                         validator: (value) {
@@ -1001,6 +1073,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                             setState(() {
                               _endDate = ScheduleUtils.computeDailyEndDate(_startDate!, v);
                               _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
+                              _fieldErrors.remove('duration');
+                            });
+                          } else {
+                            setState(() {
+                              _fieldErrors.remove('duration');
                             });
                           }
                           _updateCalculations();
@@ -1249,11 +1326,12 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                           const SizedBox(height: 12),
                           TextFormField(
                             controller: _scheduledDeliveryDateController,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Fecha de entrega (por defecto: mañana)',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.event_note),
+                              border: const OutlineInputBorder(),
+                              prefixIcon: const Icon(Icons.event_note),
                               helperText: 'Puedes ajustar a una fecha futura. Por defecto se programa al día siguiente.',
+                              errorText: _fieldErrors['scheduledDeliveryDate'],
                             ),
                             readOnly: true,
                             onTap: _selectScheduledDeliveryDate,
@@ -1289,6 +1367,19 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                         'Información Adicional',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Dirección capturada (solo lectura)
+                      TextFormField(
+                        controller: _addressController,
+                        readOnly: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Dirección',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.location_on),
+                          helperText: 'Dirección actual registrada para el crédito',
                         ),
                       ),
                       const SizedBox(height: 16),

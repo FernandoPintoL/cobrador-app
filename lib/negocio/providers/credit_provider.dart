@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/api_exception.dart';
 import '../../datos/servicios/credit_api_service.dart';
-import '../../datos/servicios/payment_api_service.dart';
-import '../../datos/servicios/websocket_service.dart';
+import '../../datos/modelos/credit_full_details.dart';
 import '../../datos/modelos/credito.dart';
 import 'auth_provider.dart';
 import 'websocket_provider.dart';
@@ -20,12 +19,13 @@ class CreditState {
   final CreditStats? stats;
   final WaitingListSummary? waitingListSummary;
   final bool isLoading;
+  final bool isLoadingMore;
   final String? errorMessage;
   final String? successMessage;
   final int currentPage;
   final int totalPages;
   final int totalItems;
-  final Map<String, dynamic> validationErrors; // Errores de validación
+  final Map<String, dynamic> validationErrors;
 
   CreditState({
     this.credits = const [],
@@ -37,12 +37,13 @@ class CreditState {
     this.stats,
     this.waitingListSummary,
     this.isLoading = false,
+    this.isLoadingMore = false,
     this.errorMessage,
     this.successMessage,
     this.currentPage = 1,
     this.totalPages = 1,
     this.totalItems = 0,
-    this.validationErrors = const {}, // Inicializar como vacío
+    this.validationErrors = const {},
   });
 
   CreditState copyWith({
@@ -55,33 +56,31 @@ class CreditState {
     CreditStats? stats,
     WaitingListSummary? waitingListSummary,
     bool? isLoading,
+    bool? isLoadingMore,
     String? errorMessage,
     String? successMessage,
     int? currentPage,
     int? totalPages,
     int? totalItems,
-    Map<String, dynamic>? validationErrors, // Agregar parámetros de copia
+    Map<String, dynamic>? validationErrors,
   }) {
     return CreditState(
       credits: credits ?? this.credits,
       attentionCredits: attentionCredits ?? this.attentionCredits,
-      pendingApprovalCredits:
-          pendingApprovalCredits ?? this.pendingApprovalCredits,
-      waitingDeliveryCredits:
-          waitingDeliveryCredits ?? this.waitingDeliveryCredits,
-      readyForDeliveryCredits:
-          readyForDeliveryCredits ?? this.readyForDeliveryCredits,
-      overdueDeliveryCredits:
-          overdueDeliveryCredits ?? this.overdueDeliveryCredits,
+      pendingApprovalCredits: pendingApprovalCredits ?? this.pendingApprovalCredits,
+      waitingDeliveryCredits: waitingDeliveryCredits ?? this.waitingDeliveryCredits,
+      readyForDeliveryCredits: readyForDeliveryCredits ?? this.readyForDeliveryCredits,
+      overdueDeliveryCredits: overdueDeliveryCredits ?? this.overdueDeliveryCredits,
       stats: stats ?? this.stats,
       waitingListSummary: waitingListSummary ?? this.waitingListSummary,
       isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       errorMessage: errorMessage,
       successMessage: successMessage,
       currentPage: currentPage ?? this.currentPage,
       totalPages: totalPages ?? this.totalPages,
       totalItems: totalItems ?? this.totalItems,
-      validationErrors: validationErrors ?? this.validationErrors, // Copiar errores de validación
+      validationErrors: validationErrors ?? this.validationErrors,
     );
   }
 }
@@ -89,14 +88,14 @@ class CreditState {
 // Notifier para gestionar créditos
 class CreditNotifier extends StateNotifier<CreditState> {
   final CreditApiService _creditApiService;
-  final PaymentApiService _paymentApiService;
   final Ref _ref;
 
-  CreditNotifier(this._creditApiService, this._paymentApiService, this._ref)
-    : super(CreditState());
+  CreditNotifier(this._creditApiService, this._ref) : super(CreditState());
+
+  Map<String, dynamic>? _lastQuery;
 
   // ========================================
-  // MÉTODOS PÚBLICOS
+  // MÉTODOS PRINCIPALES
   // ========================================
 
   /// Obtiene todos los créditos
@@ -105,18 +104,62 @@ class CreditNotifier extends StateNotifier<CreditState> {
     int? cobradorId,
     String? status,
     String? search,
+    List<String>? frequencies,
+    DateTime? startDateFrom,
+    DateTime? startDateTo,
+    DateTime? endDateFrom,
+    DateTime? endDateTo,
+    double? amountMin,
+    double? amountMax,
+    double? totalAmountMin,
+    double? totalAmountMax,
+    double? balanceMin,
+    double? balanceMax,
     int page = 1,
+    int? perPage,
   }) async {
     try {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos...');
+
+      // Guardar últimos parámetros de consulta
+      _lastQuery = {
+        'clientId': clientId,
+        'cobradorId': cobradorId,
+        'status': status,
+        'search': search,
+        'frequencies': frequencies,
+        'startDateFrom': startDateFrom,
+        'startDateTo': startDateTo,
+        'endDateFrom': endDateFrom,
+        'endDateTo': endDateTo,
+        'amountMin': amountMin,
+        'amountMax': amountMax,
+        'totalAmountMin': totalAmountMin,
+        'totalAmountMax': totalAmountMax,
+        'balanceMin': balanceMin,
+        'balanceMax': balanceMax,
+        'perPage': perPage ?? 15,
+      };
 
       final response = await _creditApiService.getCredits(
         clientId: clientId,
         cobradorId: cobradorId,
         status: status,
         search: search,
+        frequency: (frequencies == null || frequencies.isEmpty) ? null : frequencies.join(','),
+        startDateFrom: startDateFrom?.toIso8601String().split('T')[0],
+        startDateTo: startDateTo?.toIso8601String().split('T')[0],
+        endDateFrom: endDateFrom?.toIso8601String().split('T')[0],
+        endDateTo: endDateTo?.toIso8601String().split('T')[0],
+        amountMin: amountMin,
+        amountMax: amountMax,
+        totalAmountMin: totalAmountMin,
+        totalAmountMax: totalAmountMax,
+        balanceMin: balanceMin,
+        balanceMax: balanceMax,
         page: page,
+        perPage: perPage ?? 15,
       );
 
       if (response['success'] == true) {
@@ -124,15 +167,13 @@ class CreditNotifier extends StateNotifier<CreditState> {
         final creditsData = data['data'] as List? ?? [];
 
         final credits = creditsData
-            .map(
-              (creditJson) =>
-                  Credito.fromJson(creditJson as Map<String, dynamic>),
-            )
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
             .toList();
 
         state = state.copyWith(
           credits: credits,
           isLoading: false,
+          isLoadingMore: false,
           currentPage: data['current_page'] ?? 1,
           totalPages: data['last_page'] ?? 1,
           totalItems: data['total'] ?? 0,
@@ -146,7 +187,76 @@ class CreditNotifier extends StateNotifier<CreditState> {
       print('❌ Error al cargar créditos: $e');
       state = state.copyWith(
         isLoading: false,
+        isLoadingMore: false,
         errorMessage: 'Error al cargar créditos: $e',
+      );
+    }
+  }
+
+  bool get hasMore => state.currentPage < state.totalPages;
+
+  Future<void> loadMoreCredits() async {
+    if (state.isLoading || state.isLoadingMore) return;
+    if (!hasMore) return;
+
+    final query = _lastQuery ?? {};
+    final int nextPage = (state.currentPage) + 1;
+    final int perPage = (query['perPage'] as int?) ?? 15;
+
+    try {
+      state = state.copyWith(isLoadingMore: true, errorMessage: null);
+
+      final response = await _creditApiService.getCredits(
+        clientId: query['clientId'] as int?,
+        cobradorId: query['cobradorId'] as int?,
+        status: query['status'] as String?,
+        search: query['search'] as String?,
+        frequency: (query['frequencies'] == null || (query['frequencies'] as List).isEmpty)
+            ? null
+            : (query['frequencies'] as List).join(','),
+        startDateFrom: (query['startDateFrom'] as DateTime?)?.toIso8601String().split('T')[0],
+        startDateTo: (query['startDateTo'] as DateTime?)?.toIso8601String().split('T')[0],
+        endDateFrom: (query['endDateFrom'] as DateTime?)?.toIso8601String().split('T')[0],
+        endDateTo: (query['endDateTo'] as DateTime?)?.toIso8601String().split('T')[0],
+        amountMin: query['amountMin'] as double?,
+        amountMax: query['amountMax'] as double?,
+        totalAmountMin: query['totalAmountMin'] as double?,
+        totalAmountMax: query['totalAmountMax'] as double?,
+        balanceMin: query['balanceMin'] as double?,
+        balanceMax: query['balanceMax'] as double?,
+        page: nextPage,
+        perPage: perPage,
+      );
+
+      if (response['success'] == true) {
+        final data = response['data'];
+        final creditsData = data['data'] as List? ?? [];
+        final newCredits = creditsData
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .toList();
+
+        // Evitar duplicados por id
+        final existing = {for (var c in state.credits) c.id: c};
+        for (final c in newCredits) {
+          existing[c.id] = c;
+        }
+        final merged = existing.values.toList();
+
+        state = state.copyWith(
+          credits: merged,
+          isLoadingMore: false,
+          currentPage: data['current_page'] ?? nextPage,
+          totalPages: data['last_page'] ?? state.totalPages,
+          totalItems: data['total'] ?? state.totalItems,
+        );
+      } else {
+        throw Exception(response['message'] ?? 'Error al cargar más créditos');
+      }
+    } catch (e) {
+      print('❌ Error al cargar más créditos: $e');
+      state = state.copyWith(
+        isLoadingMore: false,
+        errorMessage: 'Error al cargar más créditos: $e',
       );
     }
   }
@@ -192,19 +302,16 @@ class CreditNotifier extends StateNotifier<CreditState> {
         'status': 'pending_approval', // Estado inicial para lista de espera
       };
 
-      // Si se define una fecha programada de entrega, enviarla (permite mismo día si backend lo autoriza)
+      // Agregar campos opcionales
       if (scheduledDeliveryDate != null) {
         creditData['scheduled_delivery_date'] = scheduledDeliveryDate.toIso8601String();
       }
-
       if (interestRate != null && interestRate > 0) {
         creditData['interest_rate'] = interestRate;
       }
-
       if (totalAmount != null) {
         creditData['total_amount'] = totalAmount;
       }
-
       if (installmentAmount != null) {
         creditData['installment_amount'] = installmentAmount;
       }
@@ -234,7 +341,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
           successMessage: 'Crédito creado exitosamente',
         );
 
-        // 🔔 NOTIFICAR AL MANAGER VÍA WEBSOCKET
+        // Notificar vía WebSocket
         _notifyCreditCreated(nuevoCredito);
 
         print('✅ Crédito creado exitosamente');
@@ -245,14 +352,11 @@ class CreditNotifier extends StateNotifier<CreditState> {
     } on ApiException catch (e) {
       print('❌ ApiException al crear crédito: ${e.message}');
 
-      // Construir mensaje: usar message o primer error de validación si existe
       String errorMessage = e.message;
       Map<String, dynamic> validationErrors = {};
       if (e.hasValidationErrors) {
         validationErrors = e.validationErrors;
-        // Si hay errores de validación, priorizar un mensaje amigable
         if (validationErrors.isNotEmpty) {
-          // Tomar el primer campo y su primer error para mostrar
           final firstKey = validationErrors.keys.first;
           final firstList = validationErrors[firstKey];
           if (firstList is List && firstList.isNotEmpty) {
@@ -310,12 +414,14 @@ class CreditNotifier extends StateNotifier<CreditState> {
       if (interestRate != null) creditData['interest_rate'] = interestRate;
       if (frequency != null) creditData['frequency'] = frequency;
       if (status != null) creditData['status'] = status;
-      if (startDate != null)
+      if (startDate != null) {
         creditData['start_date'] = startDate.toIso8601String().split('T')[0];
+      }
       if (endDate != null) {
         var normalizedEnd = endDate;
-        // Si es o seguirá siendo diario, ajustar fin con la cantidad indicada (Lun–Sáb) desde startDate disponible
-        final existing = state.credits.firstWhere((c) => c.id == creditId, orElse: () => throw Exception('Crédito no encontrado'));
+        // Si es diario, ajustar fecha fin
+        final existing = state.credits.firstWhere((c) => c.id == creditId,
+            orElse: () => throw Exception('Crédito no encontrado'));
         final freq = frequency ?? existing.frequency;
         final start = startDate ?? existing.startDate;
         if (freq == 'daily') {
@@ -325,17 +431,12 @@ class CreditNotifier extends StateNotifier<CreditState> {
         creditData['end_date'] = normalizedEnd.toIso8601String().split('T')[0];
       }
       if (totalAmount != null) creditData['total_amount'] = totalAmount;
-      if (installmentAmount != null)
-        creditData['installment_amount'] = installmentAmount;
-
+      if (installmentAmount != null) creditData['installment_amount'] = installmentAmount;
       if (totalInstallments != null) creditData['total_installments'] = totalInstallments;
       if (latitude != null) creditData['latitude'] = latitude;
       if (longitude != null) creditData['longitude'] = longitude;
 
-      final response = await _creditApiService.updateCredit(
-        creditId,
-        creditData,
-      );
+      final response = await _creditApiService.updateCredit(creditId, creditData);
 
       if (response['success'] == true) {
         final creditoActualizado = Credito.fromJson(response['data']);
@@ -417,46 +518,210 @@ class CreditNotifier extends StateNotifier<CreditState> {
     }
   }
 
+  /// Procesa un pago para un crédito (delegado al PagoProvider) - CON UBICACIÓN GPS
+  Future<Map<String, dynamic>?> processPayment({
+    required int creditId,
+    required double amount,
+    String paymentType = 'cash',
+    String? notes,
+    double? latitude,
+    double? longitude,
+  }) async {
+    // Validar estado del crédito localmente
+    final current = state.credits.firstWhere(
+      (c) => c.id == creditId,
+      orElse: () => Credito(
+        id: creditId,
+        clientId: 0,
+        amount: 0,
+        balance: 0,
+        frequency: 'monthly',
+        status: 'active',
+        startDate: DateTime.now(),
+        endDate: DateTime.now(),
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    if (current.status != 'active') {
+      state = state.copyWith(
+        errorMessage: 'Solo se pueden registrar pagos para créditos activos',
+        successMessage: null,
+      );
+      return null;
+    }
+
+    // Delegar al PagoProvider incluyendo la ubicación GPS
+    final pagoNotifier = _ref.read(pagoProvider.notifier);
+    final result = await pagoNotifier.processPaymentForCredit(
+      creditId: creditId,
+      amount: amount,
+      paymentType: paymentType,
+      notes: notes,
+      latitude: latitude,
+      longitude: longitude,
+    );
+
+    // Si hay información del crédito retornada, actualizar la lista local
+    if (result != null && result['credit'] != null) {
+      final creditoActualizado = Credito.fromJson(result['credit']);
+      final creditosActualizados = state.credits.map((credito) {
+        return credito.id == creditId ? creditoActualizado : credito;
+      }).toList();
+      state = state.copyWith(
+        credits: creditosActualizados,
+        isLoading: false,
+        successMessage: 'Pago procesado exitosamente',
+      );
+    }
+
+    return result;
+  }
+
   /// Obtiene créditos de un cliente específico
-  Future<void> loadClientCredits(int clientId) async {
+  Future<void> loadClientCredits(
+    int clientId, {
+    String? status,
+    List<String>? frequencies,
+    DateTime? startDateFrom,
+    DateTime? startDateTo,
+    DateTime? endDateFrom,
+    DateTime? endDateTo,
+    double? amountMin,
+    double? amountMax,
+    double? balanceMin,
+    double? balanceMax,
+    int page = 1,
+    int perPage = 50,
+  }) async {
     try {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos del cliente: $clientId');
 
-      final response = await _creditApiService.getClientCredits(clientId);
+      final response = await _creditApiService.getClientCredits(
+        clientId,
+        status: status,
+        frequency: (frequencies == null || frequencies.isEmpty) ? null : frequencies.join(','),
+        startDateFrom: startDateFrom?.toIso8601String().split('T')[0],
+        startDateTo: startDateTo?.toIso8601String().split('T')[0],
+        endDateFrom: endDateFrom?.toIso8601String().split('T')[0],
+        endDateTo: endDateTo?.toIso8601String().split('T')[0],
+        amountMin: amountMin,
+        amountMax: amountMax,
+        balanceMin: balanceMin,
+        balanceMax: balanceMax,
+        page: page,
+        perPage: perPage,
+      );
 
       if (response['success'] == true) {
-        // El endpoint /credits/client/{client} devuelve los créditos directamente en 'data'
-        // no en una estructura paginada como 'data.data'
-        final creditsData = response['data'] as List? ?? [];
+        final data = response['data'];
+        List<dynamic> creditsData;
+        int currentPageVal = 1;
+        int totalPagesVal = 1;
+        int totalItemsVal = 0;
+
+        if (data is Map<String, dynamic> && data['data'] is List) {
+          creditsData = data['data'] as List<dynamic>;
+          currentPageVal = data['current_page'] ?? 1;
+          totalPagesVal = data['last_page'] ?? 1;
+          totalItemsVal = data['total'] ?? (creditsData.length);
+        } else if (data is List) {
+          creditsData = data;
+          totalItemsVal = data.length;
+        } else {
+          creditsData = const [];
+        }
 
         final credits = creditsData
-            .map(
-              (creditJson) =>
-                  Credito.fromJson(creditJson as Map<String, dynamic>),
-            )
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
             .toList();
 
         state = state.copyWith(
           credits: credits,
           isLoading: false,
-          // Para este endpoint no hay paginación, todos los créditos vienen juntos
-          currentPage: 1,
-          totalPages: 1,
-          totalItems: credits.length,
+          currentPage: currentPageVal,
+          totalPages: totalPagesVal,
+          totalItems: totalItemsVal,
         );
 
         print('✅ ${credits.length} créditos del cliente cargados exitosamente');
       } else {
-        throw Exception(
-          response['message'] ?? 'Error al cargar créditos del cliente',
-        );
+        throw Exception(response['message'] ?? 'Error al cargar créditos del cliente');
       }
     } catch (e) {
       print('❌ Error al cargar créditos del cliente: $e');
       state = state.copyWith(
         isLoading: false,
         errorMessage: 'Error al cargar créditos del cliente: $e',
+      );
+    }
+  }
+
+  /// Obtiene créditos por cobrador (para admin/manager)
+  Future<void> loadCobradorCredits(
+    int cobradorId, {
+    String? status,
+    String? search,
+    List<String>? frequencies,
+    DateTime? startDateFrom,
+    DateTime? startDateTo,
+    DateTime? endDateFrom,
+    DateTime? endDateTo,
+    double? amountMin,
+    double? amountMax,
+    double? balanceMin,
+    double? balanceMax,
+    int page = 1,
+    int perPage = 15,
+  }) async {
+    try {
+      state = state.copyWith(isLoading: true, errorMessage: null);
+      print('🔄 Cargando créditos del cobrador: $cobradorId');
+
+      final response = await _creditApiService.getCobradorCredits(
+        cobradorId,
+        status: status,
+        search: search,
+        frequency: (frequencies == null || frequencies.isEmpty) ? null : frequencies.join(','),
+        startDateFrom: startDateFrom?.toIso8601String().split('T')[0],
+        startDateTo: startDateTo?.toIso8601String().split('T')[0],
+        endDateFrom: endDateFrom?.toIso8601String().split('T')[0],
+        endDateTo: endDateTo?.toIso8601String().split('T')[0],
+        amountMin: amountMin,
+        amountMax: amountMax,
+        balanceMin: balanceMin,
+        balanceMax: balanceMax,
+        page: page,
+        perPage: perPage,
+      );
+
+      if (response['success'] == true) {
+        final data = response['data'];
+        final creditsData = (data is Map<String, dynamic>)
+            ? (data['data'] as List? ?? [])
+            : (data as List? ?? []);
+
+        final credits = creditsData
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .toList();
+
+        state = state.copyWith(
+          credits: credits,
+          isLoading: false,
+          currentPage: (data is Map<String, dynamic>) ? (data['current_page'] ?? 1) : 1,
+          totalPages: (data is Map<String, dynamic>) ? (data['last_page'] ?? 1) : 1,
+          totalItems: (data is Map<String, dynamic>) ? (data['total'] ?? credits.length) : credits.length,
+        );
+        print('✅ Créditos del cobrador cargados (${credits.length})');
+      } else {
+        throw Exception(response['message'] ?? 'Error al cargar créditos del cobrador');
+      }
+    } catch (e) {
+      print('❌ Error al cargar créditos del cobrador: $e');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Error al cargar créditos del cobrador: $e',
       );
     }
   }
@@ -505,10 +770,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
         final creditsData = data['data'] as List? ?? [];
 
         final attentionCredits = creditsData
-            .map(
-              (creditJson) =>
-                  Credito.fromJson(creditJson as Map<String, dynamic>),
-            )
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
             .toList();
 
         state = state.copyWith(
@@ -516,14 +778,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
           isLoading: false,
         );
 
-        print(
-          '✅ ${attentionCredits.length} créditos que requieren atención cargados',
-        );
+        print('✅ ${attentionCredits.length} créditos que requieren atención cargados');
       } else {
-        throw Exception(
-          response['message'] ??
-              'Error al cargar créditos que requieren atención',
-        );
+        throw Exception(response['message'] ?? 'Error al cargar créditos que requieren atención');
       }
     } catch (e) {
       print('❌ Error al cargar créditos que requieren atención: $e');
@@ -534,123 +791,23 @@ class CreditNotifier extends StateNotifier<CreditState> {
     }
   }
 
-  /// Procesa un pago para un crédito (delegado al PagoProvider)
-  Future<Map<String, dynamic>?> processPayment({
-    required int creditId,
-    required double amount,
-    String paymentType = 'cash',
-    String? notes,
-  }) async {
-    // Validar estado del crédito localmente
-    final current = state.credits.firstWhere(
-      (c) => c.id == creditId,
-      orElse: () => Credito(
-        id: creditId,
-        clientId: 0,
-        amount: 0,
-        balance: 0,
-        frequency: 'monthly',
-        status: 'active',
-        startDate: DateTime.now(),
-        endDate: DateTime.now(),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ),
-    );
-    if (current.status != 'active') {
-      state = state.copyWith(
-        errorMessage: 'Solo se pueden registrar pagos para créditos activos',
-        successMessage: null,
-      );
-      return null;
-    }
-
-    // Delegar al PagoProvider
-    final pagoNotifier = _ref.read(pagoProvider.notifier);
-    final result = await pagoNotifier.processPaymentForCredit(
-      creditId: creditId,
-      amount: amount,
-      paymentType: paymentType,
-      notes: notes,
-    );
-
-    // Si hay información del crédito retornada, actualizar la lista local
-    if (result != null && result['credit'] != null) {
-      final creditoActualizado = Credito.fromJson(result['credit']);
-      final creditosActualizados = state.credits.map((credito) {
-        return credito.id == creditId ? creditoActualizado : credito;
-      }).toList();
-      state = state.copyWith(
-        credits: creditosActualizados,
-        isLoading: false,
-        successMessage: 'Pago procesado exitosamente',
-      );
-    }
-
-    return result;
-  }
-
-  /// Notifica la actualización de pago a través de WebSocket
-  void _notifyPaymentUpdate(Map<String, dynamic> paymentResult, Credito credit) {
-    try {
-      final authState = _ref.read(authProvider);
-      final wsNotifier = _ref.read(webSocketProvider.notifier);
-
-      if (authState.usuario != null) {
-        // Enviar notificación de pago realizado
-        wsNotifier.notifyPaymentMade({
-          'payment': {
-            'id': paymentResult['payment']?['id'],
-            'amount': paymentResult['payment']?['amount'],
-            'notes': paymentResult['payment']?['notes'],
-            'credit_id': credit.id,
-            'cobrador_id': authState.usuario!.id,
-            'client_id': credit.clientId,
-            'client_name': credit.client?.nombre ?? 'Cliente',
-          },
-          'credit': {
-            'id': credit.id,
-            'client_name': credit.client?.nombre ?? 'Cliente',
-            'balance': credit.balance,
-          },
-          'action': 'payment_made',
-          'timestamp': DateTime.now().toIso8601String(),
-        });
-
-        print('🔔 Notificación WebSocket enviada para pago');
-      }
-    } catch (e) {
-      print('⚠️ Error enviando notificación WebSocket: $e');
-      // No fallar el proceso de pago por error en notificación
-    }
-  }
-
-  /// Simula un pago sin guardarlo (delegado al PagoProvider)
-  Future<PaymentAnalysis?> simulatePayment({required int creditId, required double amount}) async {
-    final result = await _ref
-        .read(pagoProvider.notifier)
-        .simulatePaymentForCredit(creditId: creditId, amount: amount);
-    return result;
-  }
-
   /// Obtiene un crédito por ID desde el backend (sin alterar el estado global)
   Future<Credito?> fetchCreditById(int creditId) async {
     try {
       print('🔍 [CreditNotifier] Fetching credit by ID: $creditId');
-      // Intentar obtener detalles extendidos primero
+
       Map<String, dynamic> response;
       try {
         response = await _creditApiService.getCreditDetails(creditId);
       } catch (_) {
-        // Si falla, intentar el endpoint básico
         response = await _creditApiService.getCredit(creditId);
       }
 
       if (response['success'] == true && response['data'] != null) {
         final data = response['data'];
         Map<String, dynamic>? creditJson;
+
         if (data is Map<String, dynamic>) {
-          // Algunos backends envuelven en { credit: {...} } o directamente {...}
           if (data['credit'] is Map<String, dynamic>) {
             creditJson = Map<String, dynamic>.from(data['credit']);
           } else if (data['data'] is Map<String, dynamic>) {
@@ -659,19 +816,11 @@ class CreditNotifier extends StateNotifier<CreditState> {
             creditJson = Map<String, dynamic>.from(data);
           }
         }
+
         if (creditJson != null) {
           final credit = Credito.fromJson(creditJson);
           print('✅ [CreditNotifier] Crédito obtenido: ${credit.id}');
           return credit;
-        }
-      }
-
-      // En algunos casos, el backend puede devolver el crédito en la raíz
-      if (response is Map<String, dynamic>) {
-        // Intentar encontrar un mapa que parezca un crédito
-        final maybeCredit = response['credit'] ?? response['data'];
-        if (maybeCredit is Map<String, dynamic>) {
-          return Credito.fromJson(maybeCredit);
         }
       }
 
@@ -685,7 +834,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
   /// Obtiene el cronograma de pagos de un crédito
   Future<List<PaymentSchedule>?> getPaymentSchedule(int creditId) async {
-    // Primero intentar obtener del backend para reflejar pagos recientes
     try {
       print('🔄 Obteniendo cronograma de pagos desde backend para crédito: $creditId');
       final response = await _creditApiService.getCreditPaymentSchedule(creditId);
@@ -693,7 +841,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
         final data = response['data'];
         List<dynamic> scheduleData = [];
 
-        // El backend puede devolver directamente una lista o un objeto con 'schedule'
         if (data is List) {
           scheduleData = data;
         } else if (data is Map<String, dynamic>) {
@@ -701,7 +848,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
           if (inner is List) {
             scheduleData = inner;
           } else if (inner is Map<String, dynamic>) {
-            // En caso de un formato aún más anidado, intentar extraer 'data'
             final nested = inner['data'];
             if (nested is List) scheduleData = nested;
           }
@@ -721,7 +867,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
     // Si backend falla, generar cronograma localmente
     try {
       print('🔁 Generando cronograma de pagos localmente para crédito: $creditId');
-      // Buscar el crédito en el estado actual
       final credit = state.credits.firstWhere(
         (c) => c.id == creditId,
         orElse: () => throw Exception('Crédito no encontrado'),
@@ -736,135 +881,13 @@ class CreditNotifier extends StateNotifier<CreditState> {
     }
   }
 
-
-  /// Intenta inferir el número de cuotas a partir de totalAmount e installmentAmount
-  int? _inferInstallmentsFromAmounts(double? totalAmount, double? installmentAmount) {
-    if (totalAmount == null || installmentAmount == null || installmentAmount <= 0) return null;
-    final est = (totalAmount / installmentAmount).round();
-    if (est <= 0) return null;
-    return est;
-  }
-
-  /// Genera un cronograma de pagos local basado en los datos del crédito
-  List<PaymentSchedule> _generatePaymentSchedule(Credito credit) {
-    final schedule = <PaymentSchedule>[];
-
-    // Calcular información base
-    final totalDays = credit.endDate.difference(credit.startDate).inDays;
-    final interestRate = credit.interestRate ?? 20.0; // Usar 20% por defecto
-
-    int installments;
-    int daysBetweenPayments;
-
-    // Determinar número de cuotas y frecuencia basado en el tipo
-    switch (credit.frequency) {
-      case 'daily':
-        // Inferir cantidad de cuotas diarias a partir de montos si es posible; si no, 24 por defecto.
-        final inferred = _inferInstallmentsFromAmounts(credit.totalAmount, credit.installmentAmount);
-        installments = inferred ?? 24;
-        daysBetweenPayments = 1; // iteramos por días, pero saltaremos domingos abajo
-        break;
-      case 'weekly':
-        installments = (totalDays / 7).ceil();
-        daysBetweenPayments = 7;
-        break;
-      case 'biweekly':
-        installments = (totalDays / 14).ceil();
-        daysBetweenPayments = 14;
-        break;
-      case 'monthly':
-        installments = (totalDays / 30).ceil();
-        daysBetweenPayments = 30;
-        break;
-      default:
-        installments = 24; // Valor por defecto
-        daysBetweenPayments = (totalDays / installments).round();
-    }
-
-    // Usar installmentAmount si está disponible, o calcular
-    final installmentAmount =
-        credit.installmentAmount ??
-        (credit.amount * (1 + interestRate / 100)) / installments;
-
-    // Generar cronograma
-    DateTime currentDue = credit.startDate;
-    int created = 0;
-    while (created < installments) {
-      currentDue = currentDue.add(Duration(days: daysBetweenPayments));
-      if (credit.frequency == 'daily' && currentDue.weekday == DateTime.sunday) {
-        // Saltar domingos
-        continue;
-      }
-      final dueDate = currentDue;
-      created++;
-
-      // Verificar si ya fue pagado comparando con pagos existentes
-      final existingPayment =
-          credit.payments?.where((p) {
-            final paymentDate = p.paymentDate;
-            final daysDiff = (paymentDate.difference(dueDate).inDays).abs();
-            return daysDiff <=
-                (daysBetweenPayments ~/
-                    2); // Tolerancia de la mitad del período
-          }).isNotEmpty ??
-          false;
-
-      // Determinar estado
-      String status;
-      if (existingPayment) {
-        status = 'paid';
-      } else if (dueDate.isBefore(DateTime.now())) {
-        status = 'overdue';
-      } else {
-        status = 'pending';
-      }
-
-      schedule.add(
-        PaymentSchedule(
-          installmentNumber: created,
-          dueDate: dueDate,
-          amount: installmentAmount,
-          status: status,
-        ),
-      );
-    }
-
-    return schedule;
-  }
-
-  /// Obtiene detalles completos de un crédito
-  Future<Credito?> getCreditDetails(int creditId) async {
+  /// Obtiene detalles extendidos de un crédito: credit + summary + schedule + history
+  Future<CreditFullDetails?> getCreditFullDetails(int creditId) async {
     try {
-      print('🔄 Obteniendo detalles del crédito: $creditId');
-
       final response = await _creditApiService.getCreditDetails(creditId);
-
       if (response['success'] == true) {
-        final data = response['data'];
-        // Algunas APIs devuelven { data: { credit: { ... } } }
-        final creditJson = (data is Map<String, dynamic> && data['credit'] != null)
-            ? data['credit'] as Map<String, dynamic>
-            : data as Map<String, dynamic>;
-        var credito = Credito.fromJson(creditJson);
-
-        // Merge de ubicación del cliente si viene separada en data.location_cliente
-        if (data is Map<String, dynamic>) {
-          final loc = data['location_cliente'];
-          if (loc is Map<String, dynamic>) {
-            final latStr = loc['latitude']?.toString();
-            final lngStr = loc['longitude']?.toString();
-            final lat = latStr != null ? double.tryParse(latStr) : null;
-            final lng = lngStr != null ? double.tryParse(lngStr) : null;
-            if (lat != null && lng != null && credito.client != null) {
-              final updatedClient = credito.client!.copyWith(latitud: lat, longitud: lng);
-              credito = credito.copyWith(client: updatedClient);
-              print('📍 Ubicación del cliente fusionada desde location_cliente -> ($lat, $lng)');
-            }
-          }
-        }
-
-        print('✅ Detalles del crédito obtenidos');
-        return credito;
+        final details = CreditFullDetails.fromApi(response);
+        return details;
       } else {
         throw Exception(response['message'] ?? 'Error al obtener detalles');
       }
@@ -873,24 +896,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(errorMessage: 'Error al obtener detalles: $e');
       return null;
     }
-  }
-
-  /// Limpia mensajes de error y éxito
-  void clearMessages() {
-    print('🧹 Limpiando mensajes de error y éxito...');
-    state = state.copyWith(errorMessage: null, successMessage: null);
-  }
-
-  /// Limpia solo el mensaje de error
-  void clearError() {
-    print('🧹 Limpiando error...');
-    state = state.copyWith(errorMessage: null);
-  }
-
-  /// Limpia solo el mensaje de éxito
-  void clearSuccess() {
-    print('🧹 Limpiando éxito...');
-    state = state.copyWith(successMessage: null);
   }
 
   // ========================================
@@ -903,28 +908,20 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos pendientes de aprobación...');
 
-      final response = await _creditApiService.getPendingApprovalCredits(
-        page: page,
-      );
+      final response = await _creditApiService.getPendingApprovalCredits(page: page);
 
       if (response['success'] == true) {
         final data = response['data'];
         List<dynamic> creditsData = [];
 
-        // Manejar respuesta paginada o directa
         if (data is List) {
-          // Respuesta directa como array
           creditsData = data;
         } else if (data is Map<String, dynamic>) {
-          // Respuesta paginada
           creditsData = data['data'] as List? ?? [];
         }
 
         final credits = creditsData
-            .map(
-              (creditJson) =>
-                  Credito.fromJson(creditJson as Map<String, dynamic>),
-            )
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
             .toList();
 
         state = state.copyWith(
@@ -934,9 +931,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos pendientes de aprobación cargados');
       } else {
-        throw Exception(
-          response['message'] ?? 'Error al cargar créditos pendientes',
-        );
+        throw Exception(response['message'] ?? 'Error al cargar créditos pendientes');
       }
     } catch (e) {
       print('❌ Error al cargar créditos pendientes de aprobación: $e');
@@ -953,28 +948,20 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos en lista de espera...');
 
-      final response = await _creditApiService.getWaitingDeliveryCredits(
-        page: page,
-      );
+      final response = await _creditApiService.getWaitingDeliveryCredits(page: page);
 
       if (response['success'] == true) {
         final data = response['data'];
         List<dynamic> creditsData = [];
 
-        // Manejar respuesta paginada o directa
         if (data is List) {
-          // Respuesta directa como array
           creditsData = data;
         } else if (data is Map<String, dynamic>) {
-          // Respuesta paginada
           creditsData = data['data'] as List? ?? [];
         }
 
         final credits = creditsData
-            .map(
-              (creditJson) =>
-                  Credito.fromJson(creditJson as Map<String, dynamic>),
-            )
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
             .toList();
 
         state = state.copyWith(
@@ -984,9 +971,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos en lista de espera cargados');
       } else {
-        throw Exception(
-          response['message'] ?? 'Error al cargar créditos en espera',
-        );
+        throw Exception(response['message'] ?? 'Error al cargar créditos en espera');
       }
     } catch (e) {
       print('❌ Error al cargar créditos en lista de espera: $e');
@@ -1003,19 +988,14 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos listos para entrega hoy...');
 
-      final response = await _creditApiService.getReadyForDeliveryToday(
-        page: page,
-      );
+      final response = await _creditApiService.getReadyForDeliveryToday(page: page);
 
       if (response['success'] == true) {
         final data = response['data'];
         final creditsData = data is List ? data : (data['data'] as List? ?? []);
 
         final credits = creditsData
-            .map(
-              (creditJson) =>
-                  Credito.fromJson(creditJson as Map<String, dynamic>),
-            )
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
             .toList();
 
         state = state.copyWith(
@@ -1025,9 +1005,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos listos para entrega hoy cargados');
       } else {
-        throw Exception(
-          response['message'] ?? 'Error al cargar créditos listos',
-        );
+        throw Exception(response['message'] ?? 'Error al cargar créditos listos');
       }
     } catch (e) {
       print('❌ Error al cargar créditos listos para entrega: $e');
@@ -1044,28 +1022,20 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos con entrega atrasada...');
 
-      final response = await _creditApiService.getOverdueDeliveryCredits(
-        page: page,
-      );
+      final response = await _creditApiService.getOverdueDeliveryCredits(page: page);
 
       if (response['success'] == true) {
         final data = response['data'];
         List<dynamic> creditsData = [];
 
-        // Manejar respuesta paginada o directa
         if (data is List) {
-          // Respuesta directa como array
           creditsData = data;
         } else if (data is Map<String, dynamic>) {
-          // Respuesta paginada
           creditsData = data['data'] as List? ?? [];
         }
 
         final credits = creditsData
-            .map(
-              (creditJson) =>
-                  Credito.fromJson(creditJson as Map<String, dynamic>),
-            )
+            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
             .toList();
 
         state = state.copyWith(
@@ -1075,9 +1045,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos con entrega atrasada cargados');
       } else {
-        throw Exception(
-          response['message'] ?? 'Error al cargar créditos atrasados',
-        );
+        throw Exception(response['message'] ?? 'Error al cargar créditos atrasados');
       }
     } catch (e) {
       print('❌ Error al cargar créditos con entrega atrasada: $e');
@@ -1118,13 +1086,14 @@ class CreditNotifier extends StateNotifier<CreditState> {
     required int creditId,
     required DateTime scheduledDeliveryDate,
     String? notes,
+    bool immediate = false,
   }) async {
     try {
       state = state.copyWith(
         isLoading: true,
         errorMessage: null,
         successMessage: null,
-        validationErrors: {}, // Limpiar errores de validación anteriores
+        validationErrors: {},
       );
       print('✅ Aprobando crédito para entrega: $creditId');
 
@@ -1137,11 +1106,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
       if (response['success'] == true) {
         final creditoActualizado = Credito.fromJson(response['data']['credit']);
 
-        // Actualizar el crédito en todas las listas
         _updateCreditInAllLists(creditoActualizado);
-
-        // 🔔 Notificar por WebSocket la aprobación para entrega
-        _notifyCreditApproved(creditoActualizado);
+        _notifyCreditApproved(creditoActualizado, immediate: immediate);
 
         state = state.copyWith(
           isLoading: false,
@@ -1159,7 +1125,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
     } on ApiException catch (e) {
       print('❌ ApiException: ${e.message}');
 
-      // Capturar errores de validación específicamente
       Map<String, dynamic> validationErrors = {};
       if (e.hasValidationErrors) {
         validationErrors = e.validationErrors;
@@ -1169,7 +1134,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.toString(),
-        validationErrors: validationErrors, // Almacenar errores de validación
+        validationErrors: validationErrors,
       );
       return false;
     } catch (e) {
@@ -1195,18 +1160,12 @@ class CreditNotifier extends StateNotifier<CreditState> {
       );
       print('❌ Rechazando crédito: $creditId');
 
-      final response = await _creditApiService.rejectCredit(
-        creditId,
-        reason: reason,
-      );
+      final response = await _creditApiService.rejectCredit(creditId, reason: reason);
 
       if (response['success'] == true) {
         final creditoActualizado = Credito.fromJson(response['data']['credit']);
 
-        // Actualizar el crédito en todas las listas
         _updateCreditInAllLists(creditoActualizado);
-
-        // 🔔 Notificar por WebSocket el rechazo del crédito
         _notifyCreditRejected(creditoActualizado, reason);
 
         state = state.copyWith(
@@ -1234,6 +1193,53 @@ class CreditNotifier extends StateNotifier<CreditState> {
     }
   }
 
+  /// Reprograma la fecha de entrega de un crédito
+  Future<bool> rescheduleCreditDelivery({
+    required int creditId,
+    required DateTime newScheduledDate,
+    String? reason,
+  }) async {
+    try {
+      state = state.copyWith(
+        isLoading: true,
+        errorMessage: null,
+        successMessage: null,
+      );
+      print('⏰ Reprogramando fecha de entrega del crédito: $creditId');
+
+      final response = await _creditApiService.rescheduleCreditDelivery(
+        creditId,
+        newScheduledDate: newScheduledDate,
+        reason: reason,
+      );
+
+      // La API puede devolver en diferentes formatos; intentamos cubrir ambos
+      final dynamic data = response['data'] ?? response;
+      final dynamic creditJson = (data is Map<String, dynamic>)
+          ? (data['credit'] ?? data)
+          : null;
+
+      if (creditJson is Map<String, dynamic>) {
+        final creditoActualizado = Credito.fromJson(creditJson);
+        _updateCreditInAllLists(creditoActualizado);
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        successMessage: 'Fecha de entrega reprogramada exitosamente',
+      );
+      print('✅ Fecha de entrega reprogramada');
+      return true;
+    } catch (e) {
+      print('❌ Error al reprogramar fecha de entrega: $e');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Error al reprogramar fecha de entrega: $e',
+      );
+      return false;
+    }
+  }
+
   /// Entrega un crédito al cliente
   Future<bool> deliverCreditToClient({
     required int creditId,
@@ -1247,18 +1253,12 @@ class CreditNotifier extends StateNotifier<CreditState> {
       );
       print('🚚 Entregando crédito al cliente: $creditId');
 
-      final response = await _creditApiService.deliverCreditToClient(
-        creditId,
-        notes: notes,
-      );
+      final response = await _creditApiService.deliverCreditToClient(creditId, notes: notes);
 
       if (response['success'] == true) {
         final creditoActualizado = Credito.fromJson(response['data']['credit']);
 
-        // Actualizar el crédito en todas las listas
         _updateCreditInAllLists(creditoActualizado);
-
-        // 🔔 Notificar por WebSocket la entrega del crédito
         _notifyCreditDelivered(creditoActualizado, notes: notes);
 
         state = state.copyWith(
@@ -1286,366 +1286,302 @@ class CreditNotifier extends StateNotifier<CreditState> {
     }
   }
 
-  /// Aprueba y entrega el crédito inmediatamente (flujo combinado)
-  Future<bool> approveAndDeliverCredit({
-    required int creditId,
-    required DateTime scheduledDeliveryDate,
-    String? approvalNotes,
-    String? deliveryNotes,
-  }) async {
-    try {
-      // Limpiar mensajes previos
-      state = state.copyWith(
-        isLoading: true,
-        errorMessage: null,
-        successMessage: null,
-        validationErrors: {},
-      );
+  // ========================================
+  // MÉTODOS DE UTILIDAD
+  // ========================================
 
-      // 1) Aprobar para entrega
-      final approved = await approveCreditForDelivery(
-        creditId: creditId,
-        scheduledDeliveryDate: scheduledDeliveryDate,
-        notes: approvalNotes,
-      );
-
-      if (!approved) {
-        // approveCreditForDelivery ya gestionó errores/validaciones
-        return false;
-      }
-
-      // 2) Entregar inmediatamente
-      final delivered = await deliverCreditToClient(
-        creditId: creditId,
-        notes: deliveryNotes ?? 'Entrega inmediata tras aprobación',
-      );
-
-      if (!delivered) {
-        // deliverCreditToClient ya gestionó errores
-        return false;
-      }
-
-      // Asegurar mensaje de éxito coherente para el flujo combinado
-      state = state.copyWith(
-        isLoading: false,
-        successMessage: 'Crédito aprobado y entregado exitosamente',
-      );
-      return true;
-    } on ApiException catch (e) {
-      Map<String, dynamic> validationErrors = {};
-      if (e.hasValidationErrors) {
-        validationErrors = e.validationErrors;
-      }
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: e.toString(),
-        validationErrors: validationErrors,
-      );
-      return false;
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: 'Error al aprobar y entregar crédito: $e',
-      );
-      return false;
-    }
+  /// Limpia mensajes de error y éxito
+  void clearMessages() {
+    print('🧹 Limpiando mensajes de error y éxito...');
+    state = state.copyWith(errorMessage: null, successMessage: null);
   }
 
-  /// Reprograma la fecha de entrega de un crédito
-  Future<bool> rescheduleCreditDelivery({
-    required int creditId,
-    required DateTime newScheduledDate,
-    String? reason,
-  }) async {
-    try {
-      state = state.copyWith(
-        isLoading: true,
-        errorMessage: null,
-        successMessage: null,
-      );
-      print('📅 Reprogramando entrega del crédito: $creditId');
+  /// Limpia solo el mensaje de error
+  void clearError() {
+    print('🧹 Limpiando error...');
+    state = state.copyWith(errorMessage: null);
+  }
 
-      final response = await _creditApiService.rescheduleCreditDelivery(
-        creditId,
-        newScheduledDate: newScheduledDate,
-        reason: reason,
-      );
+  /// Limpia solo el mensaje de éxito
+  void clearSuccess() {
+    print('🧹 Limpiando éxito...');
+    state = state.copyWith(successMessage: null);
+  }
 
-      if (response['success'] == true) {
-        final creditoActualizado = Credito.fromJson(response['data']['credit']);
+  // ========================================
+  // MÉTODOS PRIVADOS
+  // ========================================
 
-        // Actualizar el crédito en todas las listas
-        _updateCreditInAllLists(creditoActualizado);
+  /// Intenta inferir el número de cuotas a partir de totalAmount e installmentAmount
+  int? _inferInstallmentsFromAmounts(double? totalAmount, double? installmentAmount) {
+    if (totalAmount == null || installmentAmount == null || installmentAmount <= 0) return null;
+    final est = (totalAmount / installmentAmount).round();
+    if (est <= 0) return null;
+    return est;
+  }
 
-        state = state.copyWith(
-          isLoading: false,
-          successMessage: 'Fecha de entrega reprogramada exitosamente',
-        );
+  /// Genera un cronograma de pagos local basado en los datos del crédito
+  List<PaymentSchedule> _generatePaymentSchedule(Credito credit) {
+    final schedule = <PaymentSchedule>[];
 
-        print('✅ Fecha de entrega reprogramada exitosamente');
-        return true;
+    // Calcular información base
+    final totalDays = credit.endDate.difference(credit.startDate).inDays;
+    final interestRate = credit.interestRate ?? 20.0;
+
+    int installments;
+    int daysBetweenPayments;
+
+    // Determinar número de cuotas y frecuencia basado en el tipo
+    switch (credit.frequency) {
+      case 'daily':
+        final inferred = _inferInstallmentsFromAmounts(credit.totalAmount, credit.installmentAmount);
+        installments = inferred ?? 24;
+        daysBetweenPayments = 1;
+        break;
+      case 'weekly':
+        installments = (totalDays / 7).ceil();
+        daysBetweenPayments = 7;
+        break;
+      case 'biweekly':
+        installments = (totalDays / 14).ceil();
+        daysBetweenPayments = 14;
+        break;
+      case 'monthly':
+        installments = (totalDays / 30).ceil();
+        daysBetweenPayments = 30;
+        break;
+      default:
+        installments = 24;
+        daysBetweenPayments = (totalDays / installments).round();
+    }
+
+    // Usar installmentAmount si está disponible, o calcular
+    final installmentAmount = credit.installmentAmount ??
+        (credit.amount * (1 + interestRate / 100)) / installments;
+
+    // Generar cronograma
+    DateTime currentDue = credit.startDate;
+    int created = 0;
+    while (created < installments) {
+      currentDue = currentDue.add(Duration(days: daysBetweenPayments));
+      if (credit.frequency == 'daily' && currentDue.weekday == DateTime.sunday) {
+        continue; // Saltar domingos
+      }
+      final dueDate = currentDue;
+      created++;
+
+      // Verificar si ya fue pagado comparando con pagos existentes
+      final existingPayment = credit.payments?.where((p) {
+            final paymentDate = p.paymentDate;
+            final daysDiff = (paymentDate.difference(dueDate).inDays).abs();
+            return daysDiff <= (daysBetweenPayments ~/ 2);
+          }).isNotEmpty ??
+          false;
+
+      // Determinar estado
+      String status;
+      if (existingPayment) {
+        status = 'paid';
+      } else if (dueDate.isBefore(DateTime.now())) {
+        status = 'overdue';
       } else {
-        throw Exception(response['message'] ?? 'Error al reprogramar entrega');
-      }
-    } catch (e) {
-      print('❌ Error al reprogramar fecha de entrega: $e');
-
-      String errorMessage = 'Error al reprogramar fecha de entrega';
-      if (e.toString().contains('403')) {
-        errorMessage = 'No tienes permisos para reprogramar entregas';
-      } else if (e.toString().contains('404')) {
-        errorMessage = 'Crédito no encontrado';
+        status = 'pending';
       }
 
-      state = state.copyWith(isLoading: false, errorMessage: errorMessage);
-      return false;
+      schedule.add(
+        PaymentSchedule(
+          installmentNumber: created,
+          dueDate: dueDate,
+          amount: installmentAmount,
+          status: status,
+        ),
+      );
     }
+
+    return schedule;
   }
 
-  /// Obtiene el estado de entrega de un crédito
-  Future<DeliveryStatus?> getCreditDeliveryStatus(int creditId) async {
-    try {
-      print('📋 Obteniendo estado de entrega del crédito: $creditId');
-
-      final response = await _creditApiService.getCreditDeliveryStatus(
-        creditId,
-      );
-
-      if (response['success'] == true) {
-        final statusData = response['data'];
-        final deliveryStatus = DeliveryStatus.fromJson(statusData);
-
-        print('✅ Estado de entrega obtenido');
-        return deliveryStatus;
-      } else {
-        throw Exception(
-          response['message'] ?? 'Error al obtener estado de entrega',
-        );
-      }
-    } catch (e) {
-      print('❌ Error al obtener estado de entrega: $e');
-      state = state.copyWith(
-        errorMessage: 'Error al obtener estado de entrega: $e',
-      );
-      return null;
-    }
-  }
-
-  /// Actualiza un crédito en todas las listas del estado
+  /// Actualiza un crédito en todas las listas donde pueda estar presente
   void _updateCreditInAllLists(Credito creditoActualizado) {
-    // Actualizar en la lista principal de créditos
     final creditosActualizados = state.credits.map((credito) {
       return credito.id == creditoActualizado.id ? creditoActualizado : credito;
     }).toList();
 
-    // Actualizar en créditos pendientes de aprobación
-    final pendingActualizados = state.pendingApprovalCredits.map((credito) {
+    final attentionUpdated = state.attentionCredits.map((credito) {
       return credito.id == creditoActualizado.id ? creditoActualizado : credito;
     }).toList();
 
-    // Actualizar en créditos en lista de espera
-    final waitingActualizados = state.waitingDeliveryCredits.map((credito) {
+    final pendingUpdated = state.pendingApprovalCredits.map((credito) {
       return credito.id == creditoActualizado.id ? creditoActualizado : credito;
     }).toList();
 
-    // Actualizar en créditos listos para entrega
-    final readyActualizados = state.readyForDeliveryCredits.map((credito) {
+    final waitingUpdated = state.waitingDeliveryCredits.map((credito) {
       return credito.id == creditoActualizado.id ? creditoActualizado : credito;
     }).toList();
 
-    // Actualizar en créditos con entrega atrasada
-    final overdueActualizados = state.overdueDeliveryCredits.map((credito) {
+    final readyUpdated = state.readyForDeliveryCredits.map((credito) {
+      return credito.id == creditoActualizado.id ? creditoActualizado : credito;
+    }).toList();
+
+    final overdueUpdated = state.overdueDeliveryCredits.map((credito) {
       return credito.id == creditoActualizado.id ? creditoActualizado : credito;
     }).toList();
 
     state = state.copyWith(
       credits: creditosActualizados,
-      pendingApprovalCredits: pendingActualizados,
-      waitingDeliveryCredits: waitingActualizados,
-      readyForDeliveryCredits: readyActualizados,
-      overdueDeliveryCredits: overdueActualizados,
+      attentionCredits: attentionUpdated,
+      pendingApprovalCredits: pendingUpdated,
+      waitingDeliveryCredits: waitingUpdated,
+      readyForDeliveryCredits: readyUpdated,
+      overdueDeliveryCredits: overdueUpdated,
     );
   }
 
-  /// Carga todos los datos relacionados con lista de espera
-  Future<void> loadAllWaitingListData() async {
-    await Future.wait([
-      loadPendingApprovalCredits(),
-      loadWaitingDeliveryCredits(),
-      loadReadyForDeliveryCredits(),
-      loadOverdueDeliveryCredits(),
-      loadWaitingListSummary(),
-    ]);
-  }
-
-  /// Notifica la creación de un crédito a través de WebSocket
-  void _notifyCreditCreated(Credito credit) {
+  /// Notifica la creación de un crédito vía WebSocket
+  void _notifyCreditCreated(Credito credito) {
     try {
       final authState = _ref.read(authProvider);
       final wsNotifier = _ref.read(webSocketProvider.notifier);
 
       if (authState.usuario != null) {
-        final cobrador = authState.usuario!;
-
-        // Obtener información del cliente
-        final clientName = credit.client?.nombre ?? 'Cliente';
-
-        // Preparar datos del crédito para la notificación
-        final creditData = {
-          'id': credit.id,
-          'amount': credit.amount,
-          'balance': credit.balance,
-          'frequency': credit.frequency,
-          'status': credit.status,
-          'client_id': credit.clientId,
-          'client_name': clientName,
-          'start_date': credit.startDate.toIso8601String(),
-          'end_date': credit.endDate.toIso8601String(),
-          'created_at': DateTime.now().toIso8601String(),
-        };
-
-        // Usar el WebSocketService directamente para enviar el evento de ciclo de vida
-        final wsServiceInstance = WebSocketService();
-        wsServiceInstance.sendCreditLifecycle(
+        // Notificar al manager (targetUserId) que el cobrador solicitó crédito
+        final managerId = authState.usuario!.assignedManagerId?.toString();
+        wsNotifier.notifyCreditLifecycle(
           action: 'created',
-          creditId: credit.id.toString(),
-          credit: creditData,
-          message: 'El cobrador ${cobrador.nombre} ha creado un crédito de ${credit.amount} Bs para $clientName que requiere aprobación',
-        );
-
-        // También enviar notificación usando el método existente del websocket_provider
-        /*wsNotifier.notifyCreditCreated({
-          'creditId': credit.id.toString(),
-          'title': 'Nuevo Crédito Creado',
-          'message': 'El cobrador ${cobrador.nombre} ha creado un crédito de ${credit.amount} Bs para $clientName',
-          'credit': creditData,
-          'cobrador': {
-            'id': cobrador.id,
-            'name': cobrador.nombre,
-            'email': cobrador.email,
+          creditId: credito.id!,
+          targetUserId: managerId,
+          credit: {
+            'id': credito.id,
+            'client_id': credito.clientId,
+            'client_name': credito.client?.nombre,
+            'amount': credito.amount,
           },
-          'action': 'created',
-          'timestamp': DateTime.now().toIso8601String(),
-        });*/
-
-        print('🔔 Notificación WebSocket enviada para nuevo crédito ID: ${credit.id}');
-        print('   - Cobrador: ${cobrador.nombre}');
-        print('   - Cliente: $clientName');
-        print('   - Monto: ${credit.amount} Bs');
-      } else {
-        print('⚠️ No se puede enviar notificación: usuario no autenticado');
+          userType: 'cobrador',
+          message: 'Nuevo crédito solicitado',
+        );
+        print('🔔 WS: evento credit_lifecycle(created) emitido');
       }
     } catch (e) {
-      print('⚠️ Error enviando notificación WebSocket para crédito: $e');
-      // No fallar el proceso de creación por error en notificación
+      print('⚠️ Error enviando notificación WebSocket: $e');
     }
   }
 
-  /// Notifica aprobación de crédito (manager -> cobrador)
-  void _notifyCreditApproved(Credito credit) {
+  /// Notifica la aprobación de un crédito vía WebSocket
+  void _notifyCreditApproved(Credito credito, {bool immediate = false}) {
     try {
       final authState = _ref.read(authProvider);
-      if (authState.usuario == null) return;
-      final actor = authState.usuario!;
+      final wsNotifier = _ref.read(webSocketProvider.notifier);
 
-      final clientName = credit.client?.nombre ?? 'Cliente';
-      final targetCobradorId = credit.cobrador?.id?.toString();
+      if (authState.usuario != null) {
+        // Notificar al creador del crédito (puede ser manager o cobrador), sin importar su rol
+        final String? creatorIdStr = (() {
+          final int? creatorId = credito.createdBy ?? (credito.creator?.id is int ? credito.creator?.id as int? : null);
+          return creatorId != null ? creatorId.toString() : null;
+        })();
 
-      final creditData = {
-        'id': credit.id,
-        'amount': credit.amount,
-        'balance': credit.balance,
-        'status': credit.status,
-        'client_id': credit.clientId,
-        'client_name': clientName,
-        'scheduled_delivery_date': credit.scheduledDeliveryDate?.toIso8601String(),
-      }..removeWhere((k, v) => v == null);
-
-      final ws = WebSocketService();
-      ws.sendCreditLifecycle(
-        action: 'approved',
-        creditId: credit.id.toString(),
-        targetUserId: targetCobradorId, // avisar al cobrador si lo conocemos
-        userType: 'cobrador',
-        credit: creditData,
-        message: 'Tu crédito #${credit.id} por ${credit.amount} Bs ha sido aprobado por ${actor.nombre}',
-      );
+        wsNotifier.notifyCreditLifecycle(
+          action: 'approved',
+          creditId: credito.id!,
+          targetUserId: creatorIdStr,
+          credit: {
+            'id': credito.id,
+            'client_id': credito.clientId,
+            'client_name': credito.client?.nombre,
+            'amount': credito.amount,
+            'entrega_inmediata': immediate,
+          },
+          userType: 'manager',
+          message: 'Crédito aprobado',
+        );
+        print('🔔 WS: evento credit_lifecycle(approved) emitido');
+      }
     } catch (e) {
-      print('⚠️ Error enviando notificación de aprobación: $e');
+      print('⚠️ Error enviando notificación WebSocket: $e');
     }
   }
 
-  /// Notifica rechazo de crédito (manager -> cobrador)
-  void _notifyCreditRejected(Credito credit, String reason) {
+  /// Notifica el rechazo de un crédito vía WebSocket
+  void _notifyCreditRejected(Credito credito, String reason) {
     try {
       final authState = _ref.read(authProvider);
-      if (authState.usuario == null) return;
-      final actor = authState.usuario!;
+      final wsNotifier = _ref.read(webSocketProvider.notifier);
 
-      final clientName = credit.client?.nombre ?? 'Cliente';
-      final targetCobradorId = credit.cobrador?.id?.toString();
-
-      final creditData = {
-        'id': credit.id,
-        'amount': credit.amount,
-        'balance': credit.balance,
-        'status': credit.status,
-        'client_id': credit.clientId,
-        'client_name': clientName,
-        'rejection_reason': reason,
-      }..removeWhere((k, v) => v == null);
-
-      final ws = WebSocketService();
-      ws.sendCreditLifecycle(
-        action: 'rejected',
-        creditId: credit.id.toString(),
-        targetUserId: targetCobradorId,
-        userType: 'cobrador',
-        credit: creditData,
-        message: 'Tu crédito #${credit.id} por ${credit.amount} Bs fue rechazado por ${actor.nombre}. Motivo: $reason',
-      );
+      if (authState.usuario != null) {
+        // Notificar al cobrador que el manager rechazó el crédito
+        wsNotifier.notifyCreditLifecycle(
+          action: 'rejected',
+          creditId: credito.id!,
+          targetUserId: credito.cobrador?.id.toString(),
+          credit: {
+            'id': credito.id,
+            'client_id': credito.clientId,
+            'client_name': credito.client?.nombre,
+            'amount': credito.amount,
+            'reason': reason,
+          },
+          userType: 'manager',
+          message: 'Crédito rechazado: $reason',
+        );
+        print('🔔 WS: evento credit_lifecycle(rejected) emitido');
+      }
     } catch (e) {
-      print('⚠️ Error enviando notificación de rechazo: $e');
+      print('⚠️ Error enviando notificación WebSocket: $e');
     }
   }
 
-  /// Notifica entrega de crédito (cobrador -> managers)
-  void _notifyCreditDelivered(Credito credit, {String? notes}) {
+  /// Orquesta aprobación y entrega inmediata del crédito
+  Future<bool> approveAndDeliverCredit({required int creditId, required DateTime scheduledDeliveryDate, String? approvalNotes, String? deliveryNotes }) async {
+    // Primero aprobar para entrega
+    final approved = await approveCreditForDelivery(
+      creditId: creditId,
+      scheduledDeliveryDate: scheduledDeliveryDate,
+      notes: approvalNotes,
+      immediate: true,
+    );
+    if (!approved) return false;
+
+    // Luego entregar al cliente
+    final delivered = await deliverCreditToClient(
+      creditId: creditId,
+      notes: deliveryNotes,
+    );
+    return delivered;
+  }
+
+  /// Notifica la entrega de un crédito vía WebSocket
+  void _notifyCreditDelivered(Credito credito, {String? notes}) {
     try {
       final authState = _ref.read(authProvider);
-      if (authState.usuario == null) return;
-      final actor = authState.usuario!;
+      final wsNotifier = _ref.read(webSocketProvider.notifier);
 
-      final clientName = credit.client?.nombre ?? 'Cliente';
-
-      final creditData = {
-        'id': credit.id,
-        'amount': credit.amount,
-        'balance': credit.balance,
-        'status': credit.status,
-        'client_id': credit.clientId,
-        'client_name': clientName,
-        if (notes != null && notes.isNotEmpty) 'delivery_notes': notes,
-      }..removeWhere((k, v) => v == null);
-
-      final ws = WebSocketService();
-      ws.sendCreditLifecycle(
-        action: 'delivered',
-        creditId: credit.id.toString(),
-        credit: creditData,
-        message: 'El cobrador ${actor.nombre} entregó el crédito #${credit.id} de ${credit.amount} Bs al cliente $clientName',
-      );
+      if (authState.usuario != null) {
+        // Notificar al manager que se realizó la entrega del crédito
+        final authUser = authState.usuario!;
+        final managerId = authUser.assignedManagerId?.toString();
+        wsNotifier.notifyCreditLifecycle(
+          action: 'delivered',
+          creditId: credito.id!,
+          targetUserId: managerId,
+          credit: {
+            'id': credito.id,
+            'client_id': credito.clientId,
+            'client_name': credito.client?.nombre,
+            'amount': credito.amount,
+            if (notes != null) 'notes': notes,
+          },
+          userType: 'cobrador',
+          message: 'Crédito entregado',
+        );
+        print('🔔 WS: evento credit_lifecycle(delivered) emitido');
+      }
     } catch (e) {
-      print('⚠️ Error enviando notificación de entrega: $e');
+      print('⚠️ Error enviando notificación WebSocket: $e');
     }
   }
 }
 
-// Provider para el notifier de créditos
-final creditProvider = StateNotifierProvider<CreditNotifier, CreditState>((
-  ref,
-) {
+// Provider para gestionar créditos
+final creditProvider = StateNotifierProvider<CreditNotifier, CreditState>((ref) {
   final creditApiService = CreditApiService();
-  final paymentApiService = PaymentApiService();
-  return CreditNotifier(creditApiService, paymentApiService, ref);
+  return CreditNotifier(creditApiService, ref);
 });

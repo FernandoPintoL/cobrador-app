@@ -4,12 +4,20 @@ import 'package:intl/intl.dart';
 import '../../config/role_colors.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../../negocio/providers/user_management_provider.dart';
 import '../../datos/modelos/credito.dart';
+import '../../negocio/providers/websocket_provider.dart';
 import '../../ui/widgets/validation_error_display.dart'; // Importar widget de errores
 import '../../ui/widgets/loading_overlay.dart';
 import '../../ui/widgets/client_category_chip.dart';
+import '../pantallas/notifications_screen.dart';
+import '../widgets/logout_dialog.dart';
+import '../widgets/profile_image_widget.dart';
+import '../widgets/payment_dialog.dart';
 import 'credit_detail_screen.dart';
 import 'credit_form_screen.dart';
+import '../cliente/clientes_screen.dart';
+import '../pantallas/profile_settings_screen.dart';
 
 class CreditTypeScreen extends ConsumerStatefulWidget {
   const CreditTypeScreen({super.key});
@@ -20,36 +28,312 @@ class CreditTypeScreen extends ConsumerStatefulWidget {
 
 class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     with SingleTickerProviderStateMixin {
+  // Advanced search UI (copied style from Clientes screen)
+  bool _showAdvancedFilters = false;
+  String _specificFilter = 'busqueda_general';
+  final TextEditingController _specificController = TextEditingController();
+  final TextEditingController _clientController = TextEditingController();
+  final TextEditingController _creditIdController = TextEditingController();
+  // Estado simple de filtros para experiencia ágil
+  String? _statusFilter;
+  final Set<String> _frequency = {};
+  double? _amountMin;
+  double? _amountMax;
+  DateTime? _startFrom;
+  DateTime? _startTo;
+  String _search = '';
+  final TextEditingController _searchController = TextEditingController();
+  DateTime? _lastSearchTime;
   late TabController _tabController;
+
+  int? _selectedCobradorId; // Filtro de cobrador
+
+  // Nuevas variables para filtros rápidos
+  bool _showQuickFilters = false;
+  final ScrollController _quickFiltersController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+    // Listener para búsqueda en tiempo real desactivado (se usará botón de búsqueda u onSubmitted)
+    // _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
   }
 
+  Widget _buildAppDrawer(BuildContext context, String role) {
+    final userRoleParam = role == 'manager' ? 'manager' : role == 'cobrador' ? 'cobrador' : null;
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: RoleColors.getPrimaryColor(role),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Text('Menú', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('Accesos rápidos', style: TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.people_alt),
+              title: const Text('Gestionar clientes'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ClientesScreen(userRole: userRoleParam),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text('Mi perfil'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ProfileSettingsScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _specificController.dispose();
+    _clientController.dispose();
+    _creditIdController.dispose();
     _tabController.dispose();
+    _searchController.dispose();
+    _quickFiltersController.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged() {
+    // NOTE: Mantener para posible reactivación con debounce y _normalizeQuery
+    // Implementar debounce para búsqueda en tiempo real
+    _lastSearchTime = DateTime.now();
+
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (_lastSearchTime != null &&
+          DateTime.now().difference(_lastSearchTime!) >= const Duration(milliseconds: 500)) {
+        if (_search != _searchController.text.trim()) {
+          setState(() {
+            _search = _searchController.text.trim();
+          });
+          _loadInitialData();
+        }
+      }
+    });
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _statusFilter = null;
+      _frequency.clear();
+      _amountMin = null;
+      _amountMax = null;
+      _startFrom = null;
+      _startTo = null;
+      _selectedCobradorId = null;
+      _search = '';
+      _searchController.clear();
+    });
+    _loadInitialData();
+  }
+
+  bool get _hasActiveFilters {
+    return _statusFilter != null ||
+        _frequency.isNotEmpty ||
+        _amountMin != null ||
+        _amountMax != null ||
+        _startFrom != null ||
+        _startTo != null ||
+        _selectedCobradorId != null ||
+        _search.isNotEmpty;
+  }
+
   void _loadInitialData() {
-    // Cargar listas de espera
-    ref.read(creditProvider.notifier).loadAllWaitingListData();
-
-    // Además, cargar créditos activos según el rol
     final authState = ref.read(authProvider);
-    final usuario = authState.usuario;
-    final bool isCobrador = authState.isCobrador;
-
     ref.read(creditProvider.notifier).loadCredits(
-      status: 'active',
-      cobradorId: isCobrador && usuario != null ? usuario.id.toInt() : null,
+      status: _statusFilter,
+      search: _search.isEmpty ? null : _search,
+      frequencies: _frequency.isEmpty ? null : _frequency.toList(),
+      startDateFrom: _startFrom,
+      startDateTo: _startTo,
+      amountMin: _amountMin,
+      amountMax: _amountMax,
+      cobradorId: _selectedCobradorId,
       page: 1,
+    );
+  }
+
+  Future<void> _openFilters() async {
+    final authState = ref.read(authProvider);
+    final isManagerOrAdmin = authState.isManager || authState.isAdmin;
+    final cobradores = isManagerOrAdmin
+        ? ref.read(userManagementProvider).usuarios.where((u) => u.roles.contains('cobrador')).toList()
+        : [];
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        final amountMinController = TextEditingController(text: _amountMin?.toStringAsFixed(0) ?? '');
+        final amountMaxController = TextEditingController(text: _amountMax?.toStringAsFixed(0) ?? '');
+        String? tmpStatus = _statusFilter;
+        final tmpFreq = Set<String>.from(_frequency);
+        DateTime? tmpStartFrom = _startFrom;
+        DateTime? tmpStartTo = _startTo;
+        int? tmpCobradorId = _selectedCobradorId;
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: StatefulBuilder(
+            builder: (context, setModal) => SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Filtros', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  if (isManagerOrAdmin) ...[
+                    const Text('Filtrar por cobrador'),
+                    DropdownButtonFormField<int?>(
+                      initialValue: tmpCobradorId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Cobrador'),
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('Todos')),
+                        ...cobradores.map((c) => DropdownMenuItem<int?>(
+                              value: c.id,
+                              child: Text(c.nombre),
+                            )),
+                      ],
+                      onChanged: (v) => setModal(() => tmpCobradorId = v),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Wrap(spacing: 8, children: [
+                    FilterChip(
+                      label: const Text('Activos'),
+                      selected: tmpStatus == 'active',
+                      onSelected: (_) => setModal(() => tmpStatus = 'active'),
+                    ),
+                    FilterChip(
+                      label: const Text('Pendientes'),
+                      selected: tmpStatus == 'pending_approval',
+                      onSelected: (_) => setModal(() => tmpStatus = 'pending_approval')),
+                    FilterChip(
+                      label: const Text('En espera'),
+                      selected: tmpStatus == 'waiting_delivery',
+                      onSelected: (_) => setModal(() => tmpStatus = 'waiting_delivery')),
+                  ]),
+                  const SizedBox(height: 16),
+                  const Text('Frecuencia'),
+                  Wrap(spacing: 8, children: [
+                    for (final f in ['daily','weekly','biweekly','monthly'])
+                      FilterChip(
+                        label: Text(f),
+                        selected: tmpFreq.contains(f),
+                        onSelected: (v) => setModal(() { if (v) tmpFreq.add(f); else tmpFreq.remove(f); }),
+                      ),
+                  ]),
+                  const SizedBox(height: 16),
+                  Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: amountMinController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Monto mín.'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: amountMaxController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Monto máx.'),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  Row(children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final d = await showDatePicker(context: context, initialDate: tmpStartFrom ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+                          if (d != null) setModal(() => tmpStartFrom = d);
+                        },
+                        icon: const Icon(Icons.date_range),
+                        label: Text(tmpStartFrom==null? 'Inicio desde': DateFormat('dd/MM/yyyy').format(tmpStartFrom!)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final d = await showDatePicker(context: context, initialDate: tmpStartTo ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+                          if (d != null) setModal(() => tmpStartTo = d);
+                        },
+                        icon: const Icon(Icons.event),
+                        label: Text(tmpStartTo==null? 'Inicio hasta': DateFormat('dd/MM/yyyy').format(tmpStartTo!)),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  Row(children:[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () { Navigator.pop(context); },
+                        child: const Text('Cancelar'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _statusFilter = tmpStatus;
+                            _frequency
+                              ..clear()
+                              ..addAll(tmpFreq);
+                            _amountMin = double.tryParse(amountMinController.text);
+                            _amountMax = double.tryParse(amountMaxController.text);
+                            _startFrom = tmpStartFrom;
+                            _startTo = tmpStartTo;
+                            _selectedCobradorId = tmpCobradorId;
+                          });
+                          Navigator.pop(context);
+                          _loadInitialData();
+                        },
+                        child: const Text('Aplicar filtros'),
+                      ),
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -136,12 +420,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     });
 
     return Scaffold(
-      /*backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? Theme.of(context).scaffoldBackgroundColor
-          : RoleColors.getAccentColor(currentUserRole),*/
       appBar: AppBar(
         title: const Text(
-          'Mis Créditos',
+          'Créditos',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
@@ -152,6 +433,48 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
             icon: const Icon(Icons.refresh),
             onPressed: _loadInitialData,
             tooltip: 'Actualizar',
+          ),
+          // Botón de notificaciones
+          Consumer(
+            builder: (context, ref, child) {
+              final wsState = ref.watch(webSocketProvider);
+              final unreadCount = wsState.notifications
+                  .where((n) => !n.isRead)
+                  .length;
+
+              return IconButton(
+                icon: Badge(
+                  label: unreadCount > 0 ? Text('$unreadCount') : null,
+                  child: const Icon(Icons.notifications),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const NotificationsScreen(),
+                  ),
+                ),
+                tooltip: 'Notificaciones',
+              );
+            },
+          ),
+          /*const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Editar perfil',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ProfileSettingsScreen(),
+              ),
+            ),
+          ),*/
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Cerrar sesión',
+            onPressed: () async {
+              await showLogoutOptions(context: context, ref: ref);
+            },
           ),
         ],
         bottom: TabBar(
@@ -169,34 +492,61 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               icon: const Icon(Icons.playlist_add_check_circle),
             ),
             Tab(
-              text: 'Pendientes (${creditState.pendingApprovalCredits.length})',
+              text: 'Pendientes ('
+                  '${creditState.credits.where((c) => c.status == 'pending_approval').length}'
+                  ')',
               icon: const Icon(Icons.hourglass_empty),
             ),
             Tab(
-              text: 'En Espera (${creditState.waitingDeliveryCredits.length})',
+              text: 'En Espera ('
+                  '${creditState.credits.where((c) => c.status == 'waiting_delivery').length}'
+                  ')',
               icon: const Icon(Icons.schedule),
             ),
             Tab(
-              text:
-                  'Entregar (${creditState.readyForDeliveryCredits.length})',
+              text: 'Entregar ('
+                  '${creditState.credits.where((c) => c.isReadyForDelivery).length}'
+                  ')',
               icon: const Icon(Icons.today),
             ),
             Tab(
-              text: 'Atrasados (${creditState.overdueDeliveryCredits.length})',
+              text: 'Atrasados ('
+                  '${creditState.credits.where((c) => c.isOverdueForDelivery).length}'
+                  ')',
               icon: const Icon(Icons.warning),
             ),
           ],
         ),
       ),
+      drawer: _buildAppDrawer(context, currentUserRole),
       body: Stack(
         children: [
           Column(
             children: [
-              // Resumen de lista de espera
-              /*if (creditState.waitingListSummary != null)
-                _buildSummaryCard(creditState.waitingListSummary!),*/
-
-              // Contenido de las pestañas
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  // allow the header/filter area to scroll if it grows too tall
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+                ),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _buildQuickSearchBar(),
+                      // Advanced filters panel similar to Clientes screen
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: _showAdvancedFilters
+                            ? _buildAdvancedFiltersPanel()
+                            : const SizedBox.shrink(),
+                      ),
+                      if (_showQuickFilters) _buildQuickFilters(),
+                      if (_hasActiveFilters) _buildActiveFiltersIndicator(),
+                    ],
+                  ),
+                ),
+              ),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
@@ -206,19 +556,19 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       'active',
                     ),
                     _buildCreditsList(
-                      creditState.pendingApprovalCredits,
+                      creditState.credits.where((c) => c.status == 'pending_approval').toList(),
                       'pending_approval',
                     ),
                     _buildCreditsList(
-                      creditState.waitingDeliveryCredits,
+                      creditState.credits.where((c) => c.status == 'waiting_delivery').toList(),
                       'waiting_delivery',
                     ),
                     _buildCreditsList(
-                      creditState.readyForDeliveryCredits,
+                      creditState.credits.where((c) => c.isReadyForDelivery).toList(),
                       'ready_for_delivery',
                     ),
                     _buildCreditsList(
-                      creditState.overdueDeliveryCredits,
+                      creditState.credits.where((c) => c.isOverdueForDelivery).toList(),
                       'overdue_delivery',
                     ),
                   ],
@@ -226,7 +576,6 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               ),
             ],
           ),
-          // Overlay de carga cuando haya peticiones en curso
           LoadingOverlay(isLoading: creditState.isLoading, message: 'Cargando créditos...'),
         ],
       ),
@@ -247,7 +596,572 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     );
   }
 
+  // Advanced filters UI builder (inspired by Clientes screen)
+  Widget _buildAdvancedFiltersPanel() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    Widget chip(String key, String label, IconData icon) {
+      final selected = _specificFilter == key;
+      return ChoiceChip(
+        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 16), const SizedBox(width: 6), Text(label)]),
+        selected: selected,
+        onSelected: (_) => setState(() {
+          _specificFilter = key;
+        }),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? theme.colorScheme.surface : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.filter_alt, color: theme.colorScheme.primary, size: 20),
+            const SizedBox(width: 8),
+            Text('Filtros Específicos', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () {
+                setState(() {
+                  _showAdvancedFilters = false;
+                  _specificFilter = 'busqueda_general';
+                  _specificController.clear();
+                  _clientController.clear();
+                  _creditIdController.clear();
+                });
+              },
+              tooltip: 'Cerrar filtros',
+            )
+          ]),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            chip('busqueda_general', 'General', Icons.search),
+            chip('cliente', 'Cliente', Icons.person),
+            chip('credit_id', 'ID Crédito', Icons.numbers),
+            chip('estado', 'Estado', Icons.verified),
+            chip('frecuencia', 'Frecuencia', Icons.event_repeat),
+            chip('montos', 'Montos', Icons.attach_money),
+            chip('fechas', 'Fechas', Icons.date_range),
+          ]),
+          const SizedBox(height: 16),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: _buildSpecificInputForFilter(),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    _specificFilter = 'busqueda_general';
+                    _specificController.clear();
+                    _clientController.clear();
+                    _creditIdController.clear();
+                    _amountMin = null;
+                    _amountMax = null;
+                    _startFrom = null;
+                    _startTo = null;
+                  });
+                },
+                child: const Text('Limpiar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  final s = _composeAdvancedSearch();
+                  // Normalizar valores monto y fechas si aplica
+                  if (_amountMin != null && _amountMax != null && _amountMin! > _amountMax!) {
+                    final tmp = _amountMin!;
+                    _amountMin = _amountMax;
+                    _amountMax = tmp;
+                  }
+                  if (_startFrom != null && _startTo != null && _startFrom!.isAfter(_startTo!)) {
+                    final tmp = _startFrom!;
+                    _startFrom = _startTo;
+                    _startTo = tmp;
+                  }
+                  setState(() {
+                    _search = s ?? '';
+                    _showAdvancedFilters = false;
+                  });
+                  _loadInitialData();
+                },
+                child: const Text('Aplicar'),
+              ),
+            )
+          ])
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildSpecificInputForFilter() {
+    switch (_specificFilter) {
+      case 'cliente':
+        return TextField(
+          key: const ValueKey('cliente'),
+          controller: _clientController,
+          decoration: const InputDecoration(
+            labelText: 'Nombre del cliente',
+            prefixIcon: Icon(Icons.person),
+            border: OutlineInputBorder(),
+          ),
+        );
+      case 'credit_id':
+        return TextField(
+          key: const ValueKey('credit_id'),
+          controller: _creditIdController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'ID del crédito',
+            prefixIcon: Icon(Icons.numbers),
+            border: OutlineInputBorder(),
+          ),
+        );
+      case 'estado':
+        return Wrap(spacing: 8, children: [
+          ChoiceChip(
+            label: const Text('Activos'),
+            selected: _statusFilter == 'active',
+            onSelected: (_) => setState(() => _statusFilter = 'active'),
+          ),
+          ChoiceChip(
+            label: const Text('Pendientes'),
+            selected: _statusFilter == 'pending_approval',
+            onSelected: (_) => setState(() => _statusFilter = 'pending_approval'),
+          ),
+          ChoiceChip(
+            label: const Text('En espera'),
+            selected: _statusFilter == 'waiting_delivery',
+            onSelected: (_) => setState(() => _statusFilter = 'waiting_delivery'),
+          ),
+        ]);
+      case 'frecuencia':
+        return Wrap(spacing: 8, children: [
+          FilterChip(
+            label: const Text('Diaria'),
+            selected: _frequency.contains('daily'),
+            onSelected: (v) => setState(() => v ? _frequency.add('daily') : _frequency.remove('daily')),
+          ),
+          FilterChip(
+            label: const Text('Semanal'),
+            selected: _frequency.contains('weekly'),
+            onSelected: (v) => setState(() => v ? _frequency.add('weekly') : _frequency.remove('weekly')),
+          ),
+          FilterChip(
+            label: const Text('Quincenal'),
+            selected: _frequency.contains('biweekly'),
+            onSelected: (v) => setState(() => v ? _frequency.add('biweekly') : _frequency.remove('biweekly')),
+          ),
+          FilterChip(
+            label: const Text('Mensual'),
+            selected: _frequency.contains('monthly'),
+            onSelected: (v) => setState(() => v ? _frequency.add('monthly') : _frequency.remove('monthly')),
+          ),
+        ]);
+      case 'montos':
+        final minCtrl = TextEditingController(text: _amountMin?.toStringAsFixed(0) ?? '');
+        final maxCtrl = TextEditingController(text: _amountMax?.toStringAsFixed(0) ?? '');
+        return Row(children: [
+          Expanded(
+            child: TextField(
+              key: const ValueKey('monto_min'),
+              controller: minCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Monto mínimo',
+                prefixIcon: Icon(Icons.remove_circle_outline),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) {
+                final parsed = double.tryParse(v.replaceAll(',', '.'));
+                setState(() => _amountMin = parsed);
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              key: const ValueKey('monto_max'),
+              controller: maxCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Monto máximo',
+                prefixIcon: Icon(Icons.add_circle_outline),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) {
+                final parsed = double.tryParse(v.replaceAll(',', '.'));
+                setState(() => _amountMax = parsed);
+              },
+            ),
+          ),
+        ]);
+      case 'fechas':
+        return Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              key: const ValueKey('fecha_desde'),
+              onPressed: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: _startFrom ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                );
+                if (d != null) setState(() => _startFrom = d);
+              },
+              icon: const Icon(Icons.calendar_today),
+              label: Text(_startFrom == null
+                  ? 'Desde (inicio)'
+                  : DateFormat('dd/MM/yyyy').format(_startFrom!)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              key: const ValueKey('fecha_hasta'),
+              onPressed: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: _startTo ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                );
+                if (d != null) setState(() => _startTo = d);
+              },
+              icon: const Icon(Icons.event),
+              label: Text(_startTo == null
+                  ? 'Hasta (inicio)'
+                  : DateFormat('dd/MM/yyyy').format(_startTo!)),
+            ),
+          ),
+        ]);
+      default:
+        return TextField(
+          key: const ValueKey('general'),
+          controller: _specificController,
+          decoration: const InputDecoration(
+            labelText: 'Buscar en todos los campos (general)',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
+          ),
+        );
+    }
+  }
+
+  // Normaliza la consulta: si contiene letras -> MAYÚSCULAS, si es solo números/símbolos telefónicos -> tal cual
+  String _normalizeQuery(String v) {
+    final trimmed = v.trim();
+    if (trimmed.isEmpty) return trimmed;
+    final hasLetter = RegExp(r'[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]').hasMatch(trimmed);
+    return hasLetter ? trimmed.toUpperCase() : trimmed;
+  }
+
+  String? _composeAdvancedSearch() {
+    switch (_specificFilter) {
+      case 'cliente':
+        final v = _clientController.text.trim();
+        if (v.isEmpty) return null;
+        return _normalizeQuery(v); // nombre o CI alfanumérico en MAYÚSCULAS; teléfono se envía tal cual
+      case 'credit_id':
+        final id = _creditIdController.text.trim();
+        if (id.isEmpty) return null;
+        return id; // soporta búsqueda por ID en backend
+      case 'estado':
+        // status se pasa por _statusFilter; mantener search intacto
+        return _search.isEmpty ? null : _search;
+      case 'frecuencia':
+        // frequency se pasa por _frequency; mantener search intacto
+        return _search.isEmpty ? null : _search;
+      case 'montos':
+        // Aplicar al estado al presionar Aplicar (se maneja fuera). No compone 'search'.
+        return _search.isEmpty ? null : _search;
+      case 'fechas':
+        // Igual que montos; se pasa por parámetros dedicados
+        return _search.isEmpty ? null : _search;
+      default:
+        final v = _specificController.text.trim();
+        if (v.isEmpty) return null;
+        return _normalizeQuery(v);
+    }
+  }
+
+  Widget _buildQuickSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: TextField(
+        controller: _searchController..text = _search,
+        autofocus: false,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          isDense: true,
+          labelText: 'Buscar por nombre, CI o celular del cliente',
+          suffixIcon: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 160),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_search.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear),
+                    tooltip: 'Limpiar',
+                    onPressed: () {
+                      setState(() {
+                        _search = '';
+                        _searchController.clear();
+                      });
+                      _loadInitialData();
+                    },
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Buscar',
+                  onPressed: () {
+                    setState(() {
+                      _search = _normalizeQuery(_searchController.text);
+                    });
+                    _loadInitialData();
+                  },
+                ),
+                IconButton(
+                  icon: AnimatedRotation(
+                    turns: _showAdvancedFilters ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Icon(
+                      Icons.tune,
+                    ),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showAdvancedFilters = !_showAdvancedFilters;
+                      if (!_showAdvancedFilters) {
+                        _specificFilter = 'busqueda_general';
+                        _specificController.clear();
+                        _clientController.clear();
+                        _creditIdController.clear();
+                      }
+                    });
+                  },
+                  tooltip: _showAdvancedFilters ? 'Ocultar filtros avanzados' : 'Mostrar filtros avanzados',
+                ),
+              ],
+            ),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
+          ),
+        ),
+        onSubmitted: (value) {
+          setState(() => _search = _normalizeQuery(value));
+          _loadInitialData();
+        },
+      ),
+    );
+  }
+
+  Widget _buildQuickFilters() {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceVariant,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Filtros Rápidos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _statusFilter = 'active';
+                      _frequency.clear();
+                      _amountMin = null;
+                      _amountMax = null;
+                      _startFrom = null;
+                      _startTo = null;
+                      _selectedCobradorId = null;
+                    });
+                    _loadInitialData();
+                  },
+                  child: const Text('Activos'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _statusFilter = 'pending_approval';
+                      _frequency.clear();
+                      _amountMin = null;
+                      _amountMax = null;
+                      _startFrom = null;
+                      _startTo = null;
+                      _selectedCobradorId = null;
+                    });
+                    _loadInitialData();
+                  },
+                  child: const Text('Pendientes'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _statusFilter = 'waiting_delivery';
+                      _frequency.clear();
+                      _amountMin = null;
+                      _amountMax = null;
+                      _startFrom = null;
+                      _startTo = null;
+                      _selectedCobradorId = null;
+                    });
+                    _loadInitialData();
+                  },
+                  child: const Text('En Espera'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _statusFilter = null;
+                      _frequency
+                        ..clear()
+                        ..add('daily');
+                      _amountMin = null;
+                      _amountMax = null;
+                      _startFrom = null;
+                      _startTo = null;
+                      _selectedCobradorId = null;
+                    });
+                    _loadInitialData();
+                  },
+                  child: const Text('Hoy'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _statusFilter = null;
+                      _frequency
+                        ..clear()
+                        ..add('weekly');
+                      _amountMin = null;
+                      _amountMax = null;
+                      _startFrom = null;
+                      _startTo = null;
+                      _selectedCobradorId = null;
+                    });
+                    _loadInitialData();
+                  },
+                  child: const Text('Esta Semana'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _statusFilter = null;
+                      _frequency
+                        ..clear()
+                        ..add('monthly');
+                      _amountMin = null;
+                      _amountMax = null;
+                      _startFrom = null;
+                      _startTo = null;
+                      _selectedCobradorId = null;
+                    });
+                    _loadInitialData();
+                  },
+                  child: const Text('Este Mes'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveFiltersIndicator() {
+    return Container(
+      color: Theme
+          .of(context)
+          .colorScheme
+          .primaryContainer,
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt, color: Colors.green, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Filtros activos: ${_statusFilter != null
+                  ? 'Estado: $_statusFilter'
+                  : ''}'
+                  '${_frequency.isNotEmpty ? ', Frecuencia: ${_frequency.join(
+                  ', ')}' : ''}'
+                  '${_amountMin != null ? ', Monto mín.: $_amountMin' : ''}'
+                  '${_amountMax != null ? ', Monto máx.: $_amountMax' : ''}'
+                  '${_startFrom != null ? ', Desde: ${DateFormat('dd/MM/yyyy')
+                  .format(_startFrom!)}' : ''}'
+                  '${_startTo != null ? ', Hasta: ${DateFormat('dd/MM/yyyy')
+                  .format(_startTo!)}' : ''}'
+                  '${_selectedCobradorId != null
+                  ? ', Cobrador: $_selectedCobradorId'
+                  : ''}',
+              style: TextStyle(fontSize: 14, color: Theme
+                  .of(context)
+                  .colorScheme
+                  .onPrimaryContainer),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _clearAllFilters,
+            icon: const Icon(Icons.clear, size: 16, color: Colors.red),
+            label: const Text(
+                'Limpiar filtros', style: TextStyle(color: Colors.red)),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCreditsList(List<Credito> credits, String listType) {
+    final creditState = ref.watch(creditProvider);
+
     if (credits.isEmpty) {
       return Center(
         child: Column(
@@ -265,13 +1179,72 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: credits.length,
-      itemBuilder: (context, index) {
-        final credit = credits[index];
-        return _buildCreditCard(credit, listType);
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 200) {
+          // Cerca del final, intentar cargar más
+          final notifier = ref.read(creditProvider.notifier);
+          if (notifier.hasMore && !creditState.isLoadingMore && !creditState.isLoading) {
+            notifier.loadMoreCredits();
+          }
+        }
+        return false;
       },
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: credits.length + 1,
+        itemBuilder: (context, index) {
+          if (index < credits.length) {
+            final credit = credits[index];
+            return _buildCreditCard(credit, listType);
+          }
+          // Footer
+          if (creditState.isLoadingMore) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+            );
+          }
+          if (creditState.currentPage >= creditState.totalPages) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  'No existen más datos',
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: TextStyle(fontWeight: FontWeight.w600, color: scheme.onSurface),
+          ),
+        ],
+      ),
     );
   }
 
@@ -290,6 +1263,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               // Header con cliente y estado
               Row(
                 children: [
+                  ProfileImageWidget(
+                    profileImage: credit.client?.profileImage,
+                    size: 40,
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,6 +1287,20 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        Text(
+                          "CI.:"+ credit.client!.ci ?? '',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w300,
+                          ),
+                        ),
+                        Text(
+                          "Cel.: "+credit.client!.telefono ?? '',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w300,
+                          ),
+                        ),
                         // categoría del cliente (chip)
                         if (credit.client?.clientCategory != null)
                           Padding(
@@ -322,6 +1314,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                     ),
                   ),
                   _buildStatusChip(credit.status),
+
                 ],
               ),
 
@@ -341,7 +1334,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (credit.creator != null)
+                        if (credit.creator != null)...[
                           Text(
                             'Creado por: ${credit.creator!.nombre}',
                             style: TextStyle(
@@ -349,6 +1342,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
+                        ]
                       ],
                     ),
                   ),
@@ -361,7 +1355,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       ),
                       if (credit.scheduledDeliveryDate != null)
                         Text(
-                          'Entrega: ${DateFormat('dd/MM/yyyy HH:mm').format(credit.scheduledDeliveryDate!)}',
+                          'Entregado: ${DateFormat('dd/MM/yyyy HH:mm').format(credit.scheduledDeliveryDate!)}',
                           style: TextStyle(
                             fontSize: 12,
                             color: _getDeliveryDateColor(credit),
@@ -379,9 +1373,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.amberAccent.withValues(alpha: 25),
+                    color: Colors.amberAccent.withOpacity(0.25),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orangeAccent.withValues(alpha: 77)),
+                    border: Border.all(color: Colors.orangeAccent.withOpacity(0.77)),
                   ),
                   child: const Row(
                     children: [
@@ -411,19 +1405,19 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 25),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.withValues(alpha: 77)),
+                    color: Colors.green,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withOpacity(0.77)),
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.check_circle, color: Colors.green, size: 16),
+                      Icon(Icons.check_circle, color: Colors.white, size: 16),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Listo para entrega hoy',
                           style: TextStyle(
-                            color: Colors.green,
+                            color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
@@ -439,9 +1433,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 25),
+                    color: Colors.red.withOpacity(0.25),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withValues(alpha: 77)),
+                    border: Border.all(color: Colors.red.withOpacity(0.77)),
                   ),
                   child: Row(
                     children: [
@@ -461,6 +1455,21 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   ),
                 ),
               ],
+
+              // Datos adicionales del crédito en la lista
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _buildInfoChip('Saldo', 'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}'),
+                  _buildInfoChip('Pagado', 'Bs. ${NumberFormat('#,##0.00').format((credit.totalAmount ?? credit.amount) - credit.balance)}'),
+                  if (credit.installmentAmount != null)
+                    _buildInfoChip('Cuota', 'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount)}'),
+                  _buildInfoChip('Cuotas', '${credit.paidInstallments}/${credit.totalInstallments}'),
+                  _buildInfoChip('Frecuencia', credit.frequencyLabel),
+                ],
+              ),
 
               // Botones de acción según el estado
               const SizedBox(height: 12),
@@ -483,31 +1492,31 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
     switch (status) {
       case 'pending_approval':
-        backgroundColor = isDarkMode ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.1);
+        backgroundColor = isDarkMode ? Colors.orange.withOpacity(0.2) : Colors.orange.withOpacity(0.1);
         borderColor = isDarkMode ? Colors.orange.shade300 : Colors.orange.shade600;
         textColor = isDarkMode ? Colors.orange.shade300 : Colors.orange.shade700;
         label = 'Pendiente';
         break;
       case 'waiting_delivery':
-        backgroundColor = isDarkMode ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.withValues(alpha: 0.1);
+        backgroundColor = isDarkMode ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1);
         borderColor = isDarkMode ? Colors.blue.shade300 : Colors.blue.shade600;
         textColor = isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700;
         label = 'En Espera';
         break;
       case 'active':
-        backgroundColor = isDarkMode ? Colors.green.withValues(alpha: 0.2) : Colors.green.withValues(alpha: 0.1);
+        backgroundColor = isDarkMode ? Colors.green.withOpacity(0.2) : Colors.green.withOpacity(0.1);
         borderColor = isDarkMode ? Colors.green.shade300 : Colors.green.shade600;
         textColor = isDarkMode ? Colors.green.shade300 : Colors.green.shade700;
         label = 'Activo';
         break;
       case 'rejected':
-        backgroundColor = isDarkMode ? Colors.red.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.1);
+        backgroundColor = isDarkMode ? Colors.red.withOpacity(0.2) : Colors.red.withOpacity(0.1);
         borderColor = isDarkMode ? Colors.red.shade300 : Colors.red.shade600;
         textColor = isDarkMode ? Colors.red.shade300 : Colors.red.shade700;
         label = 'Rechazado';
         break;
       default:
-        backgroundColor = isDarkMode ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.1);
+        backgroundColor = isDarkMode ? Colors.grey.withOpacity(0.2) : Colors.grey.withOpacity(0.1);
         borderColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600;
         textColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700;
         label = status;
@@ -585,6 +1594,23 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           ),
         ),
       );
+    } else if (listType == 'active' && credit.isActive) {
+      // Botón para pagos desde la lista de créditos activos
+      buttons.add(
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _showPaymentDialogFromList(credit),
+            icon: const Icon(Icons.payment, size: 16),
+            label: const Text('Pagar', style: TextStyle(fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              minimumSize: const Size(0, 32),
+            ),
+          ),
+        ),
+      );
     }
 
     if (buttons.isEmpty) {
@@ -649,6 +1675,27 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       // Recargar datos después de regresar
       _loadInitialData();
     });
+  }
+
+  Future<void> _showPaymentDialogFromList(Credito credit) async {
+    final result = await PaymentDialog.show(
+      context,
+      ref,
+      credit,
+      onPaymentSuccess: () {
+        // Al registrar pago, refrescar la lista
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pago registrado. Actualizando créditos...')),
+        );
+        ref.read(creditProvider.notifier).loadCredits();
+        _loadInitialData();
+      },
+    );
+
+    // Si no se concretó pago, no es necesario hacer nada
+    if (result != true) {
+      // No-op
+    }
   }
 
   Future<void> _showQuickApprovalDialog(Credito credit) async {
@@ -754,22 +1801,20 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               ),
               ElevatedButton(
                 onPressed: () async {
-                  bool result;
+                  bool result = false;
                   if (deliverImmediately) {
                     result = await ref.read(creditProvider.notifier).approveAndDeliverCredit(
-                          creditId: credit.id,
-                          scheduledDeliveryDate: selectedDate,
-                          approvalNotes: 'Aprobación rápida con entrega inmediata',
-                          deliveryNotes: 'Entrega inmediata desde aprobación',
-                        );
+                      creditId: credit.id,
+                      scheduledDeliveryDate: selectedDate,
+                      approvalNotes: 'Aprobación rápida con entrega inmediata',
+                      deliveryNotes: 'Entrega inmediata desde aprobación',
+                    );
                   } else {
-                    result = await ref
-                        .read(creditProvider.notifier)
-                        .approveCreditForDelivery(
-                          creditId: credit.id,
-                          scheduledDeliveryDate: selectedDate,
-                          notes: 'Aprobación rápida para entrega',
-                        );
+                    result = await ref.read(creditProvider.notifier).approveCreditForDelivery(
+                      creditId: credit.id,
+                      scheduledDeliveryDate: selectedDate,
+                      notes: 'Aprobación rápida para entrega',
+                    );
                   }
 
                   if (result) {
