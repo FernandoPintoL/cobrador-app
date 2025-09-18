@@ -14,10 +14,9 @@ import '../pantallas/notifications_screen.dart';
 import '../widgets/logout_dialog.dart';
 import '../widgets/profile_image_widget.dart';
 import '../widgets/payment_dialog.dart';
+import '../widgets/app_drawer.dart';
 import 'credit_detail_screen.dart';
 import 'credit_form_screen.dart';
-import '../cliente/clientes_screen.dart';
-import '../pantallas/profile_settings_screen.dart';
 
 class CreditTypeScreen extends ConsumerStatefulWidget {
   const CreditTypeScreen({super.key});
@@ -48,6 +47,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
   int? _selectedCobradorId; // Filtro de cobrador
 
+  // Nuevas variables para filtros de cuotas atrasadas
+  bool? _isOverdue; // Filtro para créditos con cuotas atrasadas
+  double? _overdueAmountMin; // Monto mínimo atrasado
+  double? _overdueAmountMax; // Monto máximo atrasado
+
   // Nuevas variables para filtros rápidos
   bool _showQuickFilters = false;
   final ScrollController _quickFiltersController = ScrollController();
@@ -55,65 +59,12 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     // Listener para búsqueda en tiempo real desactivado (se usará botón de búsqueda u onSubmitted)
     // _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
-  }
-
-  Widget _buildAppDrawer(BuildContext context, String role) {
-    final userRoleParam = role == 'manager' ? 'manager' : role == 'cobrador' ? 'cobrador' : null;
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: RoleColors.getPrimaryColor(role),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Text('Menú', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 8),
-                  Text('Accesos rápidos', style: TextStyle(color: Colors.white70)),
-                ],
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.people_alt),
-              title: const Text('Gestionar clientes'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ClientesScreen(userRole: userRoleParam),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person),
-              title: const Text('Mi perfil'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ProfileSettingsScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -134,7 +85,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
     Future.delayed(const Duration(milliseconds: 500), () {
       if (_lastSearchTime != null &&
-          DateTime.now().difference(_lastSearchTime!) >= const Duration(milliseconds: 500)) {
+          DateTime.now().difference(_lastSearchTime!) >=
+              const Duration(milliseconds: 500)) {
         if (_search != _searchController.text.trim()) {
           setState(() {
             _search = _searchController.text.trim();
@@ -156,6 +108,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       _selectedCobradorId = null;
       _search = '';
       _searchController.clear();
+      _isOverdue = null;
+      _overdueAmountMin = null;
+      _overdueAmountMax = null;
     });
     _loadInitialData();
   }
@@ -168,51 +123,71 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         _startFrom != null ||
         _startTo != null ||
         _selectedCobradorId != null ||
-        _search.isNotEmpty;
+        _search.isNotEmpty ||
+        _isOverdue != null ||
+        _overdueAmountMin != null ||
+        _overdueAmountMax != null;
   }
 
   void _loadInitialData() {
-    final authState = ref.read(authProvider);
-    ref.read(creditProvider.notifier).loadCredits(
-      status: _statusFilter,
-      search: _search.isEmpty ? null : _search,
-      frequencies: _frequency.isEmpty ? null : _frequency.toList(),
-      startDateFrom: _startFrom,
-      startDateTo: _startTo,
-      amountMin: _amountMin,
-      amountMax: _amountMax,
-      cobradorId: _selectedCobradorId,
-      page: 1,
-    );
+    ref
+        .read(creditProvider.notifier)
+        .loadCredits(
+          status: _statusFilter,
+          search: _search.isEmpty ? null : _search,
+          frequencies: _frequency.isEmpty ? null : _frequency.toList(),
+          startDateFrom: _startFrom,
+          startDateTo: _startTo,
+          amountMin: _amountMin,
+          amountMax: _amountMax,
+          cobradorId: _selectedCobradorId,
+          isOverdue: _isOverdue,
+          overdueAmountMin: _overdueAmountMin,
+          overdueAmountMax: _overdueAmountMax,
+          page: 1,
+        );
   }
 
   Future<void> _openFilters() async {
     final authState = ref.read(authProvider);
     final isManagerOrAdmin = authState.isManager || authState.isAdmin;
     final cobradores = isManagerOrAdmin
-        ? ref.read(userManagementProvider).usuarios.where((u) => u.roles.contains('cobrador')).toList()
+        ? ref
+              .read(userManagementProvider)
+              .usuarios
+              .where((u) => u.roles.contains('cobrador'))
+              .toList()
         : [];
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) {
-        final amountMinController = TextEditingController(text: _amountMin?.toStringAsFixed(0) ?? '');
-        final amountMaxController = TextEditingController(text: _amountMax?.toStringAsFixed(0) ?? '');
+        final amountMinController = TextEditingController(
+          text: _amountMin?.toStringAsFixed(0) ?? '',
+        );
+        final amountMaxController = TextEditingController(
+          text: _amountMax?.toStringAsFixed(0) ?? '',
+        );
         String? tmpStatus = _statusFilter;
         final tmpFreq = Set<String>.from(_frequency);
         DateTime? tmpStartFrom = _startFrom;
         DateTime? tmpStartTo = _startTo;
         int? tmpCobradorId = _selectedCobradorId;
         return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: StatefulBuilder(
             builder: (context, setModal) => SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Filtros', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Filtros',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 12),
                   if (isManagerOrAdmin) ...[
                     const Text('Filtrar por cobrador'),
@@ -221,113 +196,174 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       isExpanded: true,
                       decoration: const InputDecoration(labelText: 'Cobrador'),
                       items: [
-                        const DropdownMenuItem<int?>(value: null, child: Text('Todos')),
-                        ...cobradores.map((c) => DropdownMenuItem<int?>(
-                              value: c.id,
-                              child: Text(c.nombre),
-                            )),
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('Todos'),
+                        ),
+                        ...cobradores.map(
+                          (c) => DropdownMenuItem<int?>(
+                            value: c.id,
+                            child: Text(c.nombre),
+                          ),
+                        ),
                       ],
                       onChanged: (v) => setModal(() => tmpCobradorId = v),
                     ),
                     const SizedBox(height: 16),
                   ],
-                  Wrap(spacing: 8, children: [
-                    FilterChip(
-                      label: const Text('Activos'),
-                      selected: tmpStatus == 'active',
-                      onSelected: (_) => setModal(() => tmpStatus = 'active'),
-                    ),
-                    FilterChip(
-                      label: const Text('Pendientes'),
-                      selected: tmpStatus == 'pending_approval',
-                      onSelected: (_) => setModal(() => tmpStatus = 'pending_approval')),
-                    FilterChip(
-                      label: const Text('En espera'),
-                      selected: tmpStatus == 'waiting_delivery',
-                      onSelected: (_) => setModal(() => tmpStatus = 'waiting_delivery')),
-                  ]),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      FilterChip(
+                        label: const Text('Activos'),
+                        selected: tmpStatus == 'active',
+                        onSelected: (_) => setModal(() => tmpStatus = 'active'),
+                      ),
+                      FilterChip(
+                        label: const Text('Pendientes'),
+                        selected: tmpStatus == 'pending_approval',
+                        onSelected: (_) =>
+                            setModal(() => tmpStatus = 'pending_approval'),
+                      ),
+                      FilterChip(
+                        label: const Text('En espera'),
+                        selected: tmpStatus == 'waiting_delivery',
+                        onSelected: (_) =>
+                            setModal(() => tmpStatus = 'waiting_delivery'),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   const Text('Frecuencia'),
-                  Wrap(spacing: 8, children: [
-                    for (final f in ['daily','weekly','biweekly','monthly'])
-                      FilterChip(
-                        label: Text(f),
-                        selected: tmpFreq.contains(f),
-                        onSelected: (v) => setModal(() { if (v) tmpFreq.add(f); else tmpFreq.remove(f); }),
-                      ),
-                  ]),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final f in [
+                        'daily',
+                        'weekly',
+                        'biweekly',
+                        'monthly',
+                      ])
+                        FilterChip(
+                          label: Text(f),
+                          selected: tmpFreq.contains(f),
+                          onSelected: (v) => setModal(() {
+                            if (v)
+                              tmpFreq.add(f);
+                            else
+                              tmpFreq.remove(f);
+                          }),
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: amountMinController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Monto mín.'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: amountMinController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Monto mín.',
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: amountMaxController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Monto máx.'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: amountMaxController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Monto máx.',
+                          ),
+                        ),
                       ),
-                    ),
-                  ]),
+                    ],
+                  ),
                   const SizedBox(height: 16),
-                  Row(children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final d = await showDatePicker(context: context, initialDate: tmpStartFrom ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
-                          if (d != null) setModal(() => tmpStartFrom = d);
-                        },
-                        icon: const Icon(Icons.date_range),
-                        label: Text(tmpStartFrom==null? 'Inicio desde': DateFormat('dd/MM/yyyy').format(tmpStartFrom!)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: tmpStartFrom ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (d != null) setModal(() => tmpStartFrom = d);
+                          },
+                          icon: const Icon(Icons.date_range),
+                          label: Text(
+                            tmpStartFrom == null
+                                ? 'Inicio desde'
+                                : DateFormat(
+                                    'dd/MM/yyyy',
+                                  ).format(tmpStartFrom!),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final d = await showDatePicker(context: context, initialDate: tmpStartTo ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
-                          if (d != null) setModal(() => tmpStartTo = d);
-                        },
-                        icon: const Icon(Icons.event),
-                        label: Text(tmpStartTo==null? 'Inicio hasta': DateFormat('dd/MM/yyyy').format(tmpStartTo!)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: tmpStartTo ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (d != null) setModal(() => tmpStartTo = d);
+                          },
+                          icon: const Icon(Icons.event),
+                          label: Text(
+                            tmpStartTo == null
+                                ? 'Inicio hasta'
+                                : DateFormat('dd/MM/yyyy').format(tmpStartTo!),
+                          ),
+                        ),
                       ),
-                    ),
-                  ]),
+                    ],
+                  ),
                   const SizedBox(height: 16),
-                  Row(children:[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () { Navigator.pop(context); },
-                        child: const Text('Cancelar'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          child: const Text('Cancelar'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _statusFilter = tmpStatus;
-                            _frequency
-                              ..clear()
-                              ..addAll(tmpFreq);
-                            _amountMin = double.tryParse(amountMinController.text);
-                            _amountMax = double.tryParse(amountMaxController.text);
-                            _startFrom = tmpStartFrom;
-                            _startTo = tmpStartTo;
-                            _selectedCobradorId = tmpCobradorId;
-                          });
-                          Navigator.pop(context);
-                          _loadInitialData();
-                        },
-                        child: const Text('Aplicar filtros'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _statusFilter = tmpStatus;
+                              _frequency
+                                ..clear()
+                                ..addAll(tmpFreq);
+                              _amountMin = double.tryParse(
+                                amountMinController.text,
+                              );
+                              _amountMax = double.tryParse(
+                                amountMaxController.text,
+                              );
+                              _startFrom = tmpStartFrom;
+                              _startTo = tmpStartTo;
+                              _selectedCobradorId = tmpCobradorId;
+                            });
+                            Navigator.pop(context);
+                            _loadInitialData();
+                          },
+                          child: const Text('Aplicar filtros'),
+                        ),
                       ),
-                    ),
-                  ]),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -483,42 +519,56 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           isScrollable: true,
-          tabAlignment: MediaQuery.of(context).size.width > 600 ? TabAlignment.center : TabAlignment.start,
+          tabAlignment: MediaQuery.of(context).size.width > 600
+              ? TabAlignment.center
+              : TabAlignment.start,
           tabs: [
             Tab(
-              text: 'Activos ('
+              text:
+                  'Activos ('
                   '${creditState.credits.where((c) => c.status == 'active').length}'
                   ')',
               icon: const Icon(Icons.playlist_add_check_circle),
             ),
             Tab(
-              text: 'Pendientes ('
+              text:
+                  'Pendientes ('
                   '${creditState.credits.where((c) => c.status == 'pending_approval').length}'
                   ')',
               icon: const Icon(Icons.hourglass_empty),
             ),
             Tab(
-              text: 'En Espera ('
+              text:
+                  'En Espera ('
                   '${creditState.credits.where((c) => c.status == 'waiting_delivery').length}'
                   ')',
               icon: const Icon(Icons.schedule),
             ),
             Tab(
-              text: 'Entregar ('
+              text:
+                  'Entregar ('
                   '${creditState.credits.where((c) => c.isReadyForDelivery).length}'
                   ')',
               icon: const Icon(Icons.today),
             ),
             Tab(
-              text: 'Atrasados ('
+              text:
+                  'Entregas Atrasadas ('
                   '${creditState.credits.where((c) => c.isOverdueForDelivery).length}'
                   ')',
               icon: const Icon(Icons.warning),
             ),
+            Tab(
+              text:
+                  'Con Mora ('
+                  '${creditState.credits.where((c) => c.isOverdue).length}'
+                  ')',
+              icon: const Icon(Icons.money_off),
+            ),
           ],
         ),
       ),
-      drawer: _buildAppDrawer(context, currentUserRole),
+      drawer: AppDrawer(role: currentUserRole),
       body: Stack(
         children: [
           Column(
@@ -552,31 +602,48 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   controller: _tabController,
                   children: [
                     _buildCreditsList(
-                      creditState.credits.where((c) => c.status == 'active').toList(),
+                      creditState.credits
+                          .where((c) => c.status == 'active')
+                          .toList(),
                       'active',
                     ),
                     _buildCreditsList(
-                      creditState.credits.where((c) => c.status == 'pending_approval').toList(),
+                      creditState.credits
+                          .where((c) => c.status == 'pending_approval')
+                          .toList(),
                       'pending_approval',
                     ),
                     _buildCreditsList(
-                      creditState.credits.where((c) => c.status == 'waiting_delivery').toList(),
+                      creditState.credits
+                          .where((c) => c.status == 'waiting_delivery')
+                          .toList(),
                       'waiting_delivery',
                     ),
                     _buildCreditsList(
-                      creditState.credits.where((c) => c.isReadyForDelivery).toList(),
+                      creditState.credits
+                          .where((c) => c.isReadyForDelivery)
+                          .toList(),
                       'ready_for_delivery',
                     ),
                     _buildCreditsList(
-                      creditState.credits.where((c) => c.isOverdueForDelivery).toList(),
+                      creditState.credits
+                          .where((c) => c.isOverdueForDelivery)
+                          .toList(),
                       'overdue_delivery',
+                    ),
+                    _buildCreditsList(
+                      creditState.credits.where((c) => c.isOverdue).toList(),
+                      'overdue_payments',
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          LoadingOverlay(isLoading: creditState.isLoading, message: 'Cargando créditos...'),
+          LoadingOverlay(
+            isLoading: creditState.isLoading,
+            message: 'Cargando créditos...',
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -584,14 +651,15 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         onPressed: () async {
           await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => const CreditFormScreen(),
-            ),
+            MaterialPageRoute(builder: (context) => const CreditFormScreen()),
           );
           _loadInitialData();
         },
-        icon: const Icon(Icons.add, color: Colors.white,),
-        label: const Text('Nuevo Crédito', style: TextStyle(color: Colors.white),),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'Nuevo Crédito',
+          style: TextStyle(color: Colors.white),
+        ),
       ),
     );
   }
@@ -604,7 +672,14 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     Widget chip(String key, String label, IconData icon) {
       final selected = _specificFilter == key;
       return ChoiceChip(
-        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 16), const SizedBox(width: 6), Text(label)]),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16),
+            const SizedBox(width: 6),
+            Text(label),
+          ],
+        ),
         selected: selected,
         onSelected: (_) => setState(() {
           _specificFilter = key;
@@ -615,93 +690,120 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark ? theme.colorScheme.surface : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        color: isDark
+            ? theme.colorScheme.surface
+            : theme.colorScheme.surfaceVariant.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(Icons.filter_alt, color: theme.colorScheme.primary, size: 20),
-            const SizedBox(width: 8),
-            Text('Filtros Específicos', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              onPressed: () {
-                setState(() {
-                  _showAdvancedFilters = false;
-                  _specificFilter = 'busqueda_general';
-                  _specificController.clear();
-                  _clientController.clear();
-                  _creditIdController.clear();
-                });
-              },
-              tooltip: 'Cerrar filtros',
-            )
-          ]),
-          const SizedBox(height: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            chip('busqueda_general', 'General', Icons.search),
-            chip('cliente', 'Cliente', Icons.person),
-            chip('credit_id', 'ID Crédito', Icons.numbers),
-            chip('estado', 'Estado', Icons.verified),
-            chip('frecuencia', 'Frecuencia', Icons.event_repeat),
-            chip('montos', 'Montos', Icons.attach_money),
-            chip('fechas', 'Fechas', Icons.date_range),
-          ]),
-          const SizedBox(height: 16),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            child: _buildSpecificInputForFilter(),
-          ),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    _specificFilter = 'busqueda_general';
-                    _specificController.clear();
-                    _clientController.clear();
-                    _creditIdController.clear();
-                    _amountMin = null;
-                    _amountMax = null;
-                    _startFrom = null;
-                    _startTo = null;
-                  });
-                },
-                child: const Text('Limpiar'),
-              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.filter_alt,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Filtros Específicos',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    setState(() {
+                      _showAdvancedFilters = false;
+                      _specificFilter = 'busqueda_general';
+                      _specificController.clear();
+                      _clientController.clear();
+                      _creditIdController.clear();
+                    });
+                  },
+                  tooltip: 'Cerrar filtros',
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  final s = _composeAdvancedSearch();
-                  // Normalizar valores monto y fechas si aplica
-                  if (_amountMin != null && _amountMax != null && _amountMin! > _amountMax!) {
-                    final tmp = _amountMin!;
-                    _amountMin = _amountMax;
-                    _amountMax = tmp;
-                  }
-                  if (_startFrom != null && _startTo != null && _startFrom!.isAfter(_startTo!)) {
-                    final tmp = _startFrom!;
-                    _startFrom = _startTo;
-                    _startTo = tmp;
-                  }
-                  setState(() {
-                    _search = s ?? '';
-                    _showAdvancedFilters = false;
-                  });
-                  _loadInitialData();
-                },
-                child: const Text('Aplicar'),
-              ),
-            )
-          ])
-        ]),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                chip('busqueda_general', 'General', Icons.search),
+                chip('cliente', 'Cliente', Icons.person),
+                chip('credit_id', 'ID Crédito', Icons.numbers),
+                chip('estado', 'Estado', Icons.verified),
+                chip('frecuencia', 'Frecuencia', Icons.event_repeat),
+                chip('montos', 'Montos', Icons.attach_money),
+                chip('fechas', 'Fechas', Icons.date_range),
+                chip('cuotas_atrasadas', 'Cuotas Atrasadas', Icons.money_off),
+              ],
+            ),
+            const SizedBox(height: 16),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: _buildSpecificInputForFilter(),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      setState(() {
+                        _specificFilter = 'busqueda_general';
+                        _specificController.clear();
+                        _clientController.clear();
+                        _creditIdController.clear();
+                        _amountMin = null;
+                        _amountMax = null;
+                        _startFrom = null;
+                        _startTo = null;
+                      });
+                    },
+                    child: const Text('Limpiar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final s = _composeAdvancedSearch();
+                      // Normalizar valores monto y fechas si aplica
+                      if (_amountMin != null &&
+                          _amountMax != null &&
+                          _amountMin! > _amountMax!) {
+                        final tmp = _amountMin!;
+                        _amountMin = _amountMax;
+                        _amountMax = tmp;
+                      }
+                      if (_startFrom != null &&
+                          _startTo != null &&
+                          _startFrom!.isAfter(_startTo!)) {
+                        final tmp = _startFrom!;
+                        _startFrom = _startTo;
+                        _startTo = tmp;
+                      }
+                      setState(() {
+                        _search = s ?? '';
+                        _showAdvancedFilters = false;
+                      });
+                      _loadInitialData();
+                    },
+                    child: const Text('Aplicar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -730,124 +832,217 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           ),
         );
       case 'estado':
-        return Wrap(spacing: 8, children: [
-          ChoiceChip(
-            label: const Text('Activos'),
-            selected: _statusFilter == 'active',
-            onSelected: (_) => setState(() => _statusFilter = 'active'),
-          ),
-          ChoiceChip(
-            label: const Text('Pendientes'),
-            selected: _statusFilter == 'pending_approval',
-            onSelected: (_) => setState(() => _statusFilter = 'pending_approval'),
-          ),
-          ChoiceChip(
-            label: const Text('En espera'),
-            selected: _statusFilter == 'waiting_delivery',
-            onSelected: (_) => setState(() => _statusFilter = 'waiting_delivery'),
-          ),
-        ]);
+        return Wrap(
+          spacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('Activos'),
+              selected: _statusFilter == 'active',
+              onSelected: (_) => setState(() => _statusFilter = 'active'),
+            ),
+            ChoiceChip(
+              label: const Text('Pendientes'),
+              selected: _statusFilter == 'pending_approval',
+              onSelected: (_) =>
+                  setState(() => _statusFilter = 'pending_approval'),
+            ),
+            ChoiceChip(
+              label: const Text('En espera'),
+              selected: _statusFilter == 'waiting_delivery',
+              onSelected: (_) =>
+                  setState(() => _statusFilter = 'waiting_delivery'),
+            ),
+          ],
+        );
       case 'frecuencia':
-        return Wrap(spacing: 8, children: [
-          FilterChip(
-            label: const Text('Diaria'),
-            selected: _frequency.contains('daily'),
-            onSelected: (v) => setState(() => v ? _frequency.add('daily') : _frequency.remove('daily')),
-          ),
-          FilterChip(
-            label: const Text('Semanal'),
-            selected: _frequency.contains('weekly'),
-            onSelected: (v) => setState(() => v ? _frequency.add('weekly') : _frequency.remove('weekly')),
-          ),
-          FilterChip(
-            label: const Text('Quincenal'),
-            selected: _frequency.contains('biweekly'),
-            onSelected: (v) => setState(() => v ? _frequency.add('biweekly') : _frequency.remove('biweekly')),
-          ),
-          FilterChip(
-            label: const Text('Mensual'),
-            selected: _frequency.contains('monthly'),
-            onSelected: (v) => setState(() => v ? _frequency.add('monthly') : _frequency.remove('monthly')),
-          ),
-        ]);
+        return Wrap(
+          spacing: 8,
+          children: [
+            FilterChip(
+              label: const Text('Diaria'),
+              selected: _frequency.contains('daily'),
+              onSelected: (v) => setState(
+                () => v ? _frequency.add('daily') : _frequency.remove('daily'),
+              ),
+            ),
+            FilterChip(
+              label: const Text('Semanal'),
+              selected: _frequency.contains('weekly'),
+              onSelected: (v) => setState(
+                () =>
+                    v ? _frequency.add('weekly') : _frequency.remove('weekly'),
+              ),
+            ),
+            FilterChip(
+              label: const Text('Quincenal'),
+              selected: _frequency.contains('biweekly'),
+              onSelected: (v) => setState(
+                () => v
+                    ? _frequency.add('biweekly')
+                    : _frequency.remove('biweekly'),
+              ),
+            ),
+            FilterChip(
+              label: const Text('Mensual'),
+              selected: _frequency.contains('monthly'),
+              onSelected: (v) => setState(
+                () => v
+                    ? _frequency.add('monthly')
+                    : _frequency.remove('monthly'),
+              ),
+            ),
+          ],
+        );
       case 'montos':
-        final minCtrl = TextEditingController(text: _amountMin?.toStringAsFixed(0) ?? '');
-        final maxCtrl = TextEditingController(text: _amountMax?.toStringAsFixed(0) ?? '');
-        return Row(children: [
-          Expanded(
-            child: TextField(
-              key: const ValueKey('monto_min'),
-              controller: minCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Monto mínimo',
-                prefixIcon: Icon(Icons.remove_circle_outline),
-                border: OutlineInputBorder(),
+        final minCtrl = TextEditingController(
+          text: _amountMin?.toStringAsFixed(0) ?? '',
+        );
+        final maxCtrl = TextEditingController(
+          text: _amountMax?.toStringAsFixed(0) ?? '',
+        );
+        return Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const ValueKey('monto_min'),
+                controller: minCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Monto mínimo',
+                  prefixIcon: Icon(Icons.remove_circle_outline),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) {
+                  final parsed = double.tryParse(v.replaceAll(',', '.'));
+                  setState(() => _amountMin = parsed);
+                },
               ),
-              onChanged: (v) {
-                final parsed = double.tryParse(v.replaceAll(',', '.'));
-                setState(() => _amountMin = parsed);
-              },
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              key: const ValueKey('monto_max'),
-              controller: maxCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Monto máximo',
-                prefixIcon: Icon(Icons.add_circle_outline),
-                border: OutlineInputBorder(),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('monto_max'),
+                controller: maxCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Monto máximo',
+                  prefixIcon: Icon(Icons.add_circle_outline),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) {
+                  final parsed = double.tryParse(v.replaceAll(',', '.'));
+                  setState(() => _amountMax = parsed);
+                },
               ),
-              onChanged: (v) {
-                final parsed = double.tryParse(v.replaceAll(',', '.'));
-                setState(() => _amountMax = parsed);
-              },
             ),
-          ),
-        ]);
+          ],
+        );
       case 'fechas':
-        return Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              key: const ValueKey('fecha_desde'),
-              onPressed: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: _startFrom ?? DateTime.now(),
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime(2100),
-                );
-                if (d != null) setState(() => _startFrom = d);
-              },
-              icon: const Icon(Icons.calendar_today),
-              label: Text(_startFrom == null
-                  ? 'Desde (inicio)'
-                  : DateFormat('dd/MM/yyyy').format(_startFrom!)),
+        return Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                key: const ValueKey('fecha_desde'),
+                onPressed: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: _startFrom ?? DateTime.now(),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
+                  );
+                  if (d != null) setState(() => _startFrom = d);
+                },
+                icon: const Icon(Icons.calendar_today),
+                label: Text(
+                  _startFrom == null
+                      ? 'Desde (inicio)'
+                      : DateFormat('dd/MM/yyyy').format(_startFrom!),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              key: const ValueKey('fecha_hasta'),
-              onPressed: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: _startTo ?? DateTime.now(),
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime(2100),
-                );
-                if (d != null) setState(() => _startTo = d);
-              },
-              icon: const Icon(Icons.event),
-              label: Text(_startTo == null
-                  ? 'Hasta (inicio)'
-                  : DateFormat('dd/MM/yyyy').format(_startTo!)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                key: const ValueKey('fecha_hasta'),
+                onPressed: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: _startTo ?? DateTime.now(),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
+                  );
+                  if (d != null) setState(() => _startTo = d);
+                },
+                icon: const Icon(Icons.event),
+                label: Text(
+                  _startTo == null
+                      ? 'Hasta (inicio)'
+                      : DateFormat('dd/MM/yyyy').format(_startTo!),
+                ),
+              ),
             ),
-          ),
-        ]);
+          ],
+        );
+      case 'cuotas_atrasadas':
+        final overdueMinCtrl = TextEditingController(
+          text: _overdueAmountMin?.toStringAsFixed(0) ?? '',
+        );
+        final overdueMaxCtrl = TextEditingController(
+          text: _overdueAmountMax?.toStringAsFixed(0) ?? '',
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CheckboxListTile(
+              dense: true,
+              title: const Text('Solo créditos con cuotas atrasadas'),
+              value: _isOverdue ?? false,
+              onChanged: (value) {
+                setState(() => _isOverdue = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            const Text('Rango de monto atrasado (opcional):'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('overdue_min'),
+                    controller: overdueMinCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Monto mínimo atrasado',
+                      prefixIcon: Icon(Icons.remove_circle_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) {
+                      final parsed = double.tryParse(v.replaceAll(',', '.'));
+                      setState(() => _overdueAmountMin = parsed);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('overdue_max'),
+                    controller: overdueMaxCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Monto máximo atrasado',
+                      prefixIcon: Icon(Icons.add_circle_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) {
+                      final parsed = double.tryParse(v.replaceAll(',', '.'));
+                      setState(() => _overdueAmountMax = parsed);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
       default:
         return TextField(
           key: const ValueKey('general'),
@@ -874,7 +1069,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       case 'cliente':
         final v = _clientController.text.trim();
         if (v.isEmpty) return null;
-        return _normalizeQuery(v); // nombre o CI alfanumérico en MAYÚSCULAS; teléfono se envía tal cual
+        return _normalizeQuery(
+          v,
+        ); // nombre o CI alfanumérico en MAYÚSCULAS; teléfono se envía tal cual
       case 'credit_id':
         final id = _creditIdController.text.trim();
         if (id.isEmpty) return null;
@@ -890,6 +1087,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         return _search.isEmpty ? null : _search;
       case 'fechas':
         // Igual que montos; se pasa por parámetros dedicados
+        return _search.isEmpty ? null : _search;
+      case 'cuotas_atrasadas':
+        // Se maneja por parámetros dedicados (_isOverdue, _overdueAmountMin, _overdueAmountMax)
         return _search.isEmpty ? null : _search;
       default:
         final v = _specificController.text.trim();
@@ -939,9 +1139,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   icon: AnimatedRotation(
                     turns: _showAdvancedFilters ? 0.5 : 0.0,
                     duration: const Duration(milliseconds: 300),
-                    child: Icon(
-                      Icons.tune,
-                    ),
+                    child: Icon(Icons.tune),
                   ),
                   onPressed: () {
                     setState(() {
@@ -954,14 +1152,18 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       }
                     });
                   },
-                  tooltip: _showAdvancedFilters ? 'Ocultar filtros avanzados' : 'Mostrar filtros avanzados',
+                  tooltip: _showAdvancedFilters
+                      ? 'Ocultar filtros avanzados'
+                      : 'Mostrar filtros avanzados',
                 ),
               ],
             ),
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.outline,
+            ),
           ),
         ),
         onSubmitted: (value) {
@@ -979,7 +1181,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Filtros Rápidos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text(
+            'Filtros Rápidos',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -994,6 +1199,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       _startFrom = null;
                       _startTo = null;
                       _selectedCobradorId = null;
+                      _isOverdue = null;
+                      _overdueAmountMin = null;
+                      _overdueAmountMax = null;
                     });
                     _loadInitialData();
                   },
@@ -1012,6 +1220,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       _startFrom = null;
                       _startTo = null;
                       _selectedCobradorId = null;
+                      _isOverdue = null;
+                      _overdueAmountMin = null;
+                      _overdueAmountMax = null;
                     });
                     _loadInitialData();
                   },
@@ -1034,6 +1245,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       _startFrom = null;
                       _startTo = null;
                       _selectedCobradorId = null;
+                      _isOverdue = null;
+                      _overdueAmountMin = null;
+                      _overdueAmountMax = null;
                     });
                     _loadInitialData();
                   },
@@ -1054,6 +1268,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       _startFrom = null;
                       _startTo = null;
                       _selectedCobradorId = null;
+                      _isOverdue = null;
+                      _overdueAmountMin = null;
+                      _overdueAmountMax = null;
                     });
                     _loadInitialData();
                   },
@@ -1078,6 +1295,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       _startFrom = null;
                       _startTo = null;
                       _selectedCobradorId = null;
+                      _isOverdue = null;
+                      _overdueAmountMin = null;
+                      _overdueAmountMax = null;
                     });
                     _loadInitialData();
                   },
@@ -1098,11 +1318,45 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       _startFrom = null;
                       _startTo = null;
                       _selectedCobradorId = null;
+                      _isOverdue = null;
+                      _overdueAmountMin = null;
+                      _overdueAmountMax = null;
                     });
                     _loadInitialData();
                   },
                   child: const Text('Este Mes'),
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _statusFilter = null;
+                      _frequency.clear();
+                      _amountMin = null;
+                      _amountMax = null;
+                      _startFrom = null;
+                      _startTo = null;
+                      _selectedCobradorId = null;
+                      _isOverdue =
+                          true; // Filtro para créditos con cuotas atrasadas
+                      _overdueAmountMin = null;
+                      _overdueAmountMax = null;
+                    });
+                    _loadInitialData();
+                  },
+                  child: const Text('Con Cuotas Atrasadas'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child:
+                    Container(), // Espacio vacío para mantener la disposición
               ),
             ],
           ),
@@ -1113,10 +1367,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
   Widget _buildActiveFiltersIndicator() {
     return Container(
-      color: Theme
-          .of(context)
-          .colorScheme
-          .primaryContainer,
+      color: Theme.of(context).colorScheme.primaryContainer,
       padding: const EdgeInsets.all(8),
       child: Row(
         children: [
@@ -1124,31 +1375,29 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Filtros activos: ${_statusFilter != null
-                  ? 'Estado: $_statusFilter'
-                  : ''}'
-                  '${_frequency.isNotEmpty ? ', Frecuencia: ${_frequency.join(
-                  ', ')}' : ''}'
-                  '${_amountMin != null ? ', Monto mín.: $_amountMin' : ''}'
-                  '${_amountMax != null ? ', Monto máx.: $_amountMax' : ''}'
-                  '${_startFrom != null ? ', Desde: ${DateFormat('dd/MM/yyyy')
-                  .format(_startFrom!)}' : ''}'
-                  '${_startTo != null ? ', Hasta: ${DateFormat('dd/MM/yyyy')
-                  .format(_startTo!)}' : ''}'
-                  '${_selectedCobradorId != null
-                  ? ', Cobrador: $_selectedCobradorId'
-                  : ''}',
-              style: TextStyle(fontSize: 14, color: Theme
-                  .of(context)
-                  .colorScheme
-                  .onPrimaryContainer),
+              'Filtros activos: ${_statusFilter != null ? 'Estado: $_statusFilter' : ''}'
+              '${_frequency.isNotEmpty ? ', Frecuencia: ${_frequency.join(', ')}' : ''}'
+              '${_amountMin != null ? ', Monto mín.: $_amountMin' : ''}'
+              '${_amountMax != null ? ', Monto máx.: $_amountMax' : ''}'
+              '${_startFrom != null ? ', Desde: ${DateFormat('dd/MM/yyyy').format(_startFrom!)}' : ''}'
+              '${_startTo != null ? ', Hasta: ${DateFormat('dd/MM/yyyy').format(_startTo!)}' : ''}'
+              '${_selectedCobradorId != null ? ', Cobrador: $_selectedCobradorId' : ''}'
+              '${_isOverdue != null ? ', Cuotas atrasadas: ${_isOverdue! ? 'Sí' : 'No'}' : ''}'
+              '${_overdueAmountMin != null ? ', Monto atrasado mín.: $_overdueAmountMin' : ''}'
+              '${_overdueAmountMax != null ? ', Monto atrasado máx.: $_overdueAmountMax' : ''}',
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+              ),
             ),
           ),
           TextButton.icon(
             onPressed: _clearAllFilters,
             icon: const Icon(Icons.clear, size: 16, color: Colors.red),
             label: const Text(
-                'Limpiar filtros', style: TextStyle(color: Colors.red)),
+              'Limpiar filtros',
+              style: TextStyle(color: Colors.red),
+            ),
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1167,11 +1416,18 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(_getEmptyStateIcon(listType), size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              _getEmptyStateIcon(listType),
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
             Text(
               _getEmptyStateMessage(listType),
-              style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1181,10 +1437,13 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 200) {
+        if (notification.metrics.pixels >=
+            notification.metrics.maxScrollExtent - 200) {
           // Cerca del final, intentar cargar más
           final notifier = ref.read(creditProvider.notifier);
-          if (notifier.hasMore && !creditState.isLoadingMore && !creditState.isLoading) {
+          if (notifier.hasMore &&
+              !creditState.isLoadingMore &&
+              !creditState.isLoading) {
             notifier.loadMoreCredits();
           }
         }
@@ -1202,7 +1461,13 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           if (creditState.isLoadingMore) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             );
           }
           if (creditState.currentPage >= creditState.totalPages) {
@@ -1211,7 +1476,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               child: Center(
                 child: Text(
                   'No existen más datos',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             );
@@ -1222,10 +1489,236 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     );
   }
 
+  Widget _buildOverduePaymentsIndicator(Credito credit) {
+    // Si no hay datos del backend, no mostrar nada
+    if (credit.expectedInstallments == null ||
+        credit.completedPaymentsCount == null) {
+      return const SizedBox.shrink();
+    }
+
+    final expectedPayments = credit.expectedInstallments!;
+    final completedPayments = credit.completedPaymentsCount!;
+    final overduePayments = expectedPayments - completedPayments;
+    final hasOverduePayments = credit.isOverdue && overduePayments > 0;
+
+    if (!hasOverduePayments) {
+      // Mostrar estado positivo si está al día
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.green.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.green.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle, size: 14, color: Colors.green),
+            const SizedBox(width: 4),
+            Text(
+              'Al día ($completedPayments/$expectedPayments)',
+              style: const TextStyle(
+                color: Colors.green,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Mostrar información de cuotas atrasadas
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.warning, size: 14, color: Colors.red),
+          const SizedBox(width: 4),
+          Text(
+            '$overduePayments cuota${overduePayments > 1 ? 's' : ''} atrasada${overduePayments > 1 ? 's' : ''}',
+            style: const TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverdueAmountChip(Credito credit) {
+    if (credit.overdueAmount == null || credit.overdueAmount! <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.money_off, size: 14, color: Colors.orange),
+          const SizedBox(width: 4),
+          Text(
+            'Bs. ${NumberFormat('#,##0.00').format(credit.overdueAmount)}',
+            style: const TextStyle(
+              color: Colors.orange,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentProgressBar(Credito credit) {
+    if (credit.expectedInstallments == null ||
+        credit.completedPaymentsCount == null) {
+      return const SizedBox.shrink();
+    }
+
+    final expectedPayments = credit.expectedInstallments!;
+    final completedPayments = credit.completedPaymentsCount!;
+    final progressPercentage = expectedPayments > 0
+        ? (completedPayments / expectedPayments).clamp(0.0, 1.0)
+        : 0.0;
+    final isOverdue = credit.isOverdue;
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  'Progreso de Pagos',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  '$completedPayments de $expectedPayments cuotas',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isOverdue ? Colors.red : Colors.green,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progressPercentage,
+              backgroundColor: Colors.grey.shade300,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isOverdue ? Colors.red : Colors.green,
+              ),
+              minHeight: 6,
+            ),
+          ),
+          if (isOverdue &&
+              credit.overdueAmount != null &&
+              credit.overdueAmount! > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Monto vencido: Bs. ${NumberFormat('#,##0.00').format(credit.overdueAmount)}',
+              style: const TextStyle(
+                fontSize: 10,
+                color: Colors.red,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailedPaymentInfo(Credito credit) {
+    // Solo mostrar si tenemos datos del backend
+    if (credit.expectedInstallments == null ||
+        credit.completedPaymentsCount == null) {
+      return const SizedBox.shrink();
+    }
+
+    final expectedPayments = credit.expectedInstallments!;
+    final completedPayments = credit.completedPaymentsCount!;
+    final totalPaid = credit.totalPaid ?? 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Estado de Pagos',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(child: _buildInfoChip('Esperadas', '$expectedPayments')),
+              const SizedBox(width: 4),
+              Expanded(child: _buildInfoChip('Pagadas', '$completedPayments')),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _buildInfoChip(
+                  'Total',
+                  'Bs. ${NumberFormat('#,##0').format(totalPaid)}',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoChip(String label, String value) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(12),
@@ -1234,14 +1727,24 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          const SizedBox(width: 6),
-          Text(
-            value,
-            style: TextStyle(fontWeight: FontWeight.w600, color: scheme.onSurface),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+                fontSize: 10,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -1276,7 +1779,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           'Crédito #${credit.id}',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                         Text(
@@ -1288,14 +1793,14 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           ),
                         ),
                         Text(
-                          "CI.:"+ credit.client!.ci ?? '',
+                          "CI.: ${credit.client?.ci ?? ''}",
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w300,
                           ),
                         ),
                         Text(
-                          "Cel.: "+credit.client!.telefono ?? '',
+                          "Cel.: ${credit.client?.telefono ?? ''}",
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w300,
@@ -1314,7 +1819,6 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                     ),
                   ),
                   _buildStatusChip(credit.status),
-
                 ],
               ),
 
@@ -1334,15 +1838,17 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (credit.creator != null)...[
+                        if (credit.creator != null) ...[
                           Text(
                             'Creado por: ${credit.creator!.nombre}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
-                        ]
+                        ],
                       ],
                     ),
                   ),
@@ -1351,7 +1857,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                     children: [
                       Text(
                         DateFormat('dd/MM/yyyy').format(credit.createdAt),
-                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       if (credit.scheduledDeliveryDate != null)
                         Text(
@@ -1375,7 +1884,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   decoration: BoxDecoration(
                     color: Colors.amberAccent.withOpacity(0.25),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orangeAccent.withOpacity(0.77)),
+                    border: Border.all(
+                      color: Colors.orangeAccent.withOpacity(0.77),
+                    ),
                   ),
                   child: const Row(
                     children: [
@@ -1406,8 +1917,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: Colors.green,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withOpacity(0.77)),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.withOpacity(0.77)),
                   ),
                   child: const Row(
                     children: [
@@ -1456,20 +1967,148 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                 ),
               ],
 
+              if (listType == 'overdue_payments') ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.red.withOpacity(0.1),
+                        Colors.orange.withOpacity(0.1),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.withOpacity(0.4)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.money_off_csred,
+                            color: Colors.red,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Crédito con cuotas vencidas',
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (credit.expectedInstallments != null &&
+                          credit.completedPaymentsCount != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Cuotas esperadas: ${credit.expectedInstallments}',
+                                style: TextStyle(
+                                  color: Colors.orange.shade700,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              'Pagadas: ${credit.completedPaymentsCount}',
+                              style: TextStyle(
+                                color: Colors.orange.shade700,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (credit.overdueAmount != null &&
+                            credit.overdueAmount! > 0) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.attach_money,
+                                size: 14,
+                                color: Colors.red,
+                              ),
+                              Text(
+                                'Monto vencido: Bs. ${NumberFormat('#,##0.00').format(credit.overdueAmount)}',
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+
               // Datos adicionales del crédito en la lista
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _buildInfoChip('Saldo', 'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}'),
-                  _buildInfoChip('Pagado', 'Bs. ${NumberFormat('#,##0.00').format((credit.totalAmount ?? credit.amount) - credit.balance)}'),
+                  _buildInfoChip(
+                    'Saldo',
+                    'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}',
+                  ),
+                  _buildInfoChip(
+                    'Pagado',
+                    'Bs. ${NumberFormat('#,##0.00').format((credit.totalAmount ?? credit.amount) - credit.balance)}',
+                  ),
                   if (credit.installmentAmount != null)
-                    _buildInfoChip('Cuota', 'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount)}'),
-                  _buildInfoChip('Cuotas', '${credit.paidInstallments}/${credit.totalInstallments}'),
+                    _buildInfoChip(
+                      'Cuota',
+                      'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount)}',
+                    ),
+                  _buildInfoChip(
+                    'Cuotas',
+                    '${credit.paidInstallments}/${credit.totalInstallments}',
+                  ),
                   _buildInfoChip('Frecuencia', credit.frequencyLabel),
                 ],
               ),
+
+              // Indicadores de cuotas atrasadas desde el backend
+              const SizedBox(height: 8),
+              Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: _buildOverduePaymentsIndicator(credit)),
+                      const SizedBox(width: 8),
+                      _buildOverdueAmountChip(credit),
+                    ],
+                  ),
+                  // Mostrar barra de progreso de pagos para todos los créditos con datos del backend
+                  if (credit.expectedInstallments != null &&
+                      credit.completedPaymentsCount != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _buildPaymentProgressBar(credit),
+                    ),
+                ],
+              ),
+
+              // Información detallada de pagos (solo en créditos con datos del backend)
+              if (credit.expectedInstallments != null &&
+                  credit.completedPaymentsCount != null)
+                _buildDetailedPaymentInfo(credit),
 
               // Botones de acción según el estado
               const SizedBox(height: 12),
@@ -1492,31 +2131,47 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
     switch (status) {
       case 'pending_approval':
-        backgroundColor = isDarkMode ? Colors.orange.withOpacity(0.2) : Colors.orange.withOpacity(0.1);
-        borderColor = isDarkMode ? Colors.orange.shade300 : Colors.orange.shade600;
-        textColor = isDarkMode ? Colors.orange.shade300 : Colors.orange.shade700;
+        backgroundColor = isDarkMode
+            ? Colors.orange.withOpacity(0.2)
+            : Colors.orange.withOpacity(0.1);
+        borderColor = isDarkMode
+            ? Colors.orange.shade300
+            : Colors.orange.shade600;
+        textColor = isDarkMode
+            ? Colors.orange.shade300
+            : Colors.orange.shade700;
         label = 'Pendiente';
         break;
       case 'waiting_delivery':
-        backgroundColor = isDarkMode ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1);
+        backgroundColor = isDarkMode
+            ? Colors.blue.withOpacity(0.2)
+            : Colors.blue.withOpacity(0.1);
         borderColor = isDarkMode ? Colors.blue.shade300 : Colors.blue.shade600;
         textColor = isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700;
         label = 'En Espera';
         break;
       case 'active':
-        backgroundColor = isDarkMode ? Colors.green.withOpacity(0.2) : Colors.green.withOpacity(0.1);
-        borderColor = isDarkMode ? Colors.green.shade300 : Colors.green.shade600;
+        backgroundColor = isDarkMode
+            ? Colors.green.withOpacity(0.2)
+            : Colors.green.withOpacity(0.1);
+        borderColor = isDarkMode
+            ? Colors.green.shade300
+            : Colors.green.shade600;
         textColor = isDarkMode ? Colors.green.shade300 : Colors.green.shade700;
         label = 'Activo';
         break;
       case 'rejected':
-        backgroundColor = isDarkMode ? Colors.red.withOpacity(0.2) : Colors.red.withOpacity(0.1);
+        backgroundColor = isDarkMode
+            ? Colors.red.withOpacity(0.2)
+            : Colors.red.withOpacity(0.1);
         borderColor = isDarkMode ? Colors.red.shade300 : Colors.red.shade600;
         textColor = isDarkMode ? Colors.red.shade300 : Colors.red.shade700;
         label = 'Rechazado';
         break;
       default:
-        backgroundColor = isDarkMode ? Colors.grey.withOpacity(0.2) : Colors.grey.withOpacity(0.1);
+        backgroundColor = isDarkMode
+            ? Colors.grey.withOpacity(0.2)
+            : Colors.grey.withOpacity(0.1);
         borderColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600;
         textColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700;
         label = status;
@@ -1543,7 +2198,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   Widget _buildActionButtons(Credito credit, String listType) {
     final authState = ref.watch(authProvider);
     final canApprove = authState.isManager || authState.isAdmin;
-    final canDeliver = authState.isCobrador || authState.isManager || authState.isAdmin;
+    final canDeliver =
+        authState.isCobrador || authState.isManager || authState.isAdmin;
 
     List<Widget> buttons = [];
 
@@ -1578,7 +2234,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         ),
       ]);
     } else if ((listType == 'ready_for_delivery' ||
-        (listType == 'waiting_delivery' && credit.isReadyForDelivery)) && canDeliver) {
+            (listType == 'waiting_delivery' && credit.isReadyForDelivery)) &&
+        canDeliver) {
       buttons.add(
         Expanded(
           child: ElevatedButton.icon(
@@ -1643,6 +2300,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         return Icons.warning_amber;
       case 'active':
         return Icons.playlist_add_check_circle_outlined;
+      case 'overdue_payments':
+        return Icons.money_off;
       default:
         return Icons.folder_open;
     }
@@ -1660,6 +2319,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         return 'No hay créditos con entrega atrasada';
       case 'active':
         return 'No hay créditos activos';
+      case 'overdue_payments':
+        return 'No hay créditos con cuotas atrasadas';
       default:
         return 'No hay créditos';
     }
@@ -1685,7 +2346,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       onPaymentSuccess: () {
         // Al registrar pago, refrescar la lista
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pago registrado. Actualizando créditos...')),
+          const SnackBar(
+            content: Text('Pago registrado. Actualizando créditos...'),
+          ),
         );
         ref.read(creditProvider.notifier).loadCredits();
         _loadInitialData();
@@ -1702,7 +2365,13 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     final DateTime now = DateTime.now();
     // Por defecto, programar para el día siguiente a las 09:00 (fecha posterior al día)
     final DateTime tomorrow = now.add(const Duration(days: 1));
-    DateTime selectedDate = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9, 0);
+    DateTime selectedDate = DateTime(
+      tomorrow.year,
+      tomorrow.month,
+      tomorrow.day,
+      9,
+      0,
+    );
 
     bool deliverImmediately = false;
 
@@ -1758,7 +2427,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Theme.of(context).colorScheme.outline),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(
@@ -1777,7 +2448,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                 const SizedBox(height: 8),
                 CheckboxListTile(
                   value: deliverImmediately,
-                  onChanged: (v) => setState(() => deliverImmediately = v ?? false),
+                  onChanged: (v) =>
+                      setState(() => deliverImmediately = v ?? false),
                   controlAffinity: ListTileControlAffinity.leading,
                   title: const Text('Entregar inmediatamente al aprobar'),
                   contentPadding: EdgeInsets.zero,
@@ -1803,18 +2475,23 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                 onPressed: () async {
                   bool result = false;
                   if (deliverImmediately) {
-                    result = await ref.read(creditProvider.notifier).approveAndDeliverCredit(
-                      creditId: credit.id,
-                      scheduledDeliveryDate: selectedDate,
-                      approvalNotes: 'Aprobación rápida con entrega inmediata',
-                      deliveryNotes: 'Entrega inmediata desde aprobación',
-                    );
+                    result = await ref
+                        .read(creditProvider.notifier)
+                        .approveAndDeliverCredit(
+                          creditId: credit.id,
+                          scheduledDeliveryDate: selectedDate,
+                          approvalNotes:
+                              'Aprobación rápida con entrega inmediata',
+                          deliveryNotes: 'Entrega inmediata desde aprobación',
+                        );
                   } else {
-                    result = await ref.read(creditProvider.notifier).approveCreditForDelivery(
-                      creditId: credit.id,
-                      scheduledDeliveryDate: selectedDate,
-                      notes: 'Aprobación rápida para entrega',
-                    );
+                    result = await ref
+                        .read(creditProvider.notifier)
+                        .approveCreditForDelivery(
+                          creditId: credit.id,
+                          scheduledDeliveryDate: selectedDate,
+                          notes: 'Aprobación rápida para entrega',
+                        );
                   }
 
                   if (result) {
@@ -1829,7 +2506,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
                 ),
-                child: Text(deliverImmediately ? 'Aprobar y Entregar' : 'Aprobar'),
+                child: Text(
+                  deliverImmediately ? 'Aprobar y Entregar' : 'Aprobar',
+                ),
               ),
             ],
           );
@@ -1977,7 +2656,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           reason: 'Reprogramación desde diálogo de entrega',
                         );
                     if (ok) {
-                      if (context.mounted) Navigator.pop(context, 'rescheduled');
+                      if (context.mounted)
+                        Navigator.pop(context, 'rescheduled');
                     }
                   }
                 }

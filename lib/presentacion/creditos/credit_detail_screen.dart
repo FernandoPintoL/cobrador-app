@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/websocket_provider.dart';
+import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
 import '../../ui/widgets/client_category_chip.dart';
 import 'credit_form_screen.dart';
@@ -68,7 +69,8 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
         _apiPaymentSchedule = full?.schedule;
         _paymentsHistory = full?.paymentsHistory;
         _isLoadingDetails = false;
-        _paymentRecentlyProcessed = false; // reactivar FAB tras actualizar datos
+        _paymentRecentlyProcessed =
+            false; // reactivar FAB tras actualizar datos
       });
       debugPrint('✅ Detalles cargados vía provider (única llamada).');
     } catch (e) {
@@ -98,21 +100,31 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     ref.listen<Map<String, dynamic>?>(lastPaymentUpdateProvider, (prev, next) {
       if (next == null) return;
       try {
-        final dynamic creditIdDyn = next['credit']?['id'] ?? next['payment']?['credit_id'] ?? next['creditId'];
-        final int? creditId = creditIdDyn is int ? creditIdDyn : int.tryParse(creditIdDyn?.toString() ?? '');
+        final dynamic creditIdDyn =
+            next['credit']?['id'] ??
+            next['payment']?['credit_id'] ??
+            next['creditId'];
+        final int? creditId = creditIdDyn is int
+            ? creditIdDyn
+            : int.tryParse(creditIdDyn?.toString() ?? '');
         if (creditId == null) return;
         if (creditId != widget.credit.id) return;
 
         // Evitar recargas en ráfaga si llegan múltiples eventos similares
         final now = DateTime.now();
-        if (_lastPaymentRefresh != null && now.difference(_lastPaymentRefresh!) < const Duration(seconds: 2)) {
+        if (_lastPaymentRefresh != null &&
+            now.difference(_lastPaymentRefresh!) < const Duration(seconds: 2)) {
           return;
         }
         _lastPaymentRefresh = now;
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Pago aplicado. Actualizando información del crédito...')),
+            const SnackBar(
+              content: Text(
+                'Pago aplicado. Actualizando información del crédito...',
+              ),
+            ),
           );
         }
         _loadCreditDetails();
@@ -120,6 +132,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       } catch (_) {}
     });
     final creditState = ref.watch(creditProvider);
+    final authState = ref.watch(authProvider);
 
     // Buscar el crédito actualizado en el estado, pero si el de estado está incompleto (sin totalAmount)
     // y el widget.credit sí lo trae, preferir el del widget para no perder datos.
@@ -139,6 +152,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     }
     final currentCredit = _detailedCredit ?? baseCredit;
 
+    // Verificar si el usuario es manager o admin para mostrar opciones de edición/eliminación
+    final canEditDelete = authState.isManager || authState.isAdmin;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -147,30 +163,67 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
         ),
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: currentCredit.status == 'pending_approval'
-                ? () => _editCredit(currentCredit)
-                : null,
-            tooltip: currentCredit.status == 'pending_approval'
-                ? 'Editar crédito'
-                : 'Solo se puede editar cuando está pendiente',
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) => _handleMenuAction(value, currentCredit),
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Eliminar', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          // Solo mostrar botón de editar si el usuario es manager o admin
+          if (canEditDelete)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: currentCredit.status == 'pending_approval'
+                  ? () => _editCredit(currentCredit)
+                  : null,
+              tooltip: currentCredit.status == 'pending_approval'
+                  ? 'Editar crédito'
+                  : 'Solo se puede editar cuando está pendiente',
+            ),
+          // Solo mostrar menú de opciones (anular/eliminar) si el usuario es manager o admin
+          if (canEditDelete)
+            PopupMenuButton<String>(
+              onSelected: (value) => _handleMenuAction(value, currentCredit),
+              itemBuilder: (context) {
+                // Determinar si el crédito tiene pagos para decidir entre anular o eliminar
+                final hasPayments =
+                    _paymentsHistory != null && _paymentsHistory!.isNotEmpty ||
+                    currentCredit.payments != null &&
+                        currentCredit.payments!.isNotEmpty;
+
+                // No mostrar opciones si el crédito ya está cancelado
+                if (currentCredit.status == 'cancelled') {
+                  return <PopupMenuEntry<String>>[];
+                }
+
+                if (hasPayments) {
+                  // Si tiene pagos, mostrar opción de anular
+                  return [
+                    const PopupMenuItem(
+                      value: 'cancel',
+                      child: Row(
+                        children: [
+                          Icon(Icons.cancel, color: Colors.orange),
+                          SizedBox(width: 8),
+                          Text(
+                            'Anular',
+                            style: TextStyle(color: Colors.orange),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ];
+                } else {
+                  // Si no tiene pagos, mostrar opción de eliminar
+                  return [
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Eliminar', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ];
+                }
+              },
+            ),
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -354,138 +407,135 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (credit.client?.telefono != null &&
-                            credit.client!.telefono.isNotEmpty)
-                          ...[
-                            Text('Teléfono: ${credit.client!.telefono}'),
-                            const SizedBox(height: 4),
-                            Text(
-                              'CI: ${credit.client?.ci ?? 'N/A'}',
-                            ),
-                            const SizedBox(height: 4),
-                            // Acciones de contacto y mapa
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              // mainAxisAlignment: MainAxisAlignment.start,
-                              children: [
-                                // Llamada normal
-                                IconButton(
-                                  tooltip: 'Llamar',
-                                  icon: const Icon(
-                                    Icons.phone,
-                                    color: Colors.green,
-                                  ),
-                                  onPressed:
-                                  (credit.client?.telefono != null &&
-                                      credit.client!.telefono.isNotEmpty)
-                                      ? () async {
-                                    try {
-                                      await ContactActionsWidget.makePhoneCall(
-                                        credit.client!.telefono,
-                                      );
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(e.toString()),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  }
-                                      : null,
+                            credit.client!.telefono.isNotEmpty) ...[
+                          Text('Teléfono: ${credit.client!.telefono}'),
+                          const SizedBox(height: 4),
+                          Text('CI: ${credit.client?.ci ?? 'N/A'}'),
+                          const SizedBox(height: 4),
+                          // Acciones de contacto y mapa
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            // mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              // Llamada normal
+                              IconButton(
+                                tooltip: 'Llamar',
+                                icon: const Icon(
+                                  Icons.phone,
+                                  color: Colors.green,
                                 ),
-                                // WhatsApp
-                                IconButton(
-                                  tooltip: 'WhatsApp',
-                                  icon: const Icon(
-                                    Icons.message,
-                                    color: Colors.green,
-                                  ),
-                                  onPressed:
-                                  (credit.client?.telefono != null &&
-                                      credit.client!.telefono.isNotEmpty)
-                                      ? () async {
-                                    try {
-                                      await ContactActionsWidget.openWhatsApp(
-                                        credit.client!.telefono,
-                                        message:
-                                        'Hola ${credit.client!.nombre}, me comunico desde la aplicación.',
-                                        context: context,
-                                      );
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(e.toString()),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
+                                onPressed:
+                                    (credit.client?.telefono != null &&
+                                        credit.client!.telefono.isNotEmpty)
+                                    ? () async {
+                                        try {
+                                          await ContactActionsWidget.makePhoneCall(
+                                            credit.client!.telefono,
+                                          );
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(e.toString()),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        }
                                       }
-                                    }
-                                  }
-                                      : null,
+                                    : null,
+                              ),
+                              // WhatsApp
+                              IconButton(
+                                tooltip: 'WhatsApp',
+                                icon: const Icon(
+                                  Icons.message,
+                                  color: Colors.green,
                                 ),
-                                // Ver ubicación en mapa
-                                IconButton(
-                                  tooltip: 'Ver ubicación en mapa',
-                                  icon: const Icon(Icons.map, color: Colors.blue),
-                                  onPressed:
-                                  (credit.client?.latitud != null &&
-                                      credit.client?.longitud != null)
-                                      ? () {
-                                    // Crear marcador para la ubicación del cliente
-                                    final clienteMarker = Marker(
-                                      markerId: MarkerId(
-                                        'cliente_${credit.client!.id}',
-                                      ),
-                                      position: LatLng(
-                                        credit.client!.latitud!,
-                                        credit.client!.longitud!,
-                                      ),
-                                      infoWindow: InfoWindow(
-                                        title: credit.client!.nombre,
-                                        snippet:
-                                        'Cliente ${credit.client!.clientCategory ?? 'B'} - ${credit.client!.telefono}',
-                                      ),
-                                      icon:
-                                      BitmapDescriptor.defaultMarkerWithHue(
-                                        BitmapDescriptor.hueBlue,
-                                      ),
-                                    );
+                                onPressed:
+                                    (credit.client?.telefono != null &&
+                                        credit.client!.telefono.isNotEmpty)
+                                    ? () async {
+                                        try {
+                                          await ContactActionsWidget.openWhatsApp(
+                                            credit.client!.telefono,
+                                            message:
+                                                'Hola ${credit.client!.nombre}, me comunico desde la aplicación.',
+                                            context: context,
+                                          );
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(e.toString()),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      }
+                                    : null,
+                              ),
+                              // Ver ubicación en mapa
+                              IconButton(
+                                tooltip: 'Ver ubicación en mapa',
+                                icon: const Icon(Icons.map, color: Colors.blue),
+                                onPressed:
+                                    (credit.client?.latitud != null &&
+                                        credit.client?.longitud != null)
+                                    ? () {
+                                        // Crear marcador para la ubicación del cliente
+                                        final clienteMarker = Marker(
+                                          markerId: MarkerId(
+                                            'cliente_${credit.client!.id}',
+                                          ),
+                                          position: LatLng(
+                                            credit.client!.latitud!,
+                                            credit.client!.longitud!,
+                                          ),
+                                          infoWindow: InfoWindow(
+                                            title: credit.client!.nombre,
+                                            snippet:
+                                                'Cliente ${credit.client!.clientCategory ?? 'B'} - ${credit.client!.telefono}',
+                                          ),
+                                          icon:
+                                              BitmapDescriptor.defaultMarkerWithHue(
+                                                BitmapDescriptor.hueBlue,
+                                              ),
+                                        );
 
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            LocationPickerScreen(
-                                              allowSelection: false,
-                                              extraMarkers: {clienteMarker},
-                                              customTitle:
-                                              'Ubicación de ${credit.client!.nombre}',
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                LocationPickerScreen(
+                                                  allowSelection: false,
+                                                  extraMarkers: {clienteMarker},
+                                                  customTitle:
+                                                      'Ubicación de ${credit.client!.nombre}',
+                                                ),
+                                          ),
+                                        );
+                                      }
+                                    : () {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Este cliente no tiene ubicación GPS registrada',
                                             ),
-                                      ),
-                                    );
-                                  }
-                                      : () {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Este cliente no tiene ubicación GPS registrada',
-                                        ),
-                                        backgroundColor: Colors.orange,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
+                                            backgroundColor: Colors.orange,
+                                          ),
+                                        );
+                                      },
+                              ),
+                            ],
+                          ),
+                        ],
                         if (_isLoadingDetails) ...[
                           const SizedBox(height: 4),
                           const Text(
@@ -549,7 +599,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        _buildStatusBadge(credit)
+                        _buildStatusBadge(credit),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -730,6 +780,10 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       case 'defaulted':
         color = Colors.red;
         icon = Icons.warning;
+        break;
+      case 'cancelled':
+        color = Colors.grey.shade600;
+        icon = Icons.cancel;
         break;
       default:
         color = Colors.grey;
@@ -1058,6 +1112,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
       case 'delete':
         _showDeleteConfirmation(credit);
         break;
+      case 'cancel':
+        _showCancelConfirmation(credit);
+        break;
     }
   }
 
@@ -1099,28 +1156,50 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     }
   }
 
-  Widget _buildWaitingListInfo(Credito credit) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              'Estado de Lista de Espera',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            /*Text(
-              'Estado: ${credit.status}',
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),*/
-          ],
+  Future<void> _showCancelConfirmation(Credito credit) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Anulación'),
+        content: Text(
+          '¿Estás seguro de que deseas anular este crédito?\n\n'
+          'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}\n'
+          'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}\n\n'
+          'El crédito será marcado como cancelado pero se mantendrá '
+          'el historial de pagos realizados.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Anular'),
+          ),
+        ],
       ),
     );
+
+    if (confirmed == true) {
+      final success = await ref
+          .read(creditProvider.notifier)
+          .cancelCredit(credit.id);
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Crédito anulado exitosamente'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        // Recargar los datos para mostrar el estado actualizado
+        _loadCreditDetails();
+        ref.read(creditProvider.notifier).loadCredits();
+      }
+    }
   }
 }

@@ -5,73 +5,43 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo o ícono
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(60),
-                ),
-                child: const Icon(
-                  Icons.account_balance_wallet,
-                  color: Colors.white,
-                  size: 60,
-                ),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Indicador de carga
+            CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                theme.colorScheme.primary,
               ),
-              const SizedBox(height: 32),
+            ),
+            const SizedBox(height: 24),
 
-              // Título
-              const Text(
-                'Cobrador App',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+            // Texto de carga
+            Text(
+              'Inicializando la aplicación...',
+              style: TextStyle(
+                fontSize: 16,
+                color: theme.textTheme.bodyMedium?.color,
               ),
-              const SizedBox(height: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
 
-              // Subtítulo
-              const Text(
-                'Sistema de Gestión de Cobranzas',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.white70,
-                ),
+            Text(
+              'Cargando, espere por favor',
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.textTheme.bodySmall?.color,
               ),
-              const SizedBox(height: 48),
-
-              // Indicador de carga
-              const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                strokeWidth: 3,
-              ),
-              const SizedBox(height: 24),
-
-              // Texto de carga
-              const Text(
-                'Inicializando...',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white60,
-                ),
-              ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );

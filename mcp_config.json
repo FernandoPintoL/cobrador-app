@@ -1,0 +1,12 @@
+{
+    "servers": {
+        "cobrador_app_mcp": {
+            "command": "dart",
+            "args": [
+                "bin/cobrador_mcp.dart"
+            ],
+            "env": {},
+            "cwd": "d:/josecarlos/app-cobrador"
+        }
+    }
+}

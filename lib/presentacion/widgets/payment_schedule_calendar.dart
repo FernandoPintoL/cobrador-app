@@ -8,7 +8,12 @@ class PaymentScheduleCalendar extends StatelessWidget {
   final Credito credit; // to infer paid installments
   final void Function(PaymentSchedule)? onTapInstallment;
 
-  const PaymentScheduleCalendar({super.key, required this.schedule, required this.credit, this.onTapInstallment});
+  const PaymentScheduleCalendar({
+    super.key,
+    required this.schedule,
+    required this.credit,
+    this.onTapInstallment,
+  });
 
   bool _isInstallmentPaid(PaymentSchedule installment) {
     if (installment.isPaid) return true;
@@ -48,15 +53,21 @@ class PaymentScheduleCalendar extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 8.0),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Text('Fecha de referencia: ' + DateFormat('dd/MM/yyyy').format(refDate), style: const TextStyle(fontSize: 12)),
+            child: Text(
+              'Fecha de referencia: ${DateFormat('dd/MM/yyyy').format(refDate)}',
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
         ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        // Cambiar Row por Wrap para evitar overflow en pantallas pequeñas
+        Wrap(
+          spacing: 8.0, // Espaciado horizontal entre elementos
+          runSpacing: 4.0, // Espaciado vertical entre filas
+          alignment: WrapAlignment.center,
           children: [
             _legendItem(Colors.green, 'Pagado'),
             _legendItem(Colors.grey.shade300, 'Pendiente'),
-            _legendItem(Colors.lightBlueAccent, 'Actual (día de referencia)'),
+            _legendItem(Colors.lightBlueAccent, 'Actual'),
             _legendItem(Colors.red, 'Vencido'),
           ],
         ),
@@ -79,7 +90,10 @@ class PaymentScheduleCalendar extends StatelessWidget {
             // incluso si su due_date no coincide exactamente con la fecha de referencia.
             // Esto permite que, si ya se pagó hoy la cuota que vencía hoy, se destaque la
             // próxima impaga (caso típico en cobros diarios).
-            final isCurrent = !consideredPaid && currentNumber != null && installment.installmentNumber == currentNumber;
+            final isCurrent =
+                !consideredPaid &&
+                currentNumber != null &&
+                installment.installmentNumber == currentNumber;
             final isOverdueLocal = !consideredPaid && (due.isBefore(refDate));
             Color backgroundColor;
             Color textColor = Colors.white;
@@ -109,8 +123,18 @@ class PaymentScheduleCalendar extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('${installment.installmentNumber}', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text(DateFormat('dd/MM').format(installment.dueDate), style: TextStyle(color: textColor, fontSize: 10)),
+                      Text(
+                        '${installment.installmentNumber}',
+                        style: TextStyle(
+                          color: textColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        DateFormat('dd/MM').format(installment.dueDate),
+                        style: TextStyle(color: textColor, fontSize: 10),
+                      ),
                     ],
                   ),
                 ),
@@ -123,13 +147,29 @@ class PaymentScheduleCalendar extends StatelessWidget {
   }
 
   Widget _legendItem(Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ],
+      ),
     );
   }
 }

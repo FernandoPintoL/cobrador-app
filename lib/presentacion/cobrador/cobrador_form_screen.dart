@@ -22,11 +22,7 @@ class CobradorFormScreen extends ConsumerStatefulWidget {
   final Usuario? cobrador; // null para crear, con datos para editar
   final VoidCallback? onCobradorSaved;
 
-  const CobradorFormScreen({
-    super.key,
-    this.cobrador,
-    this.onCobradorSaved,
-  });
+  const CobradorFormScreen({super.key, this.cobrador, this.onCobradorSaved});
 
   @override
   ConsumerState<CobradorFormScreen> createState() =>
@@ -46,6 +42,14 @@ class _ManagerCobradorFormScreenState
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _isEditMode = false;
+
+  // Variables para errores de campo específicos
+  String? _nombreError;
+  String? _emailError;
+  String? _passwordError;
+  String? _ciError;
+  String? _telefonoError;
+  String? _direccionError;
 
   // Variables para ubicación GPS
   double? _latitud;
@@ -74,14 +78,18 @@ class _ManagerCobradorFormScreenState
 
       // Si hay una imagen de perfil, construir la URL correcta
       if (widget.cobrador!.profileImage.isNotEmpty) {
-        _profileImageUrl = apiService.getProfileImageUrl(widget.cobrador!.profileImage);
+        _profileImageUrl = apiService.getProfileImageUrl(
+          widget.cobrador!.profileImage,
+        );
         debugPrint('🖼️ URL de perfil construida: $_profileImageUrl');
       } else {
         _profileImageUrl = null;
         debugPrint('⚠️ No hay imagen de perfil para el cobrador');
       }
 
-      debugPrint('Cargando fotos existentes para el cobrador: ${widget.cobrador!.nombre}');
+      debugPrint(
+        'Cargando fotos existentes para el cobrador: ${widget.cobrador!.nombre}',
+      );
       _cargarFotosExistentes(widget.cobrador!.id);
 
       _nombreController.text = widget.cobrador!.nombre;
@@ -116,6 +124,69 @@ class _ManagerCobradorFormScreenState
     _direccionController.dispose();
     _ciController.dispose();
     super.dispose();
+  }
+
+  void _limpiarErroresCampos() {
+    setState(() {
+      _nombreError = null;
+      _emailError = null;
+      _passwordError = null;
+      _ciError = null;
+      _telefonoError = null;
+      _direccionError = null;
+    });
+  }
+
+  void _procesarErroresCampos(List<String>? fieldErrors) {
+    if (fieldErrors == null || fieldErrors.isEmpty) return;
+
+    setState(() {
+      _nombreError = null;
+      _emailError = null;
+      _passwordError = null;
+      _ciError = null;
+      _telefonoError = null;
+      _direccionError = null;
+
+      for (String error in fieldErrors) {
+        String errorLower = error.toLowerCase();
+
+        // Errores de nombre
+        if (errorLower.contains('name') || errorLower.contains('nombre')) {
+          _nombreError = error;
+        }
+        // Errores de email
+        else if (errorLower.contains('email') ||
+            errorLower.contains('correo')) {
+          _emailError = error;
+        }
+        // Errores de contraseña
+        else if (errorLower.contains('password') ||
+            errorLower.contains('contraseña') ||
+            errorLower.contains('clave')) {
+          _passwordError = error;
+        }
+        // Errores de teléfono
+        else if (errorLower.contains('phone') ||
+            errorLower.contains('teléfono') ||
+            errorLower.contains('telefono')) {
+          _telefonoError = error;
+        }
+        // Errores de dirección
+        else if (errorLower.contains('address') ||
+            errorLower.contains('dirección') ||
+            errorLower.contains('direccion')) {
+          _direccionError = error;
+        }
+        // Errores de CI
+        else if (errorLower.contains('ci') ||
+            errorLower.contains('cédula') ||
+            errorLower.contains('cedula') ||
+            errorLower.contains('documento')) {
+          _ciError = error;
+        }
+      }
+    });
   }
 
   @override
@@ -170,10 +241,31 @@ class _ManagerCobradorFormScreenState
               // Campos del formulario
               TextFormField(
                 controller: _nombreController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Nombre completo',
-                  prefixIcon: Icon(Icons.person),
-                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(
+                    Icons.person,
+                    color: _nombreError != null ? Colors.red : null,
+                  ),
+                  border: const OutlineInputBorder(),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _nombreError != null ? Colors.red : Colors.grey,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _nombreError != null
+                          ? Colors.red
+                          : Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  errorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
+                  focusedErrorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
                 ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(
@@ -194,10 +286,31 @@ class _ManagerCobradorFormScreenState
 
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Correo electrónico',
-                  prefixIcon: Icon(Icons.email),
-                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(
+                    Icons.email,
+                    color: _emailError != null ? Colors.red : null,
+                  ),
+                  border: const OutlineInputBorder(),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _emailError != null ? Colors.red : Colors.grey,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _emailError != null
+                          ? Colors.red
+                          : Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  errorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
+                  focusedErrorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
                 ),
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
@@ -211,64 +324,108 @@ class _ManagerCobradorFormScreenState
                 },
               ),
               const SizedBox(height: 16),
-              if(!_isEditMode)
+              if (!_isEditMode)
                 TextFormField(
-                controller: _passwordController,
-                decoration: InputDecoration(
-                  labelText: _isEditMode
-                      ? 'Nueva Contraseña (opcional)'
-                      : 'Contraseña',
-                  prefixIcon: const Icon(Icons.lock),
-                  border: const OutlineInputBorder(),
-                  helperText: _isEditMode
-                      ? 'Deja vacío si no deseas cambiar la contraseña'
-                      : 'Mínimo 6 caracteres',
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility
-                          : Icons.visibility_off,
+                  controller: _passwordController,
+                  decoration: InputDecoration(
+                    labelText: _isEditMode
+                        ? 'Nueva Contraseña (opcional)'
+                        : 'Contraseña',
+                    prefixIcon: Icon(
+                      Icons.lock,
+                      color: _passwordError != null ? Colors.red : null,
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
+                    border: const OutlineInputBorder(),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(
+                        color: _passwordError != null
+                            ? Colors.red
+                            : Colors.grey,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(
+                        color: _passwordError != null
+                            ? Colors.red
+                            : Theme.of(context).primaryColor,
+                      ),
+                    ),
+                    errorBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.red),
+                    ),
+                    focusedErrorBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.red),
+                    ),
+                    helperText: _isEditMode
+                        ? 'Deja vacío si no deseas cambiar la contraseña'
+                        : 'Mínimo 6 caracteres',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                   ),
+                  obscureText: _obscurePassword,
+                  validator: (value) {
+                    if (!_isEditMode) {
+                      // En modo creación, la contraseña es obligatoria
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingresa una contraseña';
+                      }
+                      if (value.length < 6) {
+                        return 'La contraseña debe tener al menos 6 caracteres';
+                      }
+                    } else {
+                      // En modo edición, la contraseña es opcional pero debe ser válida si se proporciona
+                      if (value != null &&
+                          value.isNotEmpty &&
+                          value.length < 6) {
+                        return 'La contraseña debe tener al menos 6 caracteres';
+                      }
+                    }
+                    return null;
+                  },
                 ),
-                obscureText: _obscurePassword,
-                validator: (value) {
-                  if (!_isEditMode) {
-                    // En modo creación, la contraseña es obligatoria
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa una contraseña';
-                    }
-                    if (value.length < 6) {
-                      return 'La contraseña debe tener al menos 6 caracteres';
-                    }
-                  } else {
-                    // En modo edición, la contraseña es opcional pero debe ser válida si se proporciona
-                    if (value != null && value.isNotEmpty && value.length < 6) {
-                      return 'La contraseña debe tener al menos 6 caracteres';
-                    }
-                  }
-                  return null;
-                },
-              ),
-                const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
               // CI obligatorio
               TextFormField(
                 controller: _ciController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'CI (Cédula de identidad) *',
-                  prefixIcon: Icon(Icons.badge),
-                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(
+                    Icons.badge,
+                    color: _ciError != null ? Colors.red : null,
+                  ),
+                  border: const OutlineInputBorder(),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _ciError != null ? Colors.red : Colors.grey,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _ciError != null
+                          ? Colors.red
+                          : Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  errorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
+                  focusedErrorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
                 ),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(
-                    RegExp(r'[A-Za-z0-9]'),
-                  ),
+                  FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
                 ],
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -285,14 +442,36 @@ class _ManagerCobradorFormScreenState
               // telefono
               TextFormField(
                 controller: _telefonoController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Teléfono',
-                  prefixIcon: Icon(Icons.phone),
-                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(
+                    Icons.phone,
+                    color: _telefonoError != null ? Colors.red : null,
+                  ),
+                  border: const OutlineInputBorder(),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _telefonoError != null ? Colors.red : Colors.grey,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _telefonoError != null
+                          ? Colors.red
+                          : Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  errorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
+                  focusedErrorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
                 ),
                 keyboardType: TextInputType.phone,
                 inputFormatters: [PhoneUtils.inputFormatter()],
-                validator: (value) => PhoneUtils.validatePhone(value, required: true),
+                validator: (value) =>
+                    PhoneUtils.validatePhone(value, required: true),
               ),
               const SizedBox(height: 16),
 
@@ -300,8 +479,29 @@ class _ManagerCobradorFormScreenState
                 controller: _direccionController,
                 decoration: InputDecoration(
                   labelText: 'Dirección',
-                  prefixIcon: const Icon(Icons.location_on),
+                  prefixIcon: Icon(
+                    Icons.location_on,
+                    color: _direccionError != null ? Colors.red : null,
+                  ),
                   border: const OutlineInputBorder(),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _direccionError != null ? Colors.red : Colors.grey,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _direccionError != null
+                          ? Colors.red
+                          : Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  errorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
+                  focusedErrorBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _ubicacionObtenida
@@ -335,7 +535,10 @@ class _ManagerCobradorFormScreenState
                     children: [
                       const Text(
                         'Documentos de Identidad',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -534,6 +737,9 @@ class _ManagerCobradorFormScreenState
   Future<void> _guardarCobrador() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Limpiar errores anteriores
+    _limpiarErroresCampos();
+
     // Validar fotos requeridas en creación
     if (!_isEditMode) {
       if (_idFront == null || _idBack == null) {
@@ -557,7 +763,8 @@ class _ManagerCobradorFormScreenState
 
       if (_isEditMode) {
         // Verificar si hay fotos nuevas para actualizar
-        bool hayFotosNuevas = _idFront != null || _idBack != null || _profileImage != null;
+        bool hayFotosNuevas =
+            _idFront != null || _idBack != null || _profileImage != null;
 
         bool success;
         if (hayFotosNuevas) {
@@ -602,8 +809,8 @@ class _ManagerCobradorFormScreenState
         if (success) {
           _mostrarExito(
             hayFotosNuevas
-              ? 'Cobrador y documentos actualizados exitosamente'
-              : 'Cobrador actualizado exitosamente'
+                ? 'Cobrador y documentos actualizados exitosamente'
+                : 'Cobrador actualizado exitosamente',
           );
           // Recargar datos del manager
           await ref
@@ -614,6 +821,7 @@ class _ManagerCobradorFormScreenState
         } else {
           final state = ref.read(userManagementProvider);
           if (state.fieldErrors != null && state.fieldErrors!.isNotEmpty) {
+            _procesarErroresCampos(state.fieldErrors!);
             ValidationErrorDialog.show(
               context,
               title: 'Error de validación',
@@ -657,6 +865,7 @@ class _ManagerCobradorFormScreenState
         } else {
           final state = ref.read(userManagementProvider);
           if (state.fieldErrors != null && state.fieldErrors!.isNotEmpty) {
+            _procesarErroresCampos(state.fieldErrors!);
             ValidationErrorDialog.show(
               context,
               title: 'Error de validación',
@@ -689,7 +898,7 @@ class _ManagerCobradorFormScreenState
         title: const Text('Eliminar Cobrador'),
         content: Text(
           '¿Estás seguro de que deseas eliminar a ${widget.cobrador!.nombre}? Esta acción no se puede deshacer.',
-          style: TextStyle(color: Colors.white)
+          style: TextStyle(color: Colors.white),
         ),
         actions: [
           TextButton(
@@ -748,17 +957,28 @@ class _ManagerCobradorFormScreenState
 
   void _mostrarExito(String mensaje) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje, style: TextStyle(color: Colors.white)), backgroundColor: Colors.green),
+      SnackBar(
+        content: Text(mensaje, style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 
   void _mostrarError(String mensaje) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje, style: TextStyle(color: Colors.white)), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(mensaje, style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.red,
+      ),
     );
   }
 
-  Widget _buildImagePicker({required String label, required File? file, String? existingUrl, required VoidCallback onTap}) {
+  Widget _buildImagePicker({
+    required String label,
+    required File? file,
+    String? existingUrl,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -841,13 +1061,16 @@ class _ManagerCobradorFormScreenState
       debugPrint('Fotos existentes cargadas: $photos');
       for (final p in photos) {
         final type = p['type']?.toString();
-        final url = p['url']?.toString() ?? p['full_url']?.toString() ?? p['path_url']?.toString();
+        final url =
+            p['url']?.toString() ??
+            p['full_url']?.toString() ??
+            p['path_url']?.toString();
         if (type == 'id_front' && url != null) {
           _idFrontUrl = url;
-          debugPrint('Foto CI Anverso URL: '+_idFrontUrl.toString());
+          debugPrint('Foto CI Anverso URL: ' + _idFrontUrl.toString());
         } else if (type == 'id_back' && url != null) {
           _idBackUrl = url;
-          debugPrint('Foto CI Reverso URL: '+_idBackUrl.toString());
+          debugPrint('Foto CI Reverso URL: ' + _idBackUrl.toString());
         }
       }
       if (mounted) setState(() {});
@@ -862,9 +1085,9 @@ class _ManagerCobradorFormScreenState
       if (source == null) return;
 
       final XFile? picked = await AllowedAppsHelper.openCameraSecurely(
-              source: source,
-              imageQuality: 100,
-            );
+        source: source,
+        imageQuality: 100,
+      );
       if (picked == null) return;
       File file = File(picked.path);
       file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);
@@ -884,7 +1107,7 @@ class _ManagerCobradorFormScreenState
   }
 
   Future<void> _mostrarDialogoContrasena() async {
-    if(widget.cobrador == null) return;
+    if (widget.cobrador == null) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ChangePasswordScreen(

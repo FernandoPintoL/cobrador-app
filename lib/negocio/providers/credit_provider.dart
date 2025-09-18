@@ -67,10 +67,14 @@ class CreditState {
     return CreditState(
       credits: credits ?? this.credits,
       attentionCredits: attentionCredits ?? this.attentionCredits,
-      pendingApprovalCredits: pendingApprovalCredits ?? this.pendingApprovalCredits,
-      waitingDeliveryCredits: waitingDeliveryCredits ?? this.waitingDeliveryCredits,
-      readyForDeliveryCredits: readyForDeliveryCredits ?? this.readyForDeliveryCredits,
-      overdueDeliveryCredits: overdueDeliveryCredits ?? this.overdueDeliveryCredits,
+      pendingApprovalCredits:
+          pendingApprovalCredits ?? this.pendingApprovalCredits,
+      waitingDeliveryCredits:
+          waitingDeliveryCredits ?? this.waitingDeliveryCredits,
+      readyForDeliveryCredits:
+          readyForDeliveryCredits ?? this.readyForDeliveryCredits,
+      overdueDeliveryCredits:
+          overdueDeliveryCredits ?? this.overdueDeliveryCredits,
       stats: stats ?? this.stats,
       waitingListSummary: waitingListSummary ?? this.waitingListSummary,
       isLoading: isLoading ?? this.isLoading,
@@ -115,6 +119,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
     double? totalAmountMax,
     double? balanceMin,
     double? balanceMax,
+    bool? isOverdue, // Filtro para cuotas atrasadas
+    double? overdueAmountMin, // Monto mínimo atrasado
+    double? overdueAmountMax, // Monto máximo atrasado
     int page = 1,
     int? perPage,
   }) async {
@@ -139,6 +146,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
         'totalAmountMax': totalAmountMax,
         'balanceMin': balanceMin,
         'balanceMax': balanceMax,
+        'isOverdue': isOverdue,
+        'overdueAmountMin': overdueAmountMin,
+        'overdueAmountMax': overdueAmountMax,
         'perPage': perPage ?? 15,
       };
 
@@ -147,7 +157,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
         cobradorId: cobradorId,
         status: status,
         search: search,
-        frequency: (frequencies == null || frequencies.isEmpty) ? null : frequencies.join(','),
+        frequency: (frequencies == null || frequencies.isEmpty)
+            ? null
+            : frequencies.join(','),
         startDateFrom: startDateFrom?.toIso8601String().split('T')[0],
         startDateTo: startDateTo?.toIso8601String().split('T')[0],
         endDateFrom: endDateFrom?.toIso8601String().split('T')[0],
@@ -158,6 +170,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
         totalAmountMax: totalAmountMax,
         balanceMin: balanceMin,
         balanceMax: balanceMax,
+        isOverdue: isOverdue,
+        overdueAmountMin: overdueAmountMin,
+        overdueAmountMax: overdueAmountMax,
         page: page,
         perPage: perPage ?? 15,
       );
@@ -167,7 +182,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         final creditsData = data['data'] as List? ?? [];
 
         final credits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         state = state.copyWith(
@@ -211,13 +229,23 @@ class CreditNotifier extends StateNotifier<CreditState> {
         cobradorId: query['cobradorId'] as int?,
         status: query['status'] as String?,
         search: query['search'] as String?,
-        frequency: (query['frequencies'] == null || (query['frequencies'] as List).isEmpty)
+        frequency:
+            (query['frequencies'] == null ||
+                (query['frequencies'] as List).isEmpty)
             ? null
             : (query['frequencies'] as List).join(','),
-        startDateFrom: (query['startDateFrom'] as DateTime?)?.toIso8601String().split('T')[0],
-        startDateTo: (query['startDateTo'] as DateTime?)?.toIso8601String().split('T')[0],
-        endDateFrom: (query['endDateFrom'] as DateTime?)?.toIso8601String().split('T')[0],
-        endDateTo: (query['endDateTo'] as DateTime?)?.toIso8601String().split('T')[0],
+        startDateFrom: (query['startDateFrom'] as DateTime?)
+            ?.toIso8601String()
+            .split('T')[0],
+        startDateTo: (query['startDateTo'] as DateTime?)
+            ?.toIso8601String()
+            .split('T')[0],
+        endDateFrom: (query['endDateFrom'] as DateTime?)
+            ?.toIso8601String()
+            .split('T')[0],
+        endDateTo: (query['endDateTo'] as DateTime?)?.toIso8601String().split(
+          'T',
+        )[0],
         amountMin: query['amountMin'] as double?,
         amountMax: query['amountMax'] as double?,
         totalAmountMin: query['totalAmountMin'] as double?,
@@ -232,7 +260,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         final data = response['data'];
         final creditsData = data['data'] as List? ?? [];
         final newCredits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         // Evitar duplicados por id
@@ -304,7 +335,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
       // Agregar campos opcionales
       if (scheduledDeliveryDate != null) {
-        creditData['scheduled_delivery_date'] = scheduledDeliveryDate.toIso8601String();
+        creditData['scheduled_delivery_date'] = scheduledDeliveryDate
+            .toIso8601String();
       }
       if (interestRate != null && interestRate > 0) {
         creditData['interest_rate'] = interestRate;
@@ -420,23 +452,33 @@ class CreditNotifier extends StateNotifier<CreditState> {
       if (endDate != null) {
         var normalizedEnd = endDate;
         // Si es diario, ajustar fecha fin
-        final existing = state.credits.firstWhere((c) => c.id == creditId,
-            orElse: () => throw Exception('Crédito no encontrado'));
+        final existing = state.credits.firstWhere(
+          (c) => c.id == creditId,
+          orElse: () => throw Exception('Crédito no encontrado'),
+        );
         final freq = frequency ?? existing.frequency;
         final start = startDate ?? existing.startDate;
         if (freq == 'daily') {
-          final count = totalInstallments ?? _inferInstallmentsFromAmounts(totalAmount, installmentAmount) ?? 24;
+          final count =
+              totalInstallments ??
+              _inferInstallmentsFromAmounts(totalAmount, installmentAmount) ??
+              24;
           normalizedEnd = ScheduleUtils.computeDailyEndDate(start, count);
         }
         creditData['end_date'] = normalizedEnd.toIso8601String().split('T')[0];
       }
       if (totalAmount != null) creditData['total_amount'] = totalAmount;
-      if (installmentAmount != null) creditData['installment_amount'] = installmentAmount;
-      if (totalInstallments != null) creditData['total_installments'] = totalInstallments;
+      if (installmentAmount != null)
+        creditData['installment_amount'] = installmentAmount;
+      if (totalInstallments != null)
+        creditData['total_installments'] = totalInstallments;
       if (latitude != null) creditData['latitude'] = latitude;
       if (longitude != null) creditData['longitude'] = longitude;
 
-      final response = await _creditApiService.updateCredit(creditId, creditData);
+      final response = await _creditApiService.updateCredit(
+        creditId,
+        creditData,
+      );
 
       if (response['success'] == true) {
         final creditoActualizado = Credito.fromJson(response['data']);
@@ -465,6 +507,55 @@ class CreditNotifier extends StateNotifier<CreditState> {
         errorMessage = 'Datos de entrada inválidos';
       } else if (e.toString().contains('403')) {
         errorMessage = 'No tienes permisos para actualizar este crédito';
+      } else if (e.toString().contains('404')) {
+        errorMessage = 'Crédito no encontrado';
+      }
+
+      state = state.copyWith(isLoading: false, errorMessage: errorMessage);
+      return false;
+    }
+  }
+
+  /// Anula un crédito cambiando su estado a 'cancelled'
+  Future<bool> cancelCredit(int creditId) async {
+    try {
+      print('🚫 Anulando crédito: $creditId');
+
+      // Obtener el crédito actual para preservar todos sus datos
+      final currentCredit = state.credits.firstWhere(
+        (c) => c.id == creditId,
+        orElse: () =>
+            throw Exception('Crédito no encontrado en el estado local'),
+      );
+
+      // Usar el método updateCredit existente para cambiar solo el estado
+      final success = await updateCredit(
+        creditId: creditId,
+        clientId: currentCredit.clientId,
+        amount: currentCredit.amount,
+        balance: currentCredit.balance,
+        interestRate: currentCredit.interestRate,
+        frequency: currentCredit.frequency,
+        status: 'cancelled', // Estado de anulado
+        startDate: currentCredit.startDate,
+        endDate: currentCredit.endDate,
+        totalAmount: currentCredit.totalAmount,
+        installmentAmount: currentCredit.installmentAmount,
+        totalInstallments: currentCredit.totalInstallments,
+      );
+
+      if (success) {
+        print('✅ Crédito anulado exitosamente');
+        state = state.copyWith(successMessage: 'Crédito anulado exitosamente');
+      }
+
+      return success;
+    } catch (e) {
+      print('❌ Error al anular crédito: $e');
+
+      String errorMessage = 'Error al anular crédito';
+      if (e.toString().contains('403')) {
+        errorMessage = 'No tienes permisos para anular este crédito';
       } else if (e.toString().contains('404')) {
         errorMessage = 'Crédito no encontrado';
       }
@@ -601,7 +692,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
       final response = await _creditApiService.getClientCredits(
         clientId,
         status: status,
-        frequency: (frequencies == null || frequencies.isEmpty) ? null : frequencies.join(','),
+        frequency: (frequencies == null || frequencies.isEmpty)
+            ? null
+            : frequencies.join(','),
         startDateFrom: startDateFrom?.toIso8601String().split('T')[0],
         startDateTo: startDateTo?.toIso8601String().split('T')[0],
         endDateFrom: endDateFrom?.toIso8601String().split('T')[0],
@@ -634,7 +727,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         }
 
         final credits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         state = state.copyWith(
@@ -647,7 +743,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos del cliente cargados exitosamente');
       } else {
-        throw Exception(response['message'] ?? 'Error al cargar créditos del cliente');
+        throw Exception(
+          response['message'] ?? 'Error al cargar créditos del cliente',
+        );
       }
     } catch (e) {
       print('❌ Error al cargar créditos del cliente: $e');
@@ -683,7 +781,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
         cobradorId,
         status: status,
         search: search,
-        frequency: (frequencies == null || frequencies.isEmpty) ? null : frequencies.join(','),
+        frequency: (frequencies == null || frequencies.isEmpty)
+            ? null
+            : frequencies.join(','),
         startDateFrom: startDateFrom?.toIso8601String().split('T')[0],
         startDateTo: startDateTo?.toIso8601String().split('T')[0],
         endDateFrom: endDateFrom?.toIso8601String().split('T')[0],
@@ -703,19 +803,30 @@ class CreditNotifier extends StateNotifier<CreditState> {
             : (data as List? ?? []);
 
         final credits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         state = state.copyWith(
           credits: credits,
           isLoading: false,
-          currentPage: (data is Map<String, dynamic>) ? (data['current_page'] ?? 1) : 1,
-          totalPages: (data is Map<String, dynamic>) ? (data['last_page'] ?? 1) : 1,
-          totalItems: (data is Map<String, dynamic>) ? (data['total'] ?? credits.length) : credits.length,
+          currentPage: (data is Map<String, dynamic>)
+              ? (data['current_page'] ?? 1)
+              : 1,
+          totalPages: (data is Map<String, dynamic>)
+              ? (data['last_page'] ?? 1)
+              : 1,
+          totalItems: (data is Map<String, dynamic>)
+              ? (data['total'] ?? credits.length)
+              : credits.length,
         );
         print('✅ Créditos del cobrador cargados (${credits.length})');
       } else {
-        throw Exception(response['message'] ?? 'Error al cargar créditos del cobrador');
+        throw Exception(
+          response['message'] ?? 'Error al cargar créditos del cobrador',
+        );
       }
     } catch (e) {
       print('❌ Error al cargar créditos del cobrador: $e');
@@ -770,7 +881,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         final creditsData = data['data'] as List? ?? [];
 
         final attentionCredits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         state = state.copyWith(
@@ -778,9 +892,14 @@ class CreditNotifier extends StateNotifier<CreditState> {
           isLoading: false,
         );
 
-        print('✅ ${attentionCredits.length} créditos que requieren atención cargados');
+        print(
+          '✅ ${attentionCredits.length} créditos que requieren atención cargados',
+        );
       } else {
-        throw Exception(response['message'] ?? 'Error al cargar créditos que requieren atención');
+        throw Exception(
+          response['message'] ??
+              'Error al cargar créditos que requieren atención',
+        );
       }
     } catch (e) {
       print('❌ Error al cargar créditos que requieren atención: $e');
@@ -824,7 +943,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
         }
       }
 
-      print('⚠️ [CreditNotifier] No se pudo parsear el crédito con ID $creditId');
+      print(
+        '⚠️ [CreditNotifier] No se pudo parsear el crédito con ID $creditId',
+      );
       return null;
     } catch (e) {
       print('❌ [CreditNotifier] Error al obtener crédito $creditId: $e');
@@ -835,8 +956,12 @@ class CreditNotifier extends StateNotifier<CreditState> {
   /// Obtiene el cronograma de pagos de un crédito
   Future<List<PaymentSchedule>?> getPaymentSchedule(int creditId) async {
     try {
-      print('🔄 Obteniendo cronograma de pagos desde backend para crédito: $creditId');
-      final response = await _creditApiService.getCreditPaymentSchedule(creditId);
+      print(
+        '🔄 Obteniendo cronograma de pagos desde backend para crédito: $creditId',
+      );
+      final response = await _creditApiService.getCreditPaymentSchedule(
+        creditId,
+      );
       if (response['success'] == true) {
         final data = response['data'];
         List<dynamic> scheduleData = [];
@@ -866,7 +991,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
     // Si backend falla, generar cronograma localmente
     try {
-      print('🔁 Generando cronograma de pagos localmente para crédito: $creditId');
+      print(
+        '🔁 Generando cronograma de pagos localmente para crédito: $creditId',
+      );
       final credit = state.credits.firstWhere(
         (c) => c.id == creditId,
         orElse: () => throw Exception('Crédito no encontrado'),
@@ -908,7 +1035,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos pendientes de aprobación...');
 
-      final response = await _creditApiService.getPendingApprovalCredits(page: page);
+      final response = await _creditApiService.getPendingApprovalCredits(
+        page: page,
+      );
 
       if (response['success'] == true) {
         final data = response['data'];
@@ -921,7 +1050,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         }
 
         final credits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         state = state.copyWith(
@@ -931,7 +1063,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos pendientes de aprobación cargados');
       } else {
-        throw Exception(response['message'] ?? 'Error al cargar créditos pendientes');
+        throw Exception(
+          response['message'] ?? 'Error al cargar créditos pendientes',
+        );
       }
     } catch (e) {
       print('❌ Error al cargar créditos pendientes de aprobación: $e');
@@ -948,7 +1082,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos en lista de espera...');
 
-      final response = await _creditApiService.getWaitingDeliveryCredits(page: page);
+      final response = await _creditApiService.getWaitingDeliveryCredits(
+        page: page,
+      );
 
       if (response['success'] == true) {
         final data = response['data'];
@@ -961,7 +1097,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         }
 
         final credits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         state = state.copyWith(
@@ -971,7 +1110,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos en lista de espera cargados');
       } else {
-        throw Exception(response['message'] ?? 'Error al cargar créditos en espera');
+        throw Exception(
+          response['message'] ?? 'Error al cargar créditos en espera',
+        );
       }
     } catch (e) {
       print('❌ Error al cargar créditos en lista de espera: $e');
@@ -988,14 +1129,19 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos listos para entrega hoy...');
 
-      final response = await _creditApiService.getReadyForDeliveryToday(page: page);
+      final response = await _creditApiService.getReadyForDeliveryToday(
+        page: page,
+      );
 
       if (response['success'] == true) {
         final data = response['data'];
         final creditsData = data is List ? data : (data['data'] as List? ?? []);
 
         final credits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         state = state.copyWith(
@@ -1005,7 +1151,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos listos para entrega hoy cargados');
       } else {
-        throw Exception(response['message'] ?? 'Error al cargar créditos listos');
+        throw Exception(
+          response['message'] ?? 'Error al cargar créditos listos',
+        );
       }
     } catch (e) {
       print('❌ Error al cargar créditos listos para entrega: $e');
@@ -1022,7 +1170,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando créditos con entrega atrasada...');
 
-      final response = await _creditApiService.getOverdueDeliveryCredits(page: page);
+      final response = await _creditApiService.getOverdueDeliveryCredits(
+        page: page,
+      );
 
       if (response['success'] == true) {
         final data = response['data'];
@@ -1035,7 +1185,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         }
 
         final credits = creditsData
-            .map((creditJson) => Credito.fromJson(creditJson as Map<String, dynamic>))
+            .map(
+              (creditJson) =>
+                  Credito.fromJson(creditJson as Map<String, dynamic>),
+            )
             .toList();
 
         state = state.copyWith(
@@ -1045,7 +1198,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         print('✅ ${credits.length} créditos con entrega atrasada cargados');
       } else {
-        throw Exception(response['message'] ?? 'Error al cargar créditos atrasados');
+        throw Exception(
+          response['message'] ?? 'Error al cargar créditos atrasados',
+        );
       }
     } catch (e) {
       print('❌ Error al cargar créditos con entrega atrasada: $e');
@@ -1160,7 +1315,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
       );
       print('❌ Rechazando crédito: $creditId');
 
-      final response = await _creditApiService.rejectCredit(creditId, reason: reason);
+      final response = await _creditApiService.rejectCredit(
+        creditId,
+        reason: reason,
+      );
 
       if (response['success'] == true) {
         final creditoActualizado = Credito.fromJson(response['data']['credit']);
@@ -1253,7 +1411,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
       );
       print('🚚 Entregando crédito al cliente: $creditId');
 
-      final response = await _creditApiService.deliverCreditToClient(creditId, notes: notes);
+      final response = await _creditApiService.deliverCreditToClient(
+        creditId,
+        notes: notes,
+      );
 
       if (response['success'] == true) {
         final creditoActualizado = Credito.fromJson(response['data']['credit']);
@@ -1313,8 +1474,14 @@ class CreditNotifier extends StateNotifier<CreditState> {
   // ========================================
 
   /// Intenta inferir el número de cuotas a partir de totalAmount e installmentAmount
-  int? _inferInstallmentsFromAmounts(double? totalAmount, double? installmentAmount) {
-    if (totalAmount == null || installmentAmount == null || installmentAmount <= 0) return null;
+  int? _inferInstallmentsFromAmounts(
+    double? totalAmount,
+    double? installmentAmount,
+  ) {
+    if (totalAmount == null ||
+        installmentAmount == null ||
+        installmentAmount <= 0)
+      return null;
     final est = (totalAmount / installmentAmount).round();
     if (est <= 0) return null;
     return est;
@@ -1334,7 +1501,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
     // Determinar número de cuotas y frecuencia basado en el tipo
     switch (credit.frequency) {
       case 'daily':
-        final inferred = _inferInstallmentsFromAmounts(credit.totalAmount, credit.installmentAmount);
+        final inferred = _inferInstallmentsFromAmounts(
+          credit.totalAmount,
+          credit.installmentAmount,
+        );
         installments = inferred ?? 24;
         daysBetweenPayments = 1;
         break;
@@ -1356,7 +1526,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
     }
 
     // Usar installmentAmount si está disponible, o calcular
-    final installmentAmount = credit.installmentAmount ??
+    final installmentAmount =
+        credit.installmentAmount ??
         (credit.amount * (1 + interestRate / 100)) / installments;
 
     // Generar cronograma
@@ -1364,14 +1535,16 @@ class CreditNotifier extends StateNotifier<CreditState> {
     int created = 0;
     while (created < installments) {
       currentDue = currentDue.add(Duration(days: daysBetweenPayments));
-      if (credit.frequency == 'daily' && currentDue.weekday == DateTime.sunday) {
+      if (credit.frequency == 'daily' &&
+          currentDue.weekday == DateTime.sunday) {
         continue; // Saltar domingos
       }
       final dueDate = currentDue;
       created++;
 
       // Verificar si ya fue pagado comparando con pagos existentes
-      final existingPayment = credit.payments?.where((p) {
+      final existingPayment =
+          credit.payments?.where((p) {
             final paymentDate = p.paymentDate;
             final daysDiff = (paymentDate.difference(dueDate).inDays).abs();
             return daysDiff <= (daysBetweenPayments ~/ 2);
@@ -1475,7 +1648,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
       if (authState.usuario != null) {
         // Notificar al creador del crédito (puede ser manager o cobrador), sin importar su rol
         final String? creatorIdStr = (() {
-          final int? creatorId = credito.createdBy ?? (credito.creator?.id is int ? credito.creator?.id as int? : null);
+          final int? creatorId =
+              credito.createdBy ??
+              (credito.creator?.id is int ? credito.creator?.id as int? : null);
           return creatorId != null ? creatorId.toString() : null;
         })();
 
@@ -1530,7 +1705,12 @@ class CreditNotifier extends StateNotifier<CreditState> {
   }
 
   /// Orquesta aprobación y entrega inmediata del crédito
-  Future<bool> approveAndDeliverCredit({required int creditId, required DateTime scheduledDeliveryDate, String? approvalNotes, String? deliveryNotes }) async {
+  Future<bool> approveAndDeliverCredit({
+    required int creditId,
+    required DateTime scheduledDeliveryDate,
+    String? approvalNotes,
+    String? deliveryNotes,
+  }) async {
     // Primero aprobar para entrega
     final approved = await approveCreditForDelivery(
       creditId: creditId,
@@ -1581,7 +1761,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
 }
 
 // Provider para gestionar créditos
-final creditProvider = StateNotifierProvider<CreditNotifier, CreditState>((ref) {
+final creditProvider = StateNotifierProvider<CreditNotifier, CreditState>((
+  ref,
+) {
   final creditApiService = CreditApiService();
   return CreditNotifier(creditApiService, ref);
 });

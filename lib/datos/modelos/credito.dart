@@ -26,6 +26,18 @@ class Credito {
   final String? deliveryNotes; // Notas del proceso de entrega
   final String? rejectionReason; // Motivo de rechazo
 
+  // Campos de cuotas y mora del backend
+  // Campos del backend (con nombres diferentes para evitar conflicto)
+  final int?
+  backendTotalInstallments; // Total de cuotas del crédito desde backend
+  final double? totalPaid; // Monto total pagado
+  final int? completedPaymentsCount; // Cuotas realmente pagadas
+  final int?
+  expectedInstallments; // Cuotas que debería tener pagadas a la fecha
+  final int? backendPendingInstallments; // Cuotas pendientes desde backend
+  final bool? backendIsOverdue; // Si tiene cuotas atrasadas desde backend
+  final double? overdueAmount; // Monto total atrasado
+
   // Relaciones
   final Usuario? client;
   final Usuario? cobrador;
@@ -57,6 +69,14 @@ class Credito {
     this.deliveredAt,
     this.deliveryNotes,
     this.rejectionReason,
+    // Campos de cuotas y mora del backend
+    this.backendTotalInstallments,
+    this.totalPaid,
+    this.completedPaymentsCount,
+    this.expectedInstallments,
+    this.backendPendingInstallments,
+    this.backendIsOverdue,
+    this.overdueAmount,
     // Relaciones
     this.client,
     this.cobrador,
@@ -104,6 +124,19 @@ class Credito {
           : null,
       deliveryNotes: json['delivery_notes'],
       rejectionReason: json['rejection_reason'],
+      // Campos del backend para cuotas y mora
+      backendTotalInstallments:
+          json['total_installments'] ?? json['expected_installments'],
+      totalPaid: json['total_paid'] != null
+          ? double.tryParse(json['total_paid'].toString())
+          : null,
+      completedPaymentsCount: json['completed_payments_count'],
+      expectedInstallments: json['expected_installments'],
+      backendPendingInstallments: json['pending_installments'],
+      backendIsOverdue: json['is_overdue'] == 1 || json['is_overdue'] == true,
+      overdueAmount: json['overdue_amount'] != null
+          ? double.tryParse(json['overdue_amount'].toString())
+          : null,
       // Relaciones
       client: json['client'] != null ? Usuario.fromJson(json['client']) : null,
       cobrador: json['cobrador'] != null
@@ -188,7 +221,12 @@ class Credito {
     return DateTime.now().difference(scheduledDeliveryDate!).inDays;
   }
 
+  // Usar la lógica del backend si está disponible, sino calcular
   bool get isOverdue {
+    // Si tenemos datos del backend, usarlos
+    if (backendIsOverdue != null) return backendIsOverdue!;
+
+    // Fallback al cálculo original
     return DateTime.now().isAfter(endDate) && !isCompleted;
   }
 
@@ -209,6 +247,10 @@ class Credito {
 
   // Calcular el número total de cuotas
   int get totalInstallments {
+    // Usar datos del backend si están disponibles
+    if (backendTotalInstallments != null) return backendTotalInstallments!;
+
+    // Fallback al cálculo original
     final daysDiff = endDate.difference(startDate).inDays + 1;
     switch (frequency) {
       case 'daily':
@@ -227,6 +269,10 @@ class Credito {
 
   // Calcular cuotas pendientes
   int get pendingInstallments {
+    // Usar datos del backend si están disponibles
+    if (backendPendingInstallments != null) return backendPendingInstallments!;
+
+    // Fallback al cálculo original
     final currentInstallment =
         installmentAmount ?? (totalAmount ?? amount) / totalInstallments;
     if (currentInstallment == 0) return 0;

@@ -30,6 +30,9 @@ class CreditApiService extends BaseApiService {
     double? totalAmountMax,
     double? balanceMin,
     double? balanceMax,
+    bool? isOverdue, // Filtro para cuotas atrasadas
+    double? overdueAmountMin, // Monto mínimo atrasado
+    double? overdueAmountMax, // Monto máximo atrasado
     int page = 1,
     int perPage = 15,
   }) async {
@@ -39,17 +42,29 @@ class CreditApiService extends BaseApiService {
       if (cobradorId != null) queryParams['cobrador_id'] = cobradorId;
       if (status != null && status.isNotEmpty) queryParams['status'] = status;
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
-      if (frequency != null && frequency.isNotEmpty) queryParams['frequency'] = frequency;
-      if (startDateFrom != null && startDateFrom.isNotEmpty) queryParams['start_date_from'] = startDateFrom;
-      if (startDateTo != null && startDateTo.isNotEmpty) queryParams['start_date_to'] = startDateTo;
-      if (endDateFrom != null && endDateFrom.isNotEmpty) queryParams['end_date_from'] = endDateFrom;
-      if (endDateTo != null && endDateTo.isNotEmpty) queryParams['end_date_to'] = endDateTo;
+      if (frequency != null && frequency.isNotEmpty)
+        queryParams['frequency'] = frequency;
+      if (startDateFrom != null && startDateFrom.isNotEmpty)
+        queryParams['start_date_from'] = startDateFrom;
+      if (startDateTo != null && startDateTo.isNotEmpty)
+        queryParams['start_date_to'] = startDateTo;
+      if (endDateFrom != null && endDateFrom.isNotEmpty)
+        queryParams['end_date_from'] = endDateFrom;
+      if (endDateTo != null && endDateTo.isNotEmpty)
+        queryParams['end_date_to'] = endDateTo;
       if (amountMin != null) queryParams['amount_min'] = amountMin;
       if (amountMax != null) queryParams['amount_max'] = amountMax;
-      if (totalAmountMin != null) queryParams['total_amount_min'] = totalAmountMin;
-      if (totalAmountMax != null) queryParams['total_amount_max'] = totalAmountMax;
+      if (totalAmountMin != null)
+        queryParams['total_amount_min'] = totalAmountMin;
+      if (totalAmountMax != null)
+        queryParams['total_amount_max'] = totalAmountMax;
       if (balanceMin != null) queryParams['balance_min'] = balanceMin;
       if (balanceMax != null) queryParams['balance_max'] = balanceMax;
+      if (isOverdue != null) queryParams['is_overdue'] = isOverdue;
+      if (overdueAmountMin != null)
+        queryParams['overdue_amount_min'] = overdueAmountMin;
+      if (overdueAmountMax != null)
+        queryParams['overdue_amount_max'] = overdueAmountMax;
 
       final response = await get('/credits', queryParameters: queryParams);
 
@@ -66,7 +81,9 @@ class CreditApiService extends BaseApiService {
   }
 
   /// Crea un nuevo crédito
-  Future<Map<String, dynamic>> createCredit(Map<String, dynamic> creditData) async {
+  Future<Map<String, dynamic>> createCredit(
+    Map<String, dynamic> creditData,
+  ) async {
     try {
       final response = await post('/credits', data: creditData);
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -176,11 +193,16 @@ class CreditApiService extends BaseApiService {
     try {
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
       if (status != null && status.isNotEmpty) queryParams['status'] = status;
-      if (frequency != null && frequency.isNotEmpty) queryParams['frequency'] = frequency;
-      if (startDateFrom != null && startDateFrom.isNotEmpty) queryParams['start_date_from'] = startDateFrom;
-      if (startDateTo != null && startDateTo.isNotEmpty) queryParams['start_date_to'] = startDateTo;
-      if (endDateFrom != null && endDateFrom.isNotEmpty) queryParams['end_date_from'] = endDateFrom;
-      if (endDateTo != null && endDateTo.isNotEmpty) queryParams['end_date_to'] = endDateTo;
+      if (frequency != null && frequency.isNotEmpty)
+        queryParams['frequency'] = frequency;
+      if (startDateFrom != null && startDateFrom.isNotEmpty)
+        queryParams['start_date_from'] = startDateFrom;
+      if (startDateTo != null && startDateTo.isNotEmpty)
+        queryParams['start_date_to'] = startDateTo;
+      if (endDateFrom != null && endDateFrom.isNotEmpty)
+        queryParams['end_date_from'] = endDateFrom;
+      if (endDateTo != null && endDateTo.isNotEmpty)
+        queryParams['end_date_to'] = endDateTo;
       if (amountMin != null) queryParams['amount_min'] = amountMin;
       if (amountMax != null) queryParams['amount_max'] = amountMax;
       if (balanceMin != null) queryParams['balance_min'] = balanceMin;
@@ -220,16 +242,22 @@ class CreditApiService extends BaseApiService {
     double? balanceMin,
     double? balanceMax,
     int page = 1,
-    int perPage = 15}) async {
+    int perPage = 15,
+  }) async {
     try {
       final queryParams = <String, dynamic>{'page': page, 'per_page': perPage};
       if (status != null && status.isNotEmpty) queryParams['status'] = status;
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
-      if (frequency != null && frequency.isNotEmpty) queryParams['frequency'] = frequency;
-      if (startDateFrom != null && startDateFrom.isNotEmpty) queryParams['start_date_from'] = startDateFrom;
-      if (startDateTo != null && startDateTo.isNotEmpty) queryParams['start_date_to'] = startDateTo;
-      if (endDateFrom != null && endDateFrom.isNotEmpty) queryParams['end_date_from'] = endDateFrom;
-      if (endDateTo != null && endDateTo.isNotEmpty) queryParams['end_date_to'] = endDateTo;
+      if (frequency != null && frequency.isNotEmpty)
+        queryParams['frequency'] = frequency;
+      if (startDateFrom != null && startDateFrom.isNotEmpty)
+        queryParams['start_date_from'] = startDateFrom;
+      if (startDateTo != null && startDateTo.isNotEmpty)
+        queryParams['start_date_to'] = startDateTo;
+      if (endDateFrom != null && endDateFrom.isNotEmpty)
+        queryParams['end_date_from'] = endDateFrom;
+      if (endDateTo != null && endDateTo.isNotEmpty)
+        queryParams['end_date_to'] = endDateTo;
       if (amountMin != null) queryParams['amount_min'] = amountMin;
       if (amountMax != null) queryParams['amount_max'] = amountMax;
       if (balanceMin != null) queryParams['balance_min'] = balanceMin;

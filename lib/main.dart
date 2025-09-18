@@ -36,7 +36,8 @@ Future<void> main() async {
 
 class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
   ConsumerState<MyApp> createState() => _MyAppState();
@@ -69,7 +70,6 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         AllowedAppsHelper.init(_autoLogoutService!);
         debugPrint('✅ AllowedAppsHelper inicializado con AutoLogoutService');
       }
-
     });
   }
 
@@ -88,7 +88,8 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     if (kIsWeb) {
       return; // No hacer logout automático en Web
     }
-    final isMobile = defaultTargetPlatform == TargetPlatform.android ||
+    final isMobile =
+        defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
     if (!isMobile) {
       return; // No hacer logout automático en escritorio
@@ -104,7 +105,9 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
     switch (state) {
       case AppLifecycleState.paused:
-        debugPrint('⏸️ App pausada - verificando si requiere logout por seguridad');
+        debugPrint(
+          '⏸️ App pausada - verificando si requiere logout por seguridad',
+        );
         // La app se pausó, delegar al AutoLogoutService para manejar el logout
         _autoLogoutService?.onScreenChanged(null);
         break;
@@ -133,7 +136,6 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -149,10 +151,14 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
           next.usuario != null &&
           (previous == null || !previous.isAuthenticated)) {
         // Usuario se autenticó, WebSocket se conecta automáticamente
-        debugPrint('🔌 Usuario autenticado, WebSocket se conectará automáticamente...');
+        debugPrint(
+          '🔌 Usuario autenticado, WebSocket se conectará automáticamente...',
+        );
       } else if (previous?.isAuthenticated == true && !next.isAuthenticated) {
         // Usuario cerró sesión o perdió sesión, redirigir a Login y limpiar el stack
-        debugPrint('🔌 Usuario cerró o perdió sesión, WebSocket se desconectará automáticamente...');
+        debugPrint(
+          '🔌 Usuario cerró o perdió sesión, WebSocket se desconectará automáticamente...',
+        );
         debugPrint('🚪 Usuario sin sesión - Redirigiendo a LoginScreen');
         // Evitar navegación si ya estamos en LoginScreen
         final ctx = MyApp.navigatorKey.currentContext;
@@ -170,7 +176,11 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
               if (ctx != null) {
                 ScaffoldMessenger.of(ctx).clearSnackBars();
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Tu sesión ha expirado. Vuelve a iniciar sesión.')),
+                  const SnackBar(
+                    content: Text(
+                      'Tu sesión ha expirado. Vuelve a iniciar sesión.',
+                    ),
+                  ),
                 );
               }
             }
@@ -182,14 +192,16 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     });
 
     return MaterialApp(
-      title: 'Cobrador App',
+      title: 'Facebook eLite',
       debugShowCheckedModeBanner: false,
       theme: _buildLightTheme(),
       darkTheme: _buildDarkTheme(),
       themeMode: ThemeMode.system, // Respeta la configuración del sistema
       home: _buildInitialScreen(authState),
       navigatorKey: MyApp.navigatorKey,
-      navigatorObservers: _navigatorObserver != null ? [_navigatorObserver!] : [],
+      navigatorObservers: _navigatorObserver != null
+          ? [_navigatorObserver!]
+          : [],
       routes: {
         '/login': (context) => const LoginScreen(),
         '/crear-cliente': (context) => const ClienteFormScreen(),
@@ -369,11 +381,15 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       print('  - Roles del usuario: ${authState.usuario!.roles}');
       return const AdminDashboardScreen();
     } else if (authState.isManager) {
-      print('✅ Usuario es MANAGER - Redirigiendo a CreditTypeScreen (reemplaza dashboard)');
+      print(
+        '✅ Usuario es MANAGER - Redirigiendo a CreditTypeScreen (reemplaza dashboard)',
+      );
       print('  - Roles del usuario: ${authState.usuario!.roles}');
       return const CreditTypeScreen();
     } else if (authState.isCobrador) {
-      print('✅ Usuario es COBRADOR - Redirigiendo a CreditTypeScreen (reemplaza dashboard)');
+      print(
+        '✅ Usuario es COBRADOR - Redirigiendo a CreditTypeScreen (reemplaza dashboard)',
+      );
       print('  - Roles del usuario: ${authState.usuario!.roles}');
       return const CreditTypeScreen();
     } else {

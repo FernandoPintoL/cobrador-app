@@ -27,7 +27,7 @@ class ClienteFormScreen extends ConsumerStatefulWidget {
     this.cliente,
     this.onClienteSaved,
     this.onClienteCreated,
-    this.initialName
+    this.initialName,
   });
 
   @override
@@ -35,18 +35,27 @@ class ClienteFormScreen extends ConsumerStatefulWidget {
       _ManagerClienteFormScreenState();
 }
 
-class _ManagerClienteFormScreenState
-    extends ConsumerState<ClienteFormScreen> {
+class _ManagerClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _apellidosController = TextEditingController();
   final _telefonoController = TextEditingController();
-  final _direccionController = TextEditingController();
+  final _direccionController = TextEditingController(); // Dirección principal
+  final _descripcionCasaController =
+      TextEditingController(); // Descripción de la casa
   final _contrasenaController = TextEditingController();
   final _ciController = TextEditingController();
 
   bool _esEdicion = false;
   bool _isLoading = false;
+
+  // Variables para errores de campo específicos
+  String? _nombreError;
+  String? _apellidosError;
+  String? _telefonoError;
+  String? _direccionError;
+  String? _descripcionCasaError;
+  String? _ciError;
 
   // Variables para ubicación GPS
   double? _latitud;
@@ -76,19 +85,36 @@ class _ManagerClienteFormScreenState
 
       // Si hay una imagen de perfil, construir la URL correcta
       if (widget.cliente!.profileImage.isNotEmpty) {
-        _profileImageUrl = apiService.getProfileImageUrl(widget.cliente!.profileImage);
+        _profileImageUrl = apiService.getProfileImageUrl(
+          widget.cliente!.profileImage,
+        );
         debugPrint('🖼️ URL de perfil construida: $_profileImageUrl');
       } else {
         _profileImageUrl = null;
         debugPrint('⚠️ No hay imagen de perfil para el cliente');
       }
 
-      debugPrint('Cargando fotos existentes para el cliente: ${widget.cliente!.nombre}');
+      debugPrint(
+        'Cargando fotos existentes para el cliente: ${widget.cliente!.nombre}',
+      );
       _cargarFotosExistentes(widget.cliente!.id);
-      _nombreController.text = widget.cliente!.nombre;
-      _emailController.text = widget.cliente!.email;
+
+      // Separar nombre completo en nombre y apellidos
+      final nombreCompleto = widget.cliente!.nombre.trim();
+      final partesNombre = nombreCompleto.split(' ');
+      if (partesNombre.isNotEmpty) {
+        _nombreController.text = partesNombre.first;
+        if (partesNombre.length > 1) {
+          _apellidosController.text = partesNombre.sublist(1).join(' ');
+        }
+      }
+
       _telefonoController.text = widget.cliente!.telefono;
-      _direccionController.text = widget.cliente!.direccion;
+
+      // Separar dirección existente en dos campos
+      final direccionCompleta = widget.cliente!.direccion;
+      _parsearDireccionExistente(direccionCompleta);
+
       _ciController.text = widget.cliente!.ci;
 
       // Cargar ubicación si existe
@@ -98,8 +124,17 @@ class _ManagerClienteFormScreenState
         _ubicacionObtenida = true;
         _tipoUbicacion = 'existente';
       }
-    } else if (widget.initialName != null && widget.initialName!.trim().isNotEmpty) {
-      _nombreController.text = widget.initialName!.trim();
+    } else if (widget.initialName != null &&
+        widget.initialName!.trim().isNotEmpty) {
+      // Separar nombre inicial en nombre y apellidos si es posible
+      final nombreCompleto = widget.initialName!.trim();
+      final partesNombre = nombreCompleto.split(' ');
+      if (partesNombre.isNotEmpty) {
+        _nombreController.text = partesNombre.first;
+        if (partesNombre.length > 1) {
+          _apellidosController.text = partesNombre.sublist(1).join(' ');
+        }
+      }
     }
 
     // Intento automático de obtener ubicación actual al abrir (solo en creación)
@@ -123,12 +158,138 @@ class _ManagerClienteFormScreenState
     }
   }
 
+  void _parsearDireccionExistente(String direccionCompleta) {
+    if (direccionCompleta.isEmpty) {
+      return;
+    }
+
+    // Intentar separar la dirección en dirección principal y descripción de casa
+    // Buscar patrones comunes de separación como comas, punto y coma, o palabras clave
+    final separadores = [
+      ', casa ',
+      ', Casa ',
+      '; casa ',
+      '; Casa ',
+      ' - casa ',
+      ' - Casa ',
+      ' casa ',
+      ' Casa ',
+    ];
+
+    String direccionPrincipal = direccionCompleta;
+    String descripcionCasa = '';
+
+    for (final separador in separadores) {
+      if (direccionCompleta.contains(separador)) {
+        final partes = direccionCompleta.split(separador);
+        if (partes.length >= 2) {
+          direccionPrincipal = partes[0].trim();
+          descripcionCasa = partes.sublist(1).join(separador).trim();
+          break;
+        }
+      }
+    }
+
+    // Si no encontramos un separador obvio, buscar después de números/direcciones comunes
+    if (descripcionCasa.isEmpty) {
+      final regex = RegExp(
+        r'^([^,]*(?:av\.|avenida|calle|c\.|carrera|cr\.|diagonal|diag\.|transversal|tv\.|mz\.|manzana|lote|lt\.)[^,]*(?:\d+[^,]*)?),\s*(.+)$',
+        caseSensitive: false,
+      );
+      final match = regex.firstMatch(direccionCompleta);
+      if (match != null) {
+        direccionPrincipal = match.group(1)?.trim() ?? direccionCompleta;
+        descripcionCasa = match.group(2)?.trim() ?? '';
+      }
+    }
+
+    // Si aún no hay descripción, usar toda la dirección como principal
+    _direccionController.text = direccionPrincipal;
+    _descripcionCasaController.text = descripcionCasa;
+  }
+
+  void _limpiarErroresCampos() {
+    setState(() {
+      _nombreError = null;
+      _apellidosError = null;
+      _telefonoError = null;
+      _direccionError = null;
+      _descripcionCasaError = null;
+      _ciError = null;
+    });
+  }
+
+  String _obtenerDireccionCompleta() {
+    final direccion = _direccionController.text.trim();
+    final descripcion = _descripcionCasaController.text.trim();
+
+    if (direccion.isEmpty && descripcion.isEmpty) {
+      return '';
+    } else if (direccion.isEmpty) {
+      return descripcion;
+    } else if (descripcion.isEmpty) {
+      return direccion;
+    } else {
+      // Combinar con una coma y espacio
+      return '$direccion, $descripcion';
+    }
+  }
+
+  void _procesarErroresCampos(List<String>? fieldErrors) {
+    if (fieldErrors == null || fieldErrors.isEmpty) return;
+
+    setState(() {
+      _nombreError = null;
+      _apellidosError = null;
+      _telefonoError = null;
+      _direccionError = null;
+      _ciError = null;
+
+      for (String error in fieldErrors) {
+        String errorLower = error.toLowerCase();
+
+        // Errores de nombre (se pueden aplicar tanto a nombre como apellidos)
+        if (errorLower.contains('name') || errorLower.contains('nombre')) {
+          _nombreError ??= error;
+          _apellidosError ??= error;
+        }
+        // Errores de teléfono
+        else if (errorLower.contains('phone') ||
+            errorLower.contains('teléfono') ||
+            errorLower.contains('telefono')) {
+          _telefonoError = error;
+        }
+        // Errores de dirección
+        else if (errorLower.contains('address') ||
+            errorLower.contains('dirección') ||
+            errorLower.contains('direccion')) {
+          _direccionError = error;
+        }
+        // Errores de descripción de casa
+        else if (errorLower.contains('descripción') ||
+            errorLower.contains('descripcion') ||
+            errorLower.contains('casa') ||
+            errorLower.contains('características')) {
+          _descripcionCasaError = error;
+        }
+        // Errores de CI
+        else if (errorLower.contains('ci') ||
+            errorLower.contains('cédula') ||
+            errorLower.contains('cedula') ||
+            errorLower.contains('documento')) {
+          _ciError = error;
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _nombreController.dispose();
-    _emailController.dispose();
+    _apellidosController.dispose();
     _telefonoController.dispose();
     _direccionController.dispose();
+    _descripcionCasaController.dispose();
     _contrasenaController.dispose();
     _ciController.dispose();
     super.dispose();
@@ -151,15 +312,17 @@ class _ManagerClienteFormScreenState
         ],
       ),
       body: _isLoading
-          ? const Center(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text('Procesando, por favor espera...'),
-            ],
-          ))
+          ? const Center(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text('Procesando, por favor espera...'),
+                ],
+              ),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Form(
@@ -178,15 +341,45 @@ class _ManagerClienteFormScreenState
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                             const SizedBox(height: 16),
+                            // Campo de Nombre
                             TextFormField(
                               controller: _nombreController,
-                              decoration: const InputDecoration(
-                                labelText: 'Nombre Completo *',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.person),
+                              decoration: InputDecoration(
+                                labelText: 'Nombre *',
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _nombreError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _nombreError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _nombreError != null
+                                        ? Colors.red
+                                        : Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                errorBorder: const OutlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.red),
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.person,
+                                  color: _nombreError != null
+                                      ? Colors.red
+                                      : null,
+                                ),
+                                errorText: _nombreError,
                               ),
                               inputFormatters: [
-                                // Solo letras (incluye acentos), espacios y apóstrofo opcional
+                                // Solo letras (incluye acentos), espacios y apóstrofe opcional
                                 FilteringTextInputFormatter.allow(
                                   RegExp(r"[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s']"),
                                 ),
@@ -202,13 +395,94 @@ class _ManagerClienteFormScreenState
                               },
                             ),
                             const SizedBox(height: 16),
+                            // Campo de Apellidos
+                            TextFormField(
+                              controller: _apellidosController,
+                              decoration: InputDecoration(
+                                labelText: 'Apellidos *',
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _apellidosError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _apellidosError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _apellidosError != null
+                                        ? Colors.red
+                                        : Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                errorBorder: const OutlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.red),
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.person_outline,
+                                  color: _apellidosError != null
+                                      ? Colors.red
+                                      : null,
+                                ),
+                                errorText: _apellidosError,
+                              ),
+                              inputFormatters: [
+                                // Solo letras (incluye acentos), espacios y apóstrofe opcional
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r"[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s']"),
+                                ),
+                              ],
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Los apellidos son obligatorios';
+                                }
+                                if (value.trim().length < 2) {
+                                  return 'Los apellidos deben tener al menos 2 caracteres';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
                             // CI obligatorio
                             TextFormField(
                               controller: _ciController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'CI (Cédula de identidad) *',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.badge),
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _ciError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _ciError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _ciError != null
+                                        ? Colors.red
+                                        : Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                errorBorder: const OutlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.red),
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.badge,
+                                  color: _ciError != null ? Colors.red : null,
+                                ),
+                                errorText: _ciError,
                               ),
                               inputFormatters: [
                                 // Solo letras y números (sin espacios ni símbolos)
@@ -229,22 +503,85 @@ class _ManagerClienteFormScreenState
                             const SizedBox(height: 16),
                             TextFormField(
                               controller: _telefonoController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Teléfono *',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.phone),
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _telefonoError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _telefonoError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _telefonoError != null
+                                        ? Colors.red
+                                        : Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                errorBorder: const OutlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.red),
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.phone,
+                                  color: _telefonoError != null
+                                      ? Colors.red
+                                      : null,
+                                ),
+                                errorText: _telefonoError,
                               ),
                               keyboardType: TextInputType.phone,
                               inputFormatters: [PhoneUtils.inputFormatter()],
-                              validator: (value) => PhoneUtils.validatePhone(value, required: true),
+                              validator: (value) => PhoneUtils.validatePhone(
+                                value,
+                                required: true,
+                              ),
                             ),
                             const SizedBox(height: 16),
+                            // Campo de Dirección Principal
                             TextFormField(
                               controller: _direccionController,
                               decoration: InputDecoration(
-                                labelText: 'Dirección',
-                                border: const OutlineInputBorder(),
-                                prefixIcon: const Icon(Icons.location_on),
+                                labelText: 'Dirección *',
+                                hintText: 'Ej: Av. Principal 123, 4to Anillo',
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _direccionError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _direccionError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _direccionError != null
+                                        ? Colors.red
+                                        : Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                errorBorder: const OutlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.red),
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.location_on,
+                                  color: _direccionError != null
+                                      ? Colors.red
+                                      : null,
+                                ),
+                                errorText: _direccionError,
                                 suffixIcon: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -286,9 +623,63 @@ class _ManagerClienteFormScreenState
                                 ),
                                 helperText: _ubicacionObtenida
                                     ? '${_getTipoUbicacionTexto()} ✓'
-                                    : 'Usa el botón de ubicación actual o selecciona en el mapa',
+                                    : 'Ingresa la dirección principal (calle, avenida, número)',
                               ),
                               maxLines: 2,
+                              keyboardType: TextInputType.streetAddress,
+                              textInputAction: TextInputAction.next,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'La dirección es obligatoria';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            // Campo de Descripción de la Casa
+                            TextFormField(
+                              controller: _descripcionCasaController,
+                              decoration: InputDecoration(
+                                labelText: 'Descripción de la casa',
+                                hintText:
+                                    'Ej: Casa de dos pisos color azul, portón negro, junto al parque',
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _descripcionCasaError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _descripcionCasaError != null
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _descripcionCasaError != null
+                                        ? Colors.red
+                                        : Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                errorBorder: const OutlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.red),
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.home_outlined,
+                                  color: _descripcionCasaError != null
+                                      ? Colors.red
+                                      : null,
+                                ),
+                                errorText: _descripcionCasaError,
+                                helperText:
+                                    'Describe características distintivas de la casa para facilitar su ubicación',
+                              ),
+                              maxLines: 3,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
                             ),
                             if (_ubicacionObtenida) ...[
                               const SizedBox(height: 8),
@@ -369,14 +760,20 @@ class _ManagerClienteFormScreenState
                           children: [
                             const Text(
                               'Documentos de Identidad',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               _esEdicion
                                   ? 'Puedes actualizar las fotos del CI si es necesario'
                                   : 'Anverso y Reverso del CI son obligatorios para crear',
-                              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 12,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             Row(
@@ -396,7 +793,7 @@ class _ManagerClienteFormScreenState
                                 ),
                                 const SizedBox(width: 12),
                                 _buildImagePicker(
-                                  label: 'Perfil (opcional)',
+                                  label: 'Perfil (Img Referencia)',
                                   file: _profileImage,
                                   existingUrl: _profileImageUrl,
                                   onTap: () => _pickImage('profile'),
@@ -406,7 +803,10 @@ class _ManagerClienteFormScreenState
                             const SizedBox(height: 6),
                             const Text(
                               'Las imágenes deben pesar menos de 1MB. Se comprimen automáticamente.',
-                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
                             ),
                           ],
                         ),
@@ -496,7 +896,10 @@ class _ManagerClienteFormScreenState
       if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Los servicios de ubicación están deshabilitados'),
+            content: Text(
+              'Los servicios de ubicación están deshabilitados',
+              style: TextStyle(color: Colors.white),
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -509,7 +912,10 @@ class _ManagerClienteFormScreenState
         if (permission == LocationPermission.denied) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Permisos de ubicación denegados'),
+              content: Text(
+                'Permisos de ubicación denegados',
+                style: TextStyle(color: Colors.white),
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -522,6 +928,7 @@ class _ManagerClienteFormScreenState
           const SnackBar(
             content: Text(
               'Permisos de ubicación denegados permanentemente. Ve a configuración para habilitarlos.',
+              style: TextStyle(color: Colors.white),
             ),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 4),
@@ -601,6 +1008,7 @@ class _ManagerClienteFormScreenState
             'Ubicación actual obtenida correctamente\n'
             'Lat: ${position.latitude.toStringAsFixed(4)}\n'
             'Lng: ${position.longitude.toStringAsFixed(4)}',
+            style: TextStyle(color: Colors.white),
           ),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 3),
@@ -614,7 +1022,10 @@ class _ManagerClienteFormScreenState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al obtener ubicación actual: $e'),
+          content: Text(
+            'Error al obtener ubicación actual: $e',
+            style: const TextStyle(color: Colors.white),
+          ),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 4),
         ),
@@ -645,7 +1056,10 @@ class _ManagerClienteFormScreenState
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ubicación seleccionada en mapa correctamente'),
+            content: Text(
+              'Ubicación seleccionada en mapa correctamente',
+              style: TextStyle(color: Colors.white),
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -653,7 +1067,10 @@ class _ManagerClienteFormScreenState
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al obtener ubicación: $e'),
+          content: Text(
+            'Error al obtener ubicación: $e',
+            style: TextStyle(color: Colors.white),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -665,12 +1082,18 @@ class _ManagerClienteFormScreenState
       return;
     }
 
+    // Limpiar errores previos de campos
+    _limpiarErroresCampos();
+
     // Validar fotos requeridas en creación
     if (!_esEdicion) {
       if (_idFront == null || _idBack == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Debes subir las fotos del CI (anverso y reverso)'),
+            content: Text(
+              'Debes subir las fotos del CI (anverso y reverso)',
+              style: TextStyle(color: Colors.white),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -690,7 +1113,8 @@ class _ManagerClienteFormScreenState
 
       if (_esEdicion) {
         // Verificar si hay fotos nuevas para actualizar
-        bool hayFotosNuevas = _idFront != null || _idBack != null || _profileImage != null;
+        bool hayFotosNuevas =
+            _idFront != null || _idBack != null || _profileImage != null;
 
         bool success;
         if (hayFotosNuevas) {
@@ -699,11 +1123,12 @@ class _ManagerClienteFormScreenState
               .read(userManagementProvider.notifier)
               .actualizarUsuarioConFotos(
                 id: widget.cliente!.id,
-                nombre: _nombreController.text.trim(),
-                email: _emailController.text.trim(),
+                nombre:
+                    '${_nombreController.text.trim()} ${_apellidosController.text.trim()}',
+                email: '', // Email vacío para clientes
                 ci: _ciController.text.trim(),
                 telefono: _telefonoController.text.trim(),
-                direccion: _direccionController.text.trim(),
+                direccion: _obtenerDireccionCompleta(),
                 latitud: _latitud,
                 longitud: _longitud,
                 idFront: _idFront,
@@ -716,11 +1141,12 @@ class _ManagerClienteFormScreenState
               .read(userManagementProvider.notifier)
               .actualizarUsuario(
                 id: widget.cliente!.id,
-                nombre: _nombreController.text.trim(),
-                email: _emailController.text.trim(),
+                nombre:
+                    '${_nombreController.text.trim()} ${_apellidosController.text.trim()}',
+                email: '', // Email vacío para clientes
                 ci: _ciController.text.trim(),
                 telefono: _telefonoController.text.trim(),
-                direccion: _direccionController.text.trim(),
+                direccion: _obtenerDireccionCompleta(),
                 latitud: _latitud,
                 longitud: _longitud,
               );
@@ -732,8 +1158,10 @@ class _ManagerClienteFormScreenState
               SnackBar(
                 content: Text(
                   hayFotosNuevas
-                    ? 'Cliente y documentos actualizados exitosamente'
-                    : 'Cliente actualizado exitosamente'
+                      ? 'Cliente y documentos actualizados exitosamente'
+                      : 'Cliente actualizado exitosamente',
+
+                  style: TextStyle(color: Colors.white),
                 ),
                 backgroundColor: Colors.green,
               ),
@@ -742,10 +1170,17 @@ class _ManagerClienteFormScreenState
         } else {
           // Manejar errores
           final state = ref.read(userManagementProvider);
+
+          // Procesar errores de campos específicos
+          _procesarErroresCampos(state.fieldErrors);
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(state.error ?? 'Error al actualizar cliente'),
+                content: Text(
+                  state.error ?? 'Error al actualizar cliente',
+                  style: TextStyle(color: Colors.white),
+                ),
                 backgroundColor: Colors.red,
               ),
             );
@@ -757,12 +1192,13 @@ class _ManagerClienteFormScreenState
         final success = await ref
             .read(userManagementProvider.notifier)
             .crearUsuarioConFotos(
-              nombre: _nombreController.text.trim(),
-              email: _emailController.text.trim(),
+              nombre:
+                  '${_nombreController.text.trim()} ${_apellidosController.text.trim()}',
+              email: '', // Email vacío para clientes
               ci: _ciController.text.trim(),
               roles: ['client'],
               telefono: _telefonoController.text.trim(),
-              direccion: _direccionController.text.trim(),
+              direccion: _obtenerDireccionCompleta(),
               password: _contrasenaController.text.isNotEmpty
                   ? _contrasenaController.text
                   : null,
@@ -777,7 +1213,10 @@ class _ManagerClienteFormScreenState
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Cliente creado exitosamente'),
+                content: Text(
+                  'Cliente creado exitosamente',
+                  style: TextStyle(color: Colors.white),
+                ),
                 backgroundColor: Colors.green,
               ),
             );
@@ -785,10 +1224,17 @@ class _ManagerClienteFormScreenState
         } else {
           // Manejar errores
           final state = ref.read(userManagementProvider);
+
+          // Procesar errores de campos específicos
+          _procesarErroresCampos(state.fieldErrors);
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(state.error ?? 'Error al crear cliente'),
+                content: Text(
+                  state.error ?? 'Error al crear cliente',
+                  style: TextStyle(color: Colors.white),
+                ),
                 backgroundColor: Colors.red,
               ),
             );
@@ -803,7 +1249,31 @@ class _ManagerClienteFormScreenState
       }
 
       if (mounted) {
-        Navigator.of(context).pop();
+        if (!_esEdicion) {
+          // Para creación: intentar devolver el cliente creado
+          try {
+            await Future.delayed(
+              const Duration(milliseconds: 200),
+            ); // Esperar a que se actualice el estado
+            final userState = ref.read(userManagementProvider);
+            if (userState.usuarios.isNotEmpty) {
+              // Buscar el cliente creado por CI (más confiable que por último)
+              final clienteCreado = userState.usuarios.firstWhere(
+                (u) => u.ci == _ciController.text.trim(),
+                orElse: () => userState.usuarios.last, // Fallback al último
+              );
+              Navigator.of(context).pop(clienteCreado);
+            } else {
+              Navigator.of(context).pop(true); // Fallback a boolean
+            }
+          } catch (e) {
+            // Si hay algún error, devolver true como antes
+            Navigator.of(context).pop(true);
+          }
+        } else {
+          // Para edición: devolver el cliente actualizado
+          Navigator.of(context).pop(widget.cliente);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -811,6 +1281,7 @@ class _ManagerClienteFormScreenState
           SnackBar(
             content: Text(
               'Error al ${_esEdicion ? 'actualizar' : 'crear'} cliente: $e',
+              style: TextStyle(color: Colors.white),
             ),
             backgroundColor: Colors.red,
           ),
@@ -867,6 +1338,7 @@ class _ManagerClienteFormScreenState
           SnackBar(
             content: Text(
               'Cliente ${widget.cliente!.nombre} eliminado exitosamente',
+              style: TextStyle(color: Colors.white),
             ),
             backgroundColor: Colors.green,
           ),
@@ -882,7 +1354,10 @@ class _ManagerClienteFormScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al eliminar cliente: $e'),
+            content: Text(
+              'Error al eliminar cliente: $e',
+              style: TextStyle(color: Colors.white),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -896,7 +1371,12 @@ class _ManagerClienteFormScreenState
     }
   }
 
-  Widget _buildImagePicker({required String label, required File? file, String? existingUrl, required VoidCallback onTap}) {
+  Widget _buildImagePicker({
+    required String label,
+    required File? file,
+    String? existingUrl,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -978,7 +1458,10 @@ class _ManagerClienteFormScreenState
       final photos = await UserApiService().listUserPhotos(userId);
       for (final p in photos) {
         final type = p['type']?.toString();
-        final url = p['url']?.toString() ?? p['full_url']?.toString() ?? p['path_url']?.toString();
+        final url =
+            p['url']?.toString() ??
+            p['full_url']?.toString() ??
+            p['path_url']?.toString();
         if (type == 'id_front' && url != null) {
           _idFrontUrl = url;
         } else if (type == 'id_back' && url != null) {
@@ -998,9 +1481,9 @@ class _ManagerClienteFormScreenState
       if (source == null) return;
 
       final XFile? picked = await AllowedAppsHelper.openCameraSecurely(
-              source: source,
-              imageQuality: 100,
-            );
+        source: source,
+        imageQuality: 100,
+      );
       if (picked == null) return;
       File file = File(picked.path);
       file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);
@@ -1017,7 +1500,13 @@ class _ManagerClienteFormScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo seleccionar la imagen: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(
+              'No se pudo seleccionar la imagen: $e',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
