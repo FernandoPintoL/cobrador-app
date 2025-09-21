@@ -189,6 +189,9 @@ abstract class BaseApiService {
   // Getters para acceso a servicios internos
   StorageService get storageService => _storageService;
 
+  /// Permite acceso a la instancia de Dio desde subclases
+  Dio get dio => _dio;
+
   // Métodos de utilidad compartidos
   Future<void> saveTokenFromResponse(String token) async {
     await _saveToken(token);
@@ -206,7 +209,8 @@ abstract class BaseApiService {
     }
 
     // Si ya es una URL completa, devolverla tal como está
-    if (profileImage.startsWith('http://') || profileImage.startsWith('https://')) {
+    if (profileImage.startsWith('http://') ||
+        profileImage.startsWith('https://')) {
       return profileImage;
     }
 
@@ -223,9 +227,12 @@ abstract class BaseApiService {
     String finalUrl;
 
     // Verificar si ya incluye storage/ al inicio
-    if (profileImage.startsWith('storage/') || profileImage.startsWith('/storage/')) {
+    if (profileImage.startsWith('storage/') ||
+        profileImage.startsWith('/storage/')) {
       // Ya tiene el prefijo storage, usarla directamente
-      finalUrl = profileImage.startsWith('/') ? '$serverUrl$profileImage' : '$serverUrl/$profileImage';
+      finalUrl = profileImage.startsWith('/')
+          ? '$serverUrl$profileImage'
+          : '$serverUrl/$profileImage';
     } else {
       // No tiene storage/, agregarlo
       finalUrl = '$serverUrl/storage/$profileImage';
@@ -264,8 +271,7 @@ abstract class BaseApiService {
             final firstError = errors[firstErrorField];
 
             if (firstError is List && firstError.isNotEmpty) {
-              // Agregamos el nombre del campo para más contexto
-              final fieldName = firstErrorField.replaceAll('_', ' ');
+              // Usar el primer error como mensaje principal
               errorMessage = firstError.first.toString();
             } else if (firstError is String) {
               errorMessage = firstError;

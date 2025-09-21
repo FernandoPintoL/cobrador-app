@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../negocio/providers/manager_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
+import '../reports/reports_screen.dart';
 
 class ManagerReportesScreen extends ConsumerStatefulWidget {
   const ManagerReportesScreen({super.key});
@@ -156,6 +157,16 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
             icon: const Icon(Icons.refresh),
             onPressed: _cargarDatos,
             tooltip: 'Actualizar',
+          ),
+          IconButton(
+            icon: const Icon(Icons.analytics),
+            tooltip: 'Generador de reportes',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ReportsScreen(userRole: 'manager'),
+              ),
+            ),
           ),
         ],
         bottom: TabBar(

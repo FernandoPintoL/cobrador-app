@@ -13,7 +13,8 @@ import '../pantallas/notifications_screen.dart';
 import '../widgets/logout_dialog.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import '../creditos/credit_type_screen.dart';
-import 'package:intl/intl.dart';
+import '../reports/reports_screen.dart';
+// import 'package:intl/intl.dart'; // no usado
 
 class CobradorDashboardScreen extends ConsumerStatefulWidget {
   const CobradorDashboardScreen({super.key});
@@ -38,7 +39,6 @@ class _CobradorDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-    final creditState = ref.watch(creditProvider);
     final usuario = authState.usuario;
     final profileImageState = ref.watch(profileImageProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -58,7 +58,8 @@ class _CobradorDashboardScreenState
         // No limpiar aquí para evitar bucles
       }
 
-      if (previous?.successMessage != next.successMessage && next.successMessage != null) {
+      if (previous?.successMessage != next.successMessage &&
+          next.successMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.successMessage!),
@@ -219,7 +220,7 @@ class _CobradorDashboardScreenState
                     'Ver y gestionar créditos de clientes',
                     Icons.credit_card,
                     Colors.green,
-                        () => _navigateToCreditManagement(context),
+                    () => _navigateToCreditManagement(context),
                   ),
                   const SizedBox(height: 12),
                   _buildCobradorActionCard(
@@ -393,10 +394,12 @@ class _CobradorDashboardScreenState
   }
 
   void _navigateToReports(BuildContext context) {
-    // TODO: Implementar pantalla de reportes
-    ScaffoldMessenger.of(
+    Navigator.push(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Reportes - En desarrollo')));
+      MaterialPageRoute(
+        builder: (context) => const ReportsScreen(userRole: 'cobrador'),
+      ),
+    );
   }
 
   void _navigateToSettings(BuildContext context) {
