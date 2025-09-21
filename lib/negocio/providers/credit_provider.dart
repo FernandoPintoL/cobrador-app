@@ -653,9 +653,24 @@ class CreditNotifier extends StateNotifier<CreditState> {
       longitude: longitude,
     );
 
-    // Si hay información del crédito retornada, actualizar la lista local
-    if (result != null && result['credit'] != null) {
-      final creditoActualizado = Credito.fromJson(result['credit']);
+    // Si hay información del crédito retornada, actualizar la lista local.
+    // `result` puede ser la respuesta completa ({success,data,message}) o
+    // directamente el `data` (Map). Normalizamos a `resultData`.
+    Map<String, dynamic>? resultData;
+    if (result != null) {
+      if (result['success'] != null) {
+        // Es la respuesta completa
+        final dynamic d = result['data'];
+        if (d is Map<String, dynamic>) resultData = d;
+        // si `data` es List o null, dejamos resultData en null
+      } else if (result is Map<String, dynamic>) {
+        // Podría ser que el caller devolvió directamente el data
+        resultData = result;
+      }
+    }
+
+    if (resultData != null && resultData['credit'] != null) {
+      final creditoActualizado = Credito.fromJson(resultData['credit']);
       final creditosActualizados = state.credits.map((credito) {
         return credito.id == creditId ? creditoActualizado : credito;
       }).toList();

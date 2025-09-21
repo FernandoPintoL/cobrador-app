@@ -41,7 +41,7 @@ class PagoNotifier extends StateNotifier<PagoState> {
   final Ref _ref;
 
   PagoNotifier(this._paymentApiService, this._creditApiService, this._ref)
-      : super(const PagoState());
+    : super(const PagoState());
 
   /// Procesa un pago para un crédito y devuelve el resultado del backend
   Future<Map<String, dynamic>?> processPaymentForCredit({
@@ -106,16 +106,21 @@ class PagoNotifier extends StateNotifier<PagoState> {
         if (creditoDetalles != null) {
           final totalInstallments = creditoDetalles.totalInstallments;
           final paidInstallments = creditoDetalles.paidInstallments;
-          final perInstallment = (creditoDetalles.installmentAmount ??
-                  ((creditoDetalles.totalAmount ?? creditoDetalles.amount) /
-                      (totalInstallments == 0 ? 1 : totalInstallments)));
+          final perInstallment =
+              (creditoDetalles.installmentAmount ??
+              ((creditoDetalles.totalAmount ?? creditoDetalles.amount) /
+                  (totalInstallments == 0 ? 1 : totalInstallments)));
           int installmentsCovered = 0;
           if (perInstallment > 0) {
             installmentsCovered = (amount / perInstallment).floor();
           }
           // Siempre al menos la próxima cuota (para pagos parciales)
-          final last = paidInstallments + (installmentsCovered > 0 ? installmentsCovered : 1);
-          installmentNumber = last > totalInstallments ? totalInstallments : (last <= 0 ? 1 : last);
+          final last =
+              paidInstallments +
+              (installmentsCovered > 0 ? installmentsCovered : 1);
+          installmentNumber = last > totalInstallments
+              ? totalInstallments
+              : (last <= 0 ? 1 : last);
         }
       } catch (e) {
         // ignore: avoid_print
@@ -148,17 +153,59 @@ class PagoNotifier extends StateNotifier<PagoState> {
       );
 
       if (response['success'] == true) {
-        final result = response['data'] as Map<String, dynamic>;
+        // `data` puede venir como Map o List (p. ej. [] cuando no hay payload)
+        final dynamic rawData = response['data'];
+        Map<String, dynamic> result;
+        if (rawData is Map<String, dynamic>) {
+          result = rawData;
+        } else if (rawData is List) {
+          // Si viene una lista vacía, no hay detalle del pago en `data`.
+          // Intentar extraer información de otros campos de la respuesta.
+          if (rawData.isEmpty) {
+            print(
+              '⚠️ `data` es una lista vacía. Buscando información alternativa en la respuesta',
+            );
+            // Si la respuesta incluye el objeto de pago en la raíz, usarla.
+            final fallback = response['payment'] ?? response['data'];
+            if (fallback is Map<String, dynamic>) {
+              result = fallback;
+            } else {
+              // No hay datos detallados; usar map vacío para no romper el flujo.
+              result = <String, dynamic>{};
+            }
+          } else if (rawData.first is Map<String, dynamic>) {
+            // Si la lista contiene objetos, tomar el primero como resultado.
+            result = Map<String, dynamic>.from(rawData.first as Map);
+          } else {
+            result = <String, dynamic>{};
+          }
+        } else {
+          // Tipo inesperado, crear map vacío para continuar de forma segura
+          print(
+            '⚠️ Tipo inesperado en response["data"]: ${rawData.runtimeType}',
+          );
+          result = <String, dynamic>{};
+        }
 
         // Intentar enviar notificación por WebSocket (no bloqueante)
         try {
-          final creditJson = result['credit'];
-          if (creditJson != null) {
+          final creditJson = result['credit'] ?? response['credit'];
+          if (creditJson != null && creditJson is Map<String, dynamic>) {
             final credit = Credito.fromJson(creditJson);
             _notifyPaymentUpdate(result, credit);
+          } else if (creditJson != null) {
+            // Si creditJson no es Map, intentar construir desde dynamic
+            try {
+              final creditMap = Map<String, dynamic>.from(creditJson);
+              final credit = Credito.fromJson(creditMap);
+              _notifyPaymentUpdate(result, credit);
+            } catch (_) {
+              print(
+                '⚠️ creditJson no pudo convertirse a Map: ${creditJson.runtimeType}',
+              );
+            }
           }
         } catch (e) {
-          // ignore: avoid_print
           print('⚠️ Error enviando notificación WebSocket: $e');
         }
 
@@ -167,13 +214,13 @@ class PagoNotifier extends StateNotifier<PagoState> {
           successMessage: 'Pago procesado exitosamente',
         );
 
-        return result;
+        // Devolver la respuesta completa del backend para que los callers
+        // puedan acceder a `success`, `message` y `data`.
+        return response;
       } else {
-        final errorMessage = response['message'] ?? 'Error desconocido al procesar el pago';
-        state = state.copyWith(
-          isLoading: false,
-          errorMessage: errorMessage,
-        );
+        final errorMessage =
+            response['message'] ?? 'Error desconocido al procesar el pago';
+        state = state.copyWith(isLoading: false, errorMessage: errorMessage);
         return response;
       }
     } catch (e) {
@@ -189,27 +236,33 @@ class PagoNotifier extends StateNotifier<PagoState> {
         errorMessage = 'No tienes permisos para procesar este pago';
       }
 
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: errorMessage,
-      );
+      state = state.copyWith(isLoading: false, errorMessage: errorMessage);
 
       return null;
     }
   }
 
-  void _notifyPaymentUpdate(Map<String, dynamic> paymentResult, Credito credit) {
+  void _notifyPaymentUpdate(
+    Map<String, dynamic> paymentResult,
+    Credito credit,
+  ) {
     try {
       final authState = _ref.read(authProvider);
       final wsNotifier = _ref.read(webSocketProvider.notifier);
 
       if (authState.usuario != null) {
         // Estructura plana requerida por notifyPaymentMade
-        final paymentId = paymentResult['payment']?['id']?.toString() ?? paymentResult['id']?.toString();
-        final montoDyn = paymentResult['payment']?['amount'] ?? paymentResult['amount'];
-        final double amount = montoDyn is num ? montoDyn.toDouble() : double.tryParse(montoDyn?.toString() ?? '') ?? 0.0;
+        final paymentId =
+            paymentResult['payment']?['id']?.toString() ??
+            paymentResult['id']?.toString();
+        final montoDyn =
+            paymentResult['payment']?['amount'] ?? paymentResult['amount'];
+        final double amount = montoDyn is num
+            ? montoDyn.toDouble()
+            : double.tryParse(montoDyn?.toString() ?? '') ?? 0.0;
         final cobradorId = authState.usuario!.id.toString();
-        final clientId = (credit.clientId ?? paymentResult['client_id'])?.toString();
+        final clientId = (credit.clientId ?? paymentResult['client_id'])
+            ?.toString();
         // Manager asignado para notificar (cuando el pago es exitoso)
         final managerId = authState.usuario!.assignedManagerId?.toString();
 

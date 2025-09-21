@@ -21,14 +21,14 @@ class PaymentDialog extends ConsumerStatefulWidget {
   ConsumerState<PaymentDialog> createState() => _PaymentDialogState();
 
   /// Método estático para mostrar el diálogo de pago desde cualquier lugar
-  static Future<bool?> show(
+  static Future<Map<String, dynamic>?> show(
     BuildContext context,
     WidgetRef ref,
     Credito credit, {
     Map<String, dynamic>? creditSummary,
     VoidCallback? onPaymentSuccess,
   }) async {
-    return showDialog<bool>(
+    return showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
       builder: (context) => PaymentDialog(
@@ -45,7 +45,7 @@ class PaymentForm extends ConsumerStatefulWidget {
   final Map<String, dynamic>? creditSummary;
   final VoidCallback? onPaymentSuccess;
   final VoidCallback? onCancel;
-  final void Function(bool result)? onFinished;
+  final void Function(Map<String, dynamic> result)? onFinished;
 
   const PaymentForm({
     super.key,
@@ -140,7 +140,10 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
       return;
     }
     if (amount > widget.credit.balance) {
-      _showSnackBar('El monto no puede ser mayor al saldo pendiente', isError: true);
+      _showSnackBar(
+        'El monto no puede ser mayor al saldo pendiente',
+        isError: true,
+      );
       return;
     }
 
@@ -158,44 +161,64 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
         }
         if (permission == LocationPermission.deniedForever ||
             permission == LocationPermission.denied) {
-          debugPrint('⚠️ Permisos de ubicación denegados, continuando sin ubicación');
+          debugPrint(
+            '⚠️ Permisos de ubicación denegados, continuando sin ubicación',
+          );
         } else {
           currentPosition = await Geolocator.getCurrentPosition(
             desiredAccuracy: LocationAccuracy.high,
             timeLimit: const Duration(seconds: 10),
           );
-          debugPrint('✅ Ubicación obtenida: ${currentPosition.latitude}, ${currentPosition.longitude}');
+          debugPrint(
+            '✅ Ubicación obtenida: ${currentPosition.latitude}, ${currentPosition.longitude}',
+          );
         }
       } catch (e) {
         debugPrint('⚠️ Error al obtener ubicación: $e');
       }
 
-      final result = await ref.read(creditProvider.notifier).processPayment(
-        creditId: widget.credit.id,
-        amount: amount,
-        paymentType: selectedPaymentType,
-        notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
-        latitude: currentPosition?.latitude,
-        longitude: currentPosition?.longitude,
-      );
+      final result = await ref
+          .read(creditProvider.notifier)
+          .processPayment(
+            creditId: widget.credit.id,
+            amount: amount,
+            paymentType: selectedPaymentType,
+            notes: notesController.text.trim().isEmpty
+                ? null
+                : notesController.text.trim(),
+            latitude: currentPosition?.latitude,
+            longitude: currentPosition?.longitude,
+          );
+      debugPrint('💰 Resultado del pagossssssssssssssssss: $result');
+      // Normalizar: `result` puede ser la respuesta completa ({success,data,message})
+      // o solo el `data` (Map) dependiendo de la implementación upstream.
+      bool success = false;
+      dynamic message;
+      if (result != null) {
+        if (result is Map<String, dynamic> && result['success'] != null) {
+          success = result['success'] == true;
+          message = result['message'];
+        } else if (result is Map<String, dynamic>) {
+          // Si no hay llave `success`, asumimos que este map es `data`.
+          // En ese caso consideramos success=true si no es un map vacío.
+          success = result.isNotEmpty;
+        }
+      }
 
-      if (result != null && result['success'] == true) {
-        _showSnackBar(
-          'Pago procesado exitosamente: ${_formatCurrency(amount)}',
-          isError: false,
-        );
-        // Notificar éxito y permitir que la pantalla padre recargue datos
-        widget.onPaymentSuccess?.call();
-        // Cerrar el diálogo a través del callback estándar del contenedor
-        widget.onFinished?.call(true);
+      if (success) {
+        // No mostrar Snackbar de éxito aquí: la pantalla padre será la
+        // responsable de mostrar el mensaje final y recargar los datos.
+        widget.onFinished?.call({'success': true, 'message': null});
+        return;
       } else {
-        final errorMessage = result?['message'] ?? '👍';
-        _showSnackBar(errorMessage, isError: true);
-        widget.onFinished?.call(false);
+        final errorMessage =
+            message ?? result?['message'] ?? 'Error al procesar pago';
+        // Delegar la notificación de error a la pantalla padre
+        widget.onFinished?.call({'success': false, 'message': errorMessage});
       }
     } catch (e) {
-      _showSnackBar('Error: $e', isError: true);
-      widget.onFinished?.call(false);
+      // Delegar error al padre
+      widget.onFinished?.call({'success': false, 'message': 'Error: $e'});
     } finally {
       if (mounted) {
         setDialogState(() {
@@ -209,7 +232,7 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(message, style: const TextStyle(color: Colors.white)),
           backgroundColor: isError ? Colors.red : Colors.green,
           action: isError
               ? null
@@ -238,7 +261,9 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -246,16 +271,19 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
               children: [
                 Text(
                   'Información del Crédito',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Crédito:'),
-                    Text('#${widget.credit.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(
+                      '#${widget.credit.id}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -265,7 +293,8 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                     const Text('Cliente:'),
                     Flexible(
                       child: Text(
-                        widget.credit.client?.nombre ?? 'Cliente #${widget.credit.clientId}',
+                        widget.credit.client?.nombre ??
+                            'Cliente #${widget.credit.clientId}',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                         textAlign: TextAlign.end,
                         overflow: TextOverflow.ellipsis,
@@ -280,7 +309,10 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                     const Text('Saldo pendiente:'),
                     Text(
                       _formatCurrency(widget.credit.balance),
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange.shade700,
+                      ),
                     ),
                   ],
                 ),
@@ -292,7 +324,10 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                       const Text('Cuota sugerida:'),
                       Text(
                         _formatCurrency(suggestedAmount),
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green.shade700,
+                        ),
                       ),
                     ],
                   ),
@@ -348,16 +383,6 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
             },
           ),
           const SizedBox(height: 16),
-          // Notas opcionales
-          /*TextFormField(
-            controller: notesController,
-            decoration: const InputDecoration(
-              labelText: 'Notas (opcional)',
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),*/
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -366,13 +391,18 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                     ? null
                     : () {
                         widget.onCancel?.call();
-                        widget.onFinished?.call(false);
+                        widget.onFinished?.call({
+                          'success': false,
+                          'message': null,
+                        });
                       },
                 child: const Text('Cancelar'),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: isProcessing ? null : () => _processPayment(setDialogState),
+                onPressed: isProcessing
+                    ? null
+                    : () => _processPayment(setDialogState),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
@@ -383,7 +413,9 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Text('Procesar Pago'),
@@ -407,9 +439,9 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
           Expanded(
             child: Text(
               'Procesar Pago',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
         ],

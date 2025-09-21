@@ -134,6 +134,9 @@ class Pago {
       metodoPago == MetodoPago.qr || metodoPago == MetodoPago.transferencia;
   bool get estaCompletado => estado == EstadoPago.completado;
 
+  // Compatibilidad con el otro modelo: exponer installmentNumber
+  int get installmentNumber => numeroCuota;
+
   Pago copyWith({
     BigInt? id,
     BigInt? clienteId,

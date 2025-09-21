@@ -3,238 +3,113 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../negocio/providers/credit_provider.dart';
-import '../../negocio/providers/websocket_provider.dart';
-import '../../negocio/providers/auth_provider.dart';
+// imports removed: websocket_provider and auth_provider were unused in this screen
 import '../../datos/modelos/credito.dart';
 import '../../ui/widgets/client_category_chip.dart';
+import '../widgets/payment_dialog.dart';
+import '../cliente/cliente_perfil_screen.dart';
 import 'credit_form_screen.dart';
 import '../widgets/contact_actions_widget.dart';
 import '../../ui/widgets/loading_overlay.dart';
 import '../cliente/location_picker_screen.dart';
 import '../widgets/profile_image_widget.dart';
 import '../widgets/payment_schedule_calendar.dart';
-import '../cliente/cliente_perfil_screen.dart';
-import '../widgets/payment_dialog.dart';
 
 class CreditDetailScreen extends ConsumerStatefulWidget {
-  final Credito credit;
+  final Credito credito;
 
-  const CreditDetailScreen({super.key, required this.credit});
+  // Accept both `credito` and `credit` as named parameters for backward compatibility
+  CreditDetailScreen({Key? key, Credito? credito, Credito? credit})
+    : assert(credito != null || credit != null),
+      credito = credito ?? credit!,
+      super(key: key);
 
   @override
   ConsumerState<CreditDetailScreen> createState() => _CreditDetailScreenState();
 }
 
-class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
-    with SingleTickerProviderStateMixin {
-  bool _paymentRecentlyProcessed = false;
-  DateTime? _lastPaymentRefresh;
-  late TabController _tabController;
-  final _paymentAmountController = TextEditingController();
-
-  // Detalles enriquecidos del crédito (incluye cliente con ubicación)
-  Credito? _detailedCredit;
+class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
+  late Credito _credito;
   bool _isLoadingDetails = false;
-
-  // Datos extra del endpoint /details
-  Map<String, dynamic>? _creditSummary; // summary
-  List<PaymentSchedule>? _apiPaymentSchedule; // payment_schedule
-  List<Pago>? _paymentsHistory; // payments_history
+  bool _paymentRecentlyProcessed = false;
+  Map<String, dynamic>? _creditSummary;
+  List<PaymentSchedule>? _apiPaymentSchedule;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    // Cargar detalles desde endpoints (crédito + cliente) siempre que se abre la pantalla
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCreditDetails();
-    });
-
-    // Nota: No usar ref.listen aquí; Riverpod exige que listen ocurra durante build.
-    // El listener a lastPaymentUpdateProvider se agrega dentro de build().
+    _credito = widget.credito;
+    _loadCreditDetails();
   }
 
   Future<void> _loadCreditDetails() async {
+    setState(() {
+      _isLoadingDetails = true;
+    });
+
     try {
-      setState(() => _isLoadingDetails = true);
-      // Obtener TODO desde el provider (una sola llamada al backend)
-      final full = await ref
+      // Obtener detalles completos desde el provider (credit + summary + schedule + payments)
+      final details = await ref
           .read(creditProvider.notifier)
-          .getCreditFullDetails(widget.credit.id);
+          .getCreditFullDetails(_credito.id);
 
-      if (!mounted) return;
-      setState(() {
-        _detailedCredit = full?.credit ?? widget.credit;
-        _creditSummary = full?.summary;
-        _apiPaymentSchedule = full?.schedule;
-        _paymentsHistory = full?.paymentsHistory;
-        _isLoadingDetails = false;
-        _paymentRecentlyProcessed =
-            false; // reactivar FAB tras actualizar datos
-      });
-      debugPrint('✅ Detalles cargados vía provider (única llamada).');
+      if (details != null) {
+        setState(() {
+          // Actualizar resumen, cronograma y historial desde la respuesta
+          _creditSummary = details.summary;
+          _apiPaymentSchedule = details.schedule;
+          // paymentsHistory is provided in details.paymentsHistory but this screen
+          // uses calendar/list widgets which can read the provider or details.credit.payments
+          // Mantener la referencia del crédito actualizada con los datos retornados
+          _credito = details.credit;
+        });
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoadingDetails = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'No se pudieron cargar todos los datos del cliente: $e',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error al cargar detalles del crédito: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
           ),
-          backgroundColor: Colors.orange,
-        ),
-      );
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoadingDetails = false;
+      });
     }
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _paymentAmountController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Listener de actualizaciones de pago (Riverpod: debe ejecutarse durante build)
-    ref.listen<Map<String, dynamic>?>(lastPaymentUpdateProvider, (prev, next) {
-      if (next == null) return;
-      try {
-        final dynamic creditIdDyn =
-            next['credit']?['id'] ??
-            next['payment']?['credit_id'] ??
-            next['creditId'];
-        final int? creditId = creditIdDyn is int
-            ? creditIdDyn
-            : int.tryParse(creditIdDyn?.toString() ?? '');
-        if (creditId == null) return;
-        if (creditId != widget.credit.id) return;
-
-        // Evitar recargas en ráfaga si llegan múltiples eventos similares
-        final now = DateTime.now();
-        if (_lastPaymentRefresh != null &&
-            now.difference(_lastPaymentRefresh!) < const Duration(seconds: 2)) {
-          return;
-        }
-        _lastPaymentRefresh = now;
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Pago aplicado. Actualizando información del crédito...',
-              ),
-            ),
-          );
-        }
-        _loadCreditDetails();
-        ref.read(creditProvider.notifier).loadCredits();
-      } catch (_) {}
-    });
-    final creditState = ref.watch(creditProvider);
-    final authState = ref.watch(authProvider);
-
-    // Buscar el crédito actualizado en el estado, pero si el de estado está incompleto (sin totalAmount)
-    // y el widget.credit sí lo trae, preferir el del widget para no perder datos.
-    Credito baseCredit;
-    try {
-      final stateCredit = creditState.credits.firstWhere(
-        (c) => c.id == widget.credit.id,
-      );
-      if (stateCredit.totalAmount == null &&
-          widget.credit.totalAmount != null) {
-        baseCredit = widget.credit;
-      } else {
-        baseCredit = stateCredit;
-      }
-    } catch (_) {
-      baseCredit = widget.credit;
-    }
-    final currentCredit = _detailedCredit ?? baseCredit;
-
-    // Verificar si el usuario es manager o admin para mostrar opciones de edición/eliminación
-    final canEditDelete = authState.isManager || authState.isAdmin;
+    final currentCredit = _credito;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Crédito #${currentCredit.id}',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        elevation: 0,
+        title: Text('Detalles del Crédito'),
         actions: [
-          // Solo mostrar botón de editar si el usuario es manager o admin
-          if (canEditDelete)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: currentCredit.status == 'pending_approval'
-                  ? () => _editCredit(currentCredit)
-                  : null,
-              tooltip: currentCredit.status == 'pending_approval'
-                  ? 'Editar crédito'
-                  : 'Solo se puede editar cuando está pendiente',
-            ),
-          // Solo mostrar menú de opciones (anular/eliminar) si el usuario es manager o admin
-          if (canEditDelete)
-            PopupMenuButton<String>(
-              onSelected: (value) => _handleMenuAction(value, currentCredit),
-              itemBuilder: (context) {
-                // Determinar si el crédito tiene pagos para decidir entre anular o eliminar
-                final hasPayments =
-                    _paymentsHistory != null && _paymentsHistory!.isNotEmpty ||
-                    currentCredit.payments != null &&
-                        currentCredit.payments!.isNotEmpty;
-
-                // No mostrar opciones si el crédito ya está cancelado
-                if (currentCredit.status == 'cancelled') {
-                  return <PopupMenuEntry<String>>[];
-                }
-
-                if (hasPayments) {
-                  // Si tiene pagos, mostrar opción de anular
-                  return [
-                    const PopupMenuItem(
-                      value: 'cancel',
-                      child: Row(
-                        children: [
-                          Icon(Icons.cancel, color: Colors.orange),
-                          SizedBox(width: 8),
-                          Text(
-                            'Anular',
-                            style: TextStyle(color: Colors.orange),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ];
-                } else {
-                  // Si no tiene pagos, mostrar opción de eliminar
-                  return [
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Eliminar', style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ];
-                }
-              },
-            ),
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () => _editCredit(currentCredit),
+            tooltip: 'Editar Crédito',
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) => _handleMenuAction(value, currentCredit),
+            itemBuilder: (context) => [
+              const PopupMenuItem<String>(
+                value: 'delete',
+                child: Text('Eliminar Crédito'),
+              ),
+              const PopupMenuItem<String>(
+                value: 'cancel',
+                child: Text('Anular Crédito'),
+              ),
+            ],
+          ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(text: 'Información', icon: Icon(Icons.info_outline)),
-            Tab(text: 'Pagos', icon: Icon(Icons.payment)),
-          ],
-        ),
       ),
       body: Stack(
         children: [
@@ -251,16 +126,10 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                 end: Alignment.bottomCenter,
               ),
             ),
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildInformationTab(currentCredit),
-                _buildPaymentsTab(currentCredit),
-              ],
-            ),
+            child: _buildInformationTab(currentCredit),
           ),
           LoadingOverlay(
-            isLoading: _isLoadingDetails,
+            isLoading: _isLoadingDetails || _paymentRecentlyProcessed,
             message: 'Cargando detalles...',
           ),
         ],
@@ -272,7 +141,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
                   : () => _navigateToPaymentScreen(currentCredit),
               icon: const Icon(Icons.payment),
               label: Text(
-                _paymentRecentlyProcessed ? 'Actualizando...' : 'Procesar Pago',
+                _paymentRecentlyProcessed
+                    ? 'Actualizando...'
+                    : 'Procesar Pagos',
               ),
             )
           : null,
@@ -285,42 +156,52 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
   }
 
   Future<void> _showPaymentDialog(Credito credit) async {
+    // Mostrar el diálogo; el diálogo retorna true en caso de éxito.
     final result = await PaymentDialog.show(
       context,
       ref,
       credit,
       creditSummary: _creditSummary,
-      onPaymentSuccess: () {
-        // Marcar como pagado recientemente para evitar reintentos inmediatos
-        if (mounted) {
-          setState(() {
-            _paymentRecentlyProcessed = true;
-          });
-        }
-
-        // Establecer marca de tiempo para evitar recargas duplicadas por WebSocket
-        _lastPaymentRefresh = DateTime.now();
-
-        // Informar al usuario y recargar datos
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pago registrado. Actualizando información...'),
-            ),
-          );
-        }
-        // Recargar créditos y detalles para obtener información actualizada
-        ref.read(creditProvider.notifier).loadCredits();
-        _loadCreditDetails();
-      },
     );
 
-    // Si se procesó el pago exitosamente, no necesitamos hacer nada más
-    // porque el callback onPaymentSuccess ya maneja la recarga de datos
-    // Si el usuario canceló o falló, aseguramos que el botón quede habilitado
-    if (result != true && mounted) {
+    if (result != null && result['success'] == true) {
+      // Marcar estado para bloquear reintentos inmediatos
+      if (mounted) {
+        setState(() {
+          _paymentRecentlyProcessed = true;
+          _isLoadingDetails = true;
+        });
+      }
+
+      final message = result['message'] as String?;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              message ?? 'Pago registrado. Actualizando información...',
+            ),
+          ),
+        );
+      }
+
+      // Recargar créditos y detalles para obtener información actualizada
+      ref.read(creditProvider.notifier).loadCredits();
+      await _loadCreditDetails();
+    } else if (result != null && result['success'] == false) {
+      // Mostrar mensaje de error devuelto por el diálogo
+      final message = result['message'] as String?;
+      if (mounted && message != null && message.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
+    }
+
+    // Si no se procesó o se canceló, reactivar el FAB
+    if (mounted) {
       setState(() {
         _paymentRecentlyProcessed = false;
+        _isLoadingDetails = false;
       });
     }
   }
@@ -917,161 +798,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen>
     );
   }
 
-  Widget _buildPaymentsTab(Credito credit) {
-    final payments = (_paymentsHistory != null && _paymentsHistory!.isNotEmpty)
-        ? _paymentsHistory!
-        : (credit.payments ?? []);
-    final total = credit.totalAmount ?? credit.amount;
+  // Payments are displayed in calendar/list views elsewhere; the tabbed payments UI was removed.
 
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final items = <Widget>[
-                _buildPaymentSummary(
-                  'Total Pagado',
-                  'Bs. ${NumberFormat('#,##0.00').format((total - credit.balance).clamp(0, total))}',
-                  Icons.payment,
-                  Colors.green,
-                ),
-                _buildPaymentSummary(
-                  'Número de Pagos',
-                  '${payments.length}',
-                  Icons.receipt,
-                  Colors.blue,
-                ),
-                if (credit.installmentAmount != null)
-                  _buildPaymentSummary(
-                    'Cuota Sugerida',
-                    'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount!)}',
-                    Icons.schedule,
-                    Colors.orange,
-                  ),
-              ];
-
-              if (constraints.maxWidth < 500) {
-                return Center(
-                  child: Wrap(
-                    spacing: 5,
-                    runSpacing: 5,
-                    alignment: WrapAlignment.spaceAround,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: items
-                        .map(
-                          (w) => ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 120),
-                            child: w,
-                          ),
-                        )
-                        .toList(),
-                  ),
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: items,
-              );
-            },
-          ),
-        ),
-        Expanded(
-          child: payments.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.payment, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text(
-                        'No hay pagos registrados',
-                        style: TextStyle(fontSize: 18, color: Colors.grey),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Los pagos aparecerán aquí una vez registrados',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: payments.length,
-                  itemBuilder: (context, index) {
-                    final payment = payments[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.green.shade100,
-                          child: Icon(
-                            Icons.payment,
-                            color: Colors.green.shade700,
-                          ),
-                        ),
-                        title: Text(
-                          'Bs. ${NumberFormat('#,##0.00').format(payment.amount)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              DateFormat(
-                                'dd/MM/yyyy HH:mm',
-                              ).format(payment.paymentDate),
-                            ),
-                            if (payment.notes != null &&
-                                payment.notes!.isNotEmpty)
-                              Text(
-                                payment.notes!,
-                                style: const TextStyle(
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                          ],
-                        ),
-                        trailing: Text(
-                          '#${payment.id}',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPaymentSummary(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: color,
-          ),
-        ),
-        Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      ],
-    );
-  }
+  // Payment summary widgets are rendered in calendar/list views; helper removed.
 
   Widget _buildDateInfo(String label, DateTime date) {
     return Row(

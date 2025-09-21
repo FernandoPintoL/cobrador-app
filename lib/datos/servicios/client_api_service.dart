@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-
 import 'base_api_service.dart';
 
 /// Servicio API para gestión de clientes y asignaciones
@@ -11,7 +10,11 @@ class ClientApiService extends BaseApiService {
   // ================== MÉTODOS PARA GESTIÓN DE CLIENTES ASIGNADOS ==================
 
   /// Obtiene clientes directos asignados a un manager específico
-  Future<Map<String, dynamic>> getManagerDirectClients(String managerId, {String? search, int? perPage}) async {
+  Future<Map<String, dynamic>> getManagerDirectClients(
+    String managerId, {
+    String? search,
+    int? perPage,
+  }) async {
     try {
       print('📋 Obteniendo clientes directos del manager: $managerId');
 
@@ -33,7 +36,9 @@ class ClientApiService extends BaseApiService {
         print('✅ Clientes directos del manager obtenidos exitosamente');
         return data;
       } else {
-        throw Exception('Error al obtener clientes directos: ${response.statusCode}');
+        throw Exception(
+          'Error al obtener clientes directos: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('❌ Error al obtener clientes directos del manager: $e');
@@ -42,9 +47,15 @@ class ClientApiService extends BaseApiService {
   }
 
   /// Obtiene todos los clientes de un manager (directos + indirectos)
-  Future<Map<String, dynamic>> getManagerAllClients(String managerId, {String? search, int? perPage}) async {
+  Future<Map<String, dynamic>> getManagerAllClients(
+    String managerId, {
+    String? search,
+    int? perPage,
+  }) async {
     try {
-      print('📋 Obteniendo todos los clientes (directos+indirectos) del manager: $managerId');
+      print(
+        '📋 Obteniendo todos los clientes (directos+indirectos) del manager: $managerId',
+      );
 
       final queryParams = <String, dynamic>{};
       if (search != null && search.isNotEmpty) {
@@ -64,7 +75,9 @@ class ClientApiService extends BaseApiService {
         print('✅ Clientes totales del manager obtenidos exitosamente');
         return data;
       } else {
-        throw Exception('Error al obtener clientes del manager: ${response.statusCode}');
+        throw Exception(
+          'Error al obtener clientes del manager: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('❌ Error al obtener clientes totales del manager: $e');
@@ -73,7 +86,11 @@ class ClientApiService extends BaseApiService {
   }
 
   /// Obtiene todos los clientes asignados a un cobrador específico
-  Future<Map<String, dynamic>> getCobradorClients(String cobradorId, {String? search, int? perPage}) async {
+  Future<Map<String, dynamic>> getCobradorClients(
+    String cobradorId, {
+    String? search,
+    int? perPage,
+  }) async {
     try {
       print('📋 Obteniendo clientes del cobrador: $cobradorId');
 
@@ -104,7 +121,10 @@ class ClientApiService extends BaseApiService {
   }
 
   /// Asigna múltiples clientes a un cobrador
-  Future<Map<String, dynamic>> assignClientsToCollector(String cobradorId, List<String> clientIds) async {
+  Future<Map<String, dynamic>> assignClientsToCollector(
+    String cobradorId,
+    List<String> clientIds,
+  ) async {
     try {
       print(
         '👥 Asignando ${clientIds.length} clientes al cobrador: $cobradorId',
@@ -386,7 +406,6 @@ class ClientApiService extends BaseApiService {
   }
 
   // ================== MÉTODOS PARA GESTIÓN DIRECTA MANAGER → CLIENTE ==================
-
 
   /// Asigna múltiples clientes directamente a un manager
   Future<Map<String, dynamic>> assignClientsDirectlyToManager(

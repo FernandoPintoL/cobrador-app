@@ -2339,25 +2339,26 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   }
 
   Future<void> _showPaymentDialogFromList(Credito credit) async {
-    final result = await PaymentDialog.show(
-      context,
-      ref,
-      credit,
-      onPaymentSuccess: () {
-        // Al registrar pago, refrescar la lista
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pago registrado. Actualizando créditos...'),
-          ),
-        );
-        ref.read(creditProvider.notifier).loadCredits();
-        _loadInitialData();
-      },
-    );
+    // Mostrar diálogo y esperar resultado; el padre es responsable de
+    // mostrar mensajes y recargar en caso de éxito.
+    final result = await PaymentDialog.show(context, ref, credit);
 
-    // Si no se concretó pago, no es necesario hacer nada
-    if (result != true) {
-      // No-op
+    if (result != null && result['success'] == true) {
+      final message = result['message'] as String?;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message ?? 'Pago registrado. Actualizando créditos...'),
+        ),
+      );
+      ref.read(creditProvider.notifier).loadCredits();
+      _loadInitialData();
+    } else if (result != null && result['success'] == false) {
+      final message = result['message'] as String?;
+      if (message != null && message.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 

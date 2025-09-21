@@ -16,6 +16,7 @@ class Credito {
   final DateTime endDate;
   final DateTime createdAt;
   final DateTime updatedAt;
+  // (no agregar installmentNumber en Credito)
 
   // Nuevos campos para lista de espera
   final DateTime? scheduledDeliveryDate; // Fecha programada para entrega
@@ -399,6 +400,7 @@ class Pago {
   final String status; // 'pending', 'completed', 'failed'
   final DateTime paymentDate;
   final String? notes;
+  final int? installmentNumber;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -413,6 +415,7 @@ class Pago {
     this.notes,
     required this.createdAt,
     required this.updatedAt,
+    this.installmentNumber,
   });
 
   factory Pago.fromJson(Map<String, dynamic> json) {
@@ -428,6 +431,8 @@ class Pago {
       notes: json['notes'],
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+      installmentNumber:
+          json['installment_number'] ?? json['numero_cuota'] ?? 0,
     );
   }
 
@@ -441,10 +446,16 @@ class Pago {
       'status': status,
       'payment_date': paymentDate.toIso8601String().split('T')[0],
       'notes': notes,
+      'installment_number': installmentNumber,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
   }
+}
+
+// Compatibilidad: exponer numeroCuota como alias para installmentNumber
+extension PagoCompat on Pago {
+  int? get numeroCuota => installmentNumber;
 }
 
 class CreditStats {
