@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/servicios/payment_api_service.dart';
-import '../../datos/modelos/api_exception.dart';
 import '../../datos/servicios/credit_api_service.dart';
-import '../../datos/servicios/websocket_service.dart';
+import '../../datos/servicios/cash_balance_api_service.dart';
 import '../../datos/modelos/credito.dart';
 import 'auth_provider.dart';
 import 'websocket_provider.dart';
@@ -38,10 +37,15 @@ class PagoState {
 class PagoNotifier extends StateNotifier<PagoState> {
   final PaymentApiService _paymentApiService;
   final CreditApiService _creditApiService;
+  final CashBalanceApiService _cashBalanceApiService;
   final Ref _ref;
 
-  PagoNotifier(this._paymentApiService, this._creditApiService, this._ref)
-    : super(const PagoState());
+  PagoNotifier(
+    this._paymentApiService,
+    this._creditApiService,
+    this._cashBalanceApiService,
+    this._ref,
+  ) : super(const PagoState());
 
   /// Procesa un pago para un crédito y devuelve el resultado del backend
   Future<Map<String, dynamic>?> processPaymentForCredit({
@@ -145,6 +149,43 @@ class PagoNotifier extends StateNotifier<PagoState> {
         paymentData['latitude'] = latitude;
         paymentData['longitude'] = longitude;
         print('✅ Ubicación agregada al pago: $latitude, $longitude');
+      }
+
+      // Asegurar que exista una caja abierta para el cobrador y la fecha del pago
+      try {
+        final authState = _ref.read(authProvider);
+        final isCobrador = authState.usuario?.esCobrador() ?? false;
+        if (isCobrador) {
+          final cobradorId = authState.usuario!.id;
+          print(
+            '🔍 Usuario es cobrador (id=$cobradorId). Intentando abrir/asegurar caja para $paymentDate',
+          );
+          try {
+            final openResp = await _cashBalanceApiService.openCashBalance(
+              cobradorId: cobradorId.toInt(),
+              date: paymentDate,
+            );
+            print('🔓 openCashBalance response: $openResp');
+            if (openResp['success'] == false) {
+              final msg = openResp['message'] ?? 'No se pudo abrir la caja';
+              state = state.copyWith(isLoading: false, errorMessage: msg);
+              return {'success': false, 'message': msg};
+            }
+          } catch (e) {
+            print('❌ Error abriendo caja: $e');
+            state = state.copyWith(
+              isLoading: false,
+              errorMessage: 'No se pudo abrir la caja: ${e.toString()}',
+            );
+            return {
+              'success': false,
+              'message': 'No se pudo abrir la caja: ${e.toString()}',
+            };
+          }
+        }
+      } catch (e) {
+        print('⚠️ Error verificando rol antes de abrir caja: $e');
+        // No bloquear el pago si la verificación falla inesperadamente
       }
 
       final response = await _paymentApiService.createPaymentForCredit(
@@ -261,8 +302,7 @@ class PagoNotifier extends StateNotifier<PagoState> {
             ? montoDyn.toDouble()
             : double.tryParse(montoDyn?.toString() ?? '') ?? 0.0;
         final cobradorId = authState.usuario!.id.toString();
-        final clientId = (credit.clientId ?? paymentResult['client_id'])
-            ?.toString();
+        final clientId = credit.clientId.toString();
         // Manager asignado para notificar (cuando el pago es exitoso)
         final managerId = authState.usuario!.assignedManagerId?.toString();
 
@@ -300,5 +340,11 @@ class PagoNotifier extends StateNotifier<PagoState> {
 final pagoProvider = StateNotifierProvider<PagoNotifier, PagoState>((ref) {
   final paymentApiService = PaymentApiService();
   final creditApiService = CreditApiService();
-  return PagoNotifier(paymentApiService, creditApiService, ref);
+  final cashBalanceApiService = CashBalanceApiService();
+  return PagoNotifier(
+    paymentApiService,
+    creditApiService,
+    cashBalanceApiService,
+    ref,
+  );
 });

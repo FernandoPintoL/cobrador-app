@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../negocio/providers/auth_provider.dart';
+import '../../datos/servicios/cash_balance_api_service.dart';
 
 class PaymentDialog extends ConsumerStatefulWidget {
   final Credito credit;
@@ -65,6 +67,9 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
   late TextEditingController notesController;
   bool isProcessing = false;
   String selectedPaymentType = 'cash';
+  bool isCobrador = false;
+  bool isCajaOpenChecking = false;
+  bool isCajaOpen = false;
 
   @override
   void initState() {
@@ -72,6 +77,10 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
     amountController = TextEditingController();
     notesController = TextEditingController();
     _calculateSuggestedAmount();
+    // Verificar rol de usuario y estado de caja al iniciar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkIfCobrador();
+    });
   }
 
   @override
@@ -189,19 +198,22 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
             latitude: currentPosition?.latitude,
             longitude: currentPosition?.longitude,
           );
-      debugPrint('💰 Resultado del pagossssssssssssssssss: $result');
-      // Normalizar: `result` puede ser la respuesta completa ({success,data,message})
-      // o solo el `data` (Map) dependiendo de la implementación upstream.
+      debugPrint('💰 Resultado del pagos: $result');
+      // Normalizar: `result` normalmente es Map<String, dynamic>
+      Map<String, dynamic>? mapResult;
+      if (result is Map<String, dynamic>) {
+        mapResult = result;
+      } else {
+        mapResult = null;
+      }
       bool success = false;
       dynamic message;
-      if (result != null) {
-        if (result is Map<String, dynamic> && result['success'] != null) {
-          success = result['success'] == true;
-          message = result['message'];
-        } else if (result is Map<String, dynamic>) {
-          // Si no hay llave `success`, asumimos que este map es `data`.
-          // En ese caso consideramos success=true si no es un map vacío.
-          success = result.isNotEmpty;
+      if (mapResult != null) {
+        if (mapResult.containsKey('success')) {
+          success = mapResult['success'] == true;
+          message = mapResult['message'];
+        } else {
+          success = mapResult.isNotEmpty;
         }
       }
 
@@ -225,6 +237,72 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
           isProcessing = false;
         });
       }
+    }
+  }
+
+  Future<void> _checkIfCobrador() async {
+    try {
+      final authState = ref.read(authProvider);
+      final usuario = authState.usuario;
+      final esC = usuario?.esCobrador() ?? false;
+      setState(() {
+        isCobrador = esC;
+      });
+      if (!esC) return;
+
+      // Opcional: podríamos consultar endpoint para verificar si hay caja abierta.
+      // Por simplicidad usamos un intento de apertura con solo fecha (idempotente) en background
+      setState(() => isCajaOpenChecking = true);
+      try {
+        final today = DateTime.now().toIso8601String().split('T')[0];
+        final resp = await CashBalanceApiService().openCashBalance(
+          cobradorId: usuario!.id.toInt(),
+          date: today,
+        );
+        // Consideramos 'success' o ausencia de excepción como caja abierta
+        final ok = resp['success'] == true || resp['status'] == 'ok';
+        setState(() {
+          isCajaOpen = ok;
+        });
+      } catch (_) {
+        setState(() {
+          isCajaOpen = false;
+        });
+      } finally {
+        setState(() => isCajaOpenChecking = false);
+      }
+    } catch (e) {
+      // ignore errors silently
+    }
+  }
+
+  Future<void> _openCajaManual() async {
+    try {
+      setState(() => isCajaOpenChecking = true);
+      final authState = ref.read(authProvider);
+      final usuario = authState.usuario;
+      if (usuario == null) {
+        _showSnackBar('Usuario no autenticado', isError: true);
+        return;
+      }
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      final resp = await CashBalanceApiService().openCashBalance(
+        cobradorId: usuario.id.toInt(),
+        date: today,
+      );
+      if (resp['success'] == true || resp['status'] == 'ok') {
+        setState(() {
+          isCajaOpen = true;
+        });
+        _showSnackBar('Caja abierta correctamente', isError: false);
+      } else {
+        final msg = resp['message'] ?? 'No se pudo abrir la caja';
+        _showSnackBar(msg, isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error al abrir caja: $e', isError: true);
+    } finally {
+      setState(() => isCajaOpenChecking = false);
     }
   }
 
@@ -336,6 +414,63 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
             ),
           ),
           const SizedBox(height: 16),
+          // Si el usuario es cobrador, mostrar estado de caja y opción para abrirla
+          if (isCobrador) ...[
+            if (isCajaOpenChecking)
+              Row(
+                children: const [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 8),
+                  Text('Verificando caja...'),
+                ],
+              )
+            else if (!isCajaOpen)
+              Card(
+                color: Colors.orange.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'No se detectó caja abierta para hoy. Abra la caja antes de procesar cobros.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: isCajaOpenChecking ? null : _openCajaManual,
+                        child: const Text('Abrir caja'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Caja abierta',
+                    style: TextStyle(color: Colors.green.shade700),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 12),
+          ],
           // Monto del pago
           TextFormField(
             controller: amountController,
@@ -453,7 +588,8 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
           onPaymentSuccess: widget.onPaymentSuccess,
           onCancel: () {
             if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop(false);
+              // Asegurar que siempre devolvemos un Map consistente
+              Navigator.of(context).pop({'success': false, 'message': null});
             }
           },
           onFinished: (result) {

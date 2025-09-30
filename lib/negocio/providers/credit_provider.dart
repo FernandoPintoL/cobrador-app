@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/api_exception.dart';
 import '../../datos/servicios/credit_api_service.dart';
+import '../../datos/servicios/cash_balance_api_service.dart';
 import '../../datos/modelos/credit_full_details.dart';
 import '../../datos/modelos/credito.dart';
 import 'auth_provider.dart';
@@ -1426,13 +1427,47 @@ class CreditNotifier extends StateNotifier<CreditState> {
       );
       print('🚚 Entregando crédito al cliente: $creditId');
 
+      // Asegurar que la caja esté abierta para el cobrador en la fecha actual
+      try {
+        final authState = _ref.read(authProvider);
+        final isCobrador = authState.usuario?.esCobrador() ?? false;
+        if (isCobrador) {
+          final cobradorId = authState.usuario!.id.toInt();
+          final today = DateTime.now().toIso8601String().split('T')[0];
+          print('🔍 Verificando/abriendo caja para cobrador=$cobradorId en fecha=$today');
+          final cashApi = CashBalanceApiService();
+          final openResp = await cashApi.openCashBalance(
+            cobradorId: cobradorId,
+            date: today,
+          );
+          if (openResp['success'] == false) {
+            final msg = openResp['message']?.toString() ?? 'No se pudo abrir la caja';
+            state = state.copyWith(isLoading: false, errorMessage: msg);
+            return false;
+          }
+        }
+      } catch (e) {
+        // Si falla la verificación de caja, detener y mostrar mensaje claro
+        final msg = 'No se pudo preparar la caja para la entrega: ${e.toString()}';
+        print('❌ $msg');
+        state = state.copyWith(isLoading: false, errorMessage: msg);
+        return false;
+      }
+
       final response = await _creditApiService.deliverCreditToClient(
         creditId,
         notes: notes,
       );
 
       if (response['success'] == true) {
-        final creditoActualizado = Credito.fromJson(response['data']['credit']);
+        // Algunos endpoints envían el crédito en data.credit, otros en data
+        final dynamic data = response['data'];
+        final dynamic creditJson = (data is Map<String, dynamic>)
+            ? (data['credit'] ?? data)
+            : null;
+        final creditoActualizado = creditJson is Map<String, dynamic>
+            ? Credito.fromJson(creditJson)
+            : Credito.fromJson(response['data']['credit']);
 
         _updateCreditInAllLists(creditoActualizado);
         _notifyCreditDelivered(creditoActualizado, notes: notes);
@@ -1445,16 +1480,22 @@ class CreditNotifier extends StateNotifier<CreditState> {
         print('✅ Crédito entregado al cliente exitosamente');
         return true;
       } else {
-        throw Exception(response['message'] ?? 'Error al entregar crédito');
+        final msg = response['message']?.toString() ?? 'Error al entregar crédito';
+        throw ApiException(message: msg, errorData: response);
       }
     } catch (e) {
       print('❌ Error al entregar crédito: $e');
 
       String errorMessage = 'Error al entregar crédito';
-      if (e.toString().contains('403')) {
+      final esApi = e is ApiException;
+      final rawMsg = esApi ? e.message : e.toString();
+      if (rawMsg != null && rawMsg.toLowerCase().contains('permiso')) {
         errorMessage = 'No tienes permisos para entregar este crédito';
-      } else if (e.toString().contains('404')) {
+      } else if (rawMsg != null && rawMsg.contains('404')) {
         errorMessage = 'Crédito no encontrado';
+      } else if (rawMsg != null && (rawMsg.toLowerCase().contains('caja') || rawMsg.toLowerCase().contains('cash'))) {
+        // Mensajes relevantes a caja/efectivo insuficiente
+        errorMessage = rawMsg;
       }
 
       state = state.copyWith(isLoading: false, errorMessage: errorMessage);

@@ -28,6 +28,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   bool _isGettingAddress = false;
   bool _mapError = false;
   String _mapErrorMessage = '';
+  MapType _mapType = MapType.normal;
 
   // Ubicación por defecto (puedes cambiar esto)
   static const LatLng _defaultLocation = LatLng(
@@ -539,6 +540,15 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               onPressed: _mostrarOpcionesNavegacion,
               icon: const Icon(Icons.directions),
             ),
+          IconButton(
+            tooltip: _mapType == MapType.satellite ? 'Mapa estándar' : 'Vista satélite',
+            onPressed: () {
+              setState(() {
+                _mapType = _mapType == MapType.satellite ? MapType.normal : MapType.satellite;
+              });
+            },
+            icon: Icon(_mapType == MapType.satellite ? Icons.map : Icons.satellite_alt_outlined),
+          ),
           if (!soloVista && _selectedLocation != null)
             TextButton(
               onPressed: _confirmarUbicacion,
@@ -649,6 +659,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         height: double.infinity,
                         child: GoogleMap(
                           onMapCreated: _onMapCreated,
+                          mapType: _mapType,
                           initialCameraPosition: CameraPosition(
                             target: _selectedLocation ?? (
                               (widget.extraMarkers != null && widget.extraMarkers!.isNotEmpty)
@@ -677,7 +688,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                           zoomControlsEnabled: true,
                           mapToolbarEnabled: false,
                           // Configurar estilo del mapa según el tema
-                          style: isDarkMode ? _darkMapStyle : null,
+                          style: (_mapType == MapType.normal && isDarkMode) ? _darkMapStyle : null,
                           onCameraMove: (CameraPosition position) {
                             print('📍 Cámara moviéndose a: ${position.target}');
                           },

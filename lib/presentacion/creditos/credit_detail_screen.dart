@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../negocio/providers/credit_provider.dart';
-// imports removed: websocket_provider and auth_provider were unused in this screen
+import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/credito.dart';
 import '../../ui/widgets/client_category_chip.dart';
 import '../widgets/payment_dialog.dart';
@@ -14,6 +14,7 @@ import '../../ui/widgets/loading_overlay.dart';
 import '../cliente/location_picker_screen.dart';
 import '../widgets/profile_image_widget.dart';
 import '../widgets/payment_schedule_calendar.dart';
+import 'package:cobrador_app/presentacion/creditos/payment_history_screen.dart';
 
 class CreditDetailScreen extends ConsumerStatefulWidget {
   final Credito credito;
@@ -89,26 +90,39 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Detalles del Crédito'),
+        title: Text('Crédito #'+currentCredit.id.toString()),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () => _editCredit(currentCredit),
-            tooltip: 'Editar Crédito',
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'Historial de pagos',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PaymentHistoryScreen(creditId: currentCredit.id),
+                ),
+              );
+            },
           ),
-          PopupMenuButton<String>(
-            onSelected: (value) => _handleMenuAction(value, currentCredit),
-            itemBuilder: (context) => [
-              const PopupMenuItem<String>(
-                value: 'delete',
-                child: Text('Eliminar Crédito'),
-              ),
-              const PopupMenuItem<String>(
-                value: 'cancel',
-                child: Text('Anular Crédito'),
-              ),
-            ],
-          ),
+          if (ref.watch(authProvider).isManager) ...[
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => _editCredit(currentCredit),
+              tooltip: 'Editar Crédito',
+            ),
+            PopupMenuButton<String>(
+              onSelected: (value) => _handleMenuAction(value, currentCredit),
+              itemBuilder: (context) => [
+                const PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Text('Eliminar Crédito'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'cancel',
+                  child: Text('Anular Crédito'),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
       body: Stack(
@@ -509,6 +523,11 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                         _buildInfoChip(
                           'N° Cuotas',
                           (_creditSummary!['total_installments'] ?? '')
+                              .toString(),
+                        ),
+                        _buildInfoChip(
+                          'Pagadas',
+                          (_creditSummary!['completed_installments_count'] ?? '')
                               .toString(),
                         ),
                         _buildInfoChip(

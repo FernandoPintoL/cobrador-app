@@ -26,6 +26,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _lastShownError;
   String? _savedIdentifier;
 
+  // Devuelve el widget destino (dashboard) según los roles del usuario.
+  // Asume que el primer rol relevante determina la pantalla.
+  Widget _getDestinationForRoles(List<String> roles) {
+    if (roles.contains('admin')) {
+      return const AdminDashboardScreen();
+    }
+    if (roles.contains('manager')) {
+      return const ManagerDashboardScreen();
+    }
+    if (roles.contains('cobrador') || roles.contains('collector')) {
+      // 'cobrador' o 'collector' -> pantalla de cobrador
+      return const CobradorDashboardScreen();
+    }
+    // Por defecto, usar la pantalla de tipos de crédito para roles no reconocidos
+    return const CreditTypeScreen();
+  }
+
   @override
   void dispose() {
     _emailOrPhoneController.dispose();
@@ -55,17 +72,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // Escuchar cambios en AuthState para actualizar errores y el estado de savedIdentifier
     ref.listen<AuthState>(authProvider, (previous, next) async {
       // Si el usuario se autenticó, navegar al dashboard correspondiente según su rol
-      if (mounted && next.isAuthenticated && next.usuario != null && (previous == null || !previous.isAuthenticated)) {
-        // Determinar ruta/destino por rol principal
-        Widget destination;
+      if (mounted &&
+          next.isAuthenticated &&
+          next.usuario != null &&
+          (previous == null || !previous.isAuthenticated)) {
         final roles = next.usuario!.roles;
-        if (roles.contains('admin')) {
-          destination = const AdminDashboardScreen();
-        } else if (roles.contains('manager')) {
-          destination = const CreditTypeScreen();
-        } else {
-          destination = const CreditTypeScreen();
-        }
+        final destination = _getDestinationForRoles(roles);
         // Reemplazar la pila para evitar volver al login
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => destination),
@@ -95,7 +107,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.error!, style: const TextStyle(color: Colors.white)),
+            content: Text(
+              next.error!,
+              style: const TextStyle(color: Colors.white),
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
             action: SnackBarAction(
@@ -123,6 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    // ignore: unused_local_variable
     final borderColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
 
     return Scaffold(
@@ -138,11 +154,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 24.0,
+                    horizontal: 16.0,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-
                       /*Text(
                         'facebook',
                         style: TextStyle(
@@ -153,7 +171,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           letterSpacing: -1,
                         ),
                       ),*/
-
                       TextButton(
                         onPressed: () async {
                           final storage = StorageService();
@@ -165,13 +182,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             });
                           }
                         },
-                        child: const Text('facebook', style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: const Color(0xFF1877F2),
-                          fontSize: 44,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -1,
-                        )),
+                        child: const Text(
+                          'facebook',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: const Color(0xFF1877F2),
+                            fontSize: 44,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -1,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
 
@@ -180,7 +200,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? onSurface.withValues(alpha: 0.9) : const Color(0xFF1C1E21),
+                          color: isDark
+                              ? onSurface.withValues(alpha: 0.9)
+                              : const Color(0xFF1C1E21),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -261,7 +283,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                               const SizedBox(height: 16),
                             ],*/
-
                             TextFormField(
                               controller: _passwordController,
                               decoration: InputDecoration(
@@ -302,7 +323,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 builder: (context, ref, child) {
                                   final authState = ref.watch(authProvider);
                                   return ElevatedButton(
-                                    onPressed: authState.isLoading ? null : _handleLogin,
+                                    onPressed: authState.isLoading
+                                        ? null
+                                        : _handleLogin,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF1877F2),
                                       foregroundColor: Colors.white,
@@ -316,11 +339,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                             height: 20,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
                                             ),
                                           )
                                         : Text(
-                                            _savedIdentifier != null ? 'Continuar' : 'Iniciar sesión',
+                                            _savedIdentifier != null
+                                                ? 'Continuar'
+                                                : 'Iniciar sesión',
                                             style: const TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.w600,
@@ -345,7 +373,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _handleLogin() async {
-    if (_savedIdentifier == null && !(_formKey.currentState?.validate() ?? false)) {
+    if (_savedIdentifier == null &&
+        !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
@@ -359,9 +388,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    final emailOrPhone = _savedIdentifier ?? _emailOrPhoneController.text.trim();
+    final emailOrPhone =
+        _savedIdentifier ?? _emailOrPhoneController.text.trim();
     final password = _passwordController.text;
 
-    await ref.read(authProvider.notifier).login(emailOrPhone, password, rememberMe: _rememberMe);
+    await ref
+        .read(authProvider.notifier)
+        .login(emailOrPhone, password, rememberMe: _rememberMe);
   }
 }

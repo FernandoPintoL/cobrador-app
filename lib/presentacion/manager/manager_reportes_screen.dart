@@ -21,7 +21,7 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _cargarDatos();
@@ -158,7 +158,7 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
             onPressed: _cargarDatos,
             tooltip: 'Actualizar',
           ),
-          IconButton(
+          /* IconButton(
             icon: const Icon(Icons.analytics),
             tooltip: 'Generador de reportes',
             onPressed: () => Navigator.push(
@@ -167,7 +167,7 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
                 builder: (context) => const ReportsScreen(userRole: 'manager'),
               ),
             ),
-          ),
+          ), */
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -186,6 +186,10 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
               icon: Icon(Icons.business, color: Colors.white),
               text: 'Clientes',
             ),
+            Tab(
+              icon: Icon(Icons.analytics, color: Colors.white),
+              text: 'Generador',
+            ),
           ],
         ),
       ),
@@ -195,6 +199,8 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
           _buildResumenTab(managerState),
           _buildCobradoresTab(managerState),
           _buildClientesTab(managerState),
+          // Embebemos ReportsScreen para que el manager tenga el generador como una pestaña
+          const ReportsScreen(userRole: 'manager'),
         ],
       ),
     );
@@ -213,7 +219,7 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Estadísticas principales
-          const Text(
+          /* const Text(
             'Estadísticas Generales',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
@@ -252,7 +258,7 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
               ),
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 32), */
 
           // Distribución de clientes por cobrador
           const Text(

@@ -12,7 +12,7 @@ import 'presentacion/pantallas/login_screen.dart';
 import 'presentacion/superadmin/admin_dashboard_screen.dart';
 import 'presentacion/manager/manager_dashboard_screen.dart';
 import 'presentacion/cobrador/cobrador_dashboard_screen.dart';
-import 'presentacion/creditos/credit_type_screen.dart';
+// import 'presentacion/creditos/credit_type_screen.dart';
 
 Future<void> main() async {
   // Configurar logging para debug
@@ -145,29 +145,34 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       _initialized = true;
     }
 
-    // Escuchar cambios en el estado de autenticación
+    // Escuchar cambios en el estado de autenticación.
+    // Redirigimos siempre al login cuando el estado ya está inicializado y
+    // el usuario no está autenticado (esto cubre auto-logout y condiciones
+    // de carrera donde el build puede volver a mostrar un dashboard).
     ref.listen<AuthState>(authProvider, (previous, next) {
+      // Caso: se autenticó ahora
       if (next.isAuthenticated &&
           next.usuario != null &&
           (previous == null || !previous.isAuthenticated)) {
-        // Usuario se autenticó, WebSocket se conecta automáticamente
         debugPrint(
           '🔌 Usuario autenticado, WebSocket se conectará automáticamente...',
         );
-      } else if (previous?.isAuthenticated == true && !next.isAuthenticated) {
-        // Usuario cerró sesión o perdió sesión, redirigir a Login y limpiar el stack
+        return;
+      }
+
+      // Si el estado ya está inicializado y NO está autenticado, forzar login
+      if (!next.isAuthenticated && next.isInitialized) {
         debugPrint(
-          '🔌 Usuario cerró o perdió sesión, WebSocket se desconectará automáticamente...',
+          '🔌 Estado NO autenticado detectado (isInitialized=${next.isInitialized}) - redirigiendo a Login',
         );
-        debugPrint('🚪 Usuario sin sesión - Redirigiendo a LoginScreen');
-        // Evitar navegación si ya estamos en LoginScreen
+
         final ctx = MyApp.navigatorKey.currentContext;
         final currentRoute = ctx != null
             ? ModalRoute.of(ctx)?.settings.name
             : _navigatorObserver?.lastRouteName;
+
         if (currentRoute != '/login' && !_navigatingToLogin) {
           _navigatingToLogin = true;
-          // Navegar de forma segura usando navigatorKey
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final nav = MyApp.navigatorKey.currentState;
             final ctx = MyApp.navigatorKey.currentContext;
@@ -184,7 +189,6 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
                 );
               }
             }
-            // Permitir nuevas navegaciones después de completar
             _navigatingToLogin = false;
           });
         }
@@ -385,13 +389,13 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         '✅ Usuario es MANAGER - Redirigiendo a CreditTypeScreen (reemplaza dashboard)',
       );
       print('  - Roles del usuario: ${authState.usuario!.roles}');
-      return const CreditTypeScreen();
+      return const ManagerDashboardScreen();
     } else if (authState.isCobrador) {
       print(
         '✅ Usuario es COBRADOR - Redirigiendo a CreditTypeScreen (reemplaza dashboard)',
       );
       print('  - Roles del usuario: ${authState.usuario!.roles}');
-      return const CreditTypeScreen();
+      return const CobradorDashboardScreen();
     } else {
       // Verificar roles individuales como fallback
       print(
@@ -404,10 +408,10 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         return const AdminDashboardScreen();
       } else if (authState.usuario!.tieneRol("manager")) {
         print('✅ Detectado rol manager por verificación individual');
-        return const CreditTypeScreen();
+        return const ManagerDashboardScreen();
       } else if (authState.usuario!.tieneRol("cobrador")) {
         print('✅ Detectado rol cobrador por verificación individual');
-        return const CreditTypeScreen();
+        return const CobradorDashboardScreen();
       } else {
         print('❌ ERROR: No se pudo determinar el rol del usuario');
         print('  - Roles disponibles: ${authState.usuario!.roles}');

@@ -5,8 +5,11 @@ import '../../negocio/providers/auth_provider.dart';
 import '../cliente/clientes_screen.dart';
 import '../pantallas/profile_settings_screen.dart';
 import '../manager/manager_cobradores_screen.dart';
+import '../cajas/cash_balances_list_screen.dart';
+import '../cajas/open_cash_balance_dialog.dart';
 import 'profile_image_widget.dart';
 import 'logout_dialog.dart';
+import '../map/map_screen.dart';
 
 class AppDrawer extends ConsumerWidget {
   final String role;
@@ -173,6 +176,19 @@ class AppDrawer extends ConsumerWidget {
                       );
                     },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.map, color: Colors.teal),
+                    title: const Text('Mapa de clientes'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MapScreen(),
+                        ),
+                      );
+                    },
+                  ),
 
                   // Opción de gestionar cobradores solo para managers
                   if (role == 'manager')
@@ -190,6 +206,43 @@ class AppDrawer extends ConsumerWidget {
                             builder: (context) =>
                                 const ManagerCobradoresScreen(),
                           ),
+                        );
+                      },
+                    ),
+
+                  // Acceso a Cajas para manager/admin/cobrador
+                  if (role == 'manager' || role == 'admin' || role == 'cobrador')
+                    ListTile(
+                      leading: const Icon(
+                        Icons.account_balance_wallet,
+                        color: Colors.brown,
+                      ),
+                      title: const Text('Cajas'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const CashBalancesListScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                  // Acceso rápido para cobrador: Abrir caja
+                  if (role == 'cobrador')
+                    ListTile(
+                      leading: const Icon(
+                        Icons.open_in_new,
+                        color: Colors.deepOrange,
+                      ),
+                      title: const Text('Abrir caja'),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await showDialog(
+                          context: context,
+                          builder: (_) => const OpenCashBalanceDialog(),
                         );
                       },
                     ),

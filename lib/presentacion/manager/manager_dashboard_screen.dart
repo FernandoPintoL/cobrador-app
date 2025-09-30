@@ -8,10 +8,13 @@ import '../../config/role_colors.dart';
 import '../creditos/credit_type_screen.dart';
 import 'manager_cobradores_screen.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
-import 'manager_reportes_screen.dart';
+// import 'manager_reportes_screen.dart';
+import '../reports/reports_screen.dart';
+import '../map/map_screen.dart';
 import '../pantallas/notifications_screen.dart';
-import 'manager_client_assignment_screen.dart';
+// import 'manager_client_assignment_screen.dart'; // removed unused import
 import '../pantallas/profile_settings_screen.dart';
+import '../cajas/cash_balances_list_screen.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -188,50 +191,64 @@ class _ManagerDashboardScreenState
             const SizedBox(height: 24),
 
             // Estadísticas del equipo
-            /*const Text(
+            const Text(
               'Mis estadísticas',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 2.1, // Ratio conservador para evitar overflow
-              children: [
-                _buildStatCard(
-                  context,
-                  'Cobradores Activos',
-                  '${managerState.estadisticas?['total_cobradores'] ?? managerState.cobradoresAsignados.length}',
-                  Icons.person_pin,
-                  Colors.blue,
-                ),
-                _buildStatCard(
-                  context,
-                  'Clientes Asignados',
-                  '${managerState.estadisticas?['total_clientes'] ?? 0}',
-                  Icons.business,
-                  Colors.green,
-                ),
-                _buildStatCard(
-                  context,
-                  'Préstamos Activos',
-                  '${managerState.estadisticas?['total_creditos'] ?? 0}',
-                  Icons.account_balance_wallet,
-                  Colors.orange,
-                ),
-                _buildStatCard(
-                  context,
-                  'Cobros del Mes',
-                  '\$${managerState.estadisticas?['cobros_mes'] ?? 0}',
-                  Icons.attach_money,
-                  Colors.purple,
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final spacing = 12.0;
+                final itemWidth = (constraints.maxWidth - spacing) / 2;
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildStatCard(
+                        context,
+                        'Cobradores Activos',
+                        '${managerState.estadisticas?['total_cobradores'] ?? managerState.cobradoresAsignados.length}',
+                        Icons.person_pin,
+                        Colors.blue,
+                      ),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildStatCard(
+                        context,
+                        'Clientes Asignados',
+                        '${managerState.estadisticas?['total_clientes'] ?? managerState.clientesDelManager.length}',
+                        Icons.business,
+                        Colors.green,
+                      ),
+                    ),
+                    /* SizedBox(
+                      width: itemWidth,
+                      child: _buildStatCard(
+                        context,
+                        'Préstamos Activos',
+                        '${managerState.estadisticas?['total_creditos'] ?? 0}',
+                        Icons.account_balance_wallet,
+                        Colors.orange,
+                      ),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _buildStatCard(
+                        context,
+                        'Cobros del Mes',
+                        '\$${managerState.estadisticas?['cobros_mes'] ?? 0}',
+                        Icons.attach_money,
+                        Colors.purple,
+                      ),
+                    ), */
+                  ],
+                );
+              },
             ),
-            const SizedBox(height: 32),*/
+            const SizedBox(height: 32),
 
             // Funciones de gestión
             const Text(
@@ -247,7 +264,7 @@ class _ManagerDashboardScreenState
                   'Crear, aprobar y gestionar créditos del equipo',
                   Icons.credit_card,
                   Colors.teal,
-                      () => _navigateToCreditManagement(context),
+                  () => _navigateToCreditManagement(context),
                 ),
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
@@ -270,11 +287,29 @@ class _ManagerDashboardScreenState
                 const SizedBox(height: 12),
                 _buildManagerFunctionCard(
                   context,
+                  'Mapa de Clientes',
+                  'Ver clientes en el mapa por estado y cobrador',
+                  Icons.map,
+                  Colors.teal,
+                  () => _navigateToMap(context),
+                ),
+                const SizedBox(height: 12),
+                _buildManagerFunctionCard(
+                  context,
                   'Reportes de Cobradores',
                   'Ver rendimiento y reportes',
                   Icons.analytics,
                   Colors.purple,
                   () => _navigateToCollectorReports(context),
+                ),
+                const SizedBox(height: 12),
+                _buildManagerFunctionCard(
+                  context,
+                  'Cajas',
+                  'Ver y gestionar cajas (abrir/cerrar, filtros)',
+                  Icons.point_of_sale,
+                  Colors.orange,
+                  () => _navigateToCashBalances(context),
                 ),
               ],
             ),
@@ -352,6 +387,51 @@ class _ManagerDashboardScreenState
     );
   }
 
+  Widget _buildStatCard(
+    BuildContext context,
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(10.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 28, color: color),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _navigateToCollectorManagement(BuildContext context) {
     Navigator.push(
       context,
@@ -371,7 +451,9 @@ class _ManagerDashboardScreenState
   void _navigateToCollectorReports(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ManagerReportesScreen()),
+      MaterialPageRoute(
+        builder: (context) => const ReportsScreen(userRole: 'manager'),
+      ),
     );
   }
 
@@ -379,6 +461,20 @@ class _ManagerDashboardScreenState
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CreditTypeScreen()),
+    );
+  }
+
+  void _navigateToCashBalances(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CashBalancesListScreen()),
+    );
+  }
+
+  void _navigateToMap(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MapScreen()),
     );
   }
 }

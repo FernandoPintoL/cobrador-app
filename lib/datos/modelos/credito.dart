@@ -131,7 +131,7 @@ class Credito {
       totalPaid: json['total_paid'] != null
           ? double.tryParse(json['total_paid'].toString())
           : null,
-      completedPaymentsCount: json['completed_payments_count'],
+      completedPaymentsCount: json['completed_installments_count'] ?? json['completed_payments_count'],
       expectedInstallments: json['expected_installments'],
       backendPendingInstallments: json['pending_installments'],
       backendIsOverdue: json['is_overdue'] == 1 || json['is_overdue'] == true,
@@ -396,13 +396,18 @@ class Pago {
   final int creditId;
   final int? cobradorId;
   final double amount;
-  final String? paymentType; // 'cash', 'transfer', etc.
+  final String? paymentType; // 'cash', 'transfer', etc. (mapeado también desde payment_method)
   final String status; // 'pending', 'completed', 'failed'
   final DateTime paymentDate;
   final String? notes;
   final int? installmentNumber;
   final DateTime createdAt;
   final DateTime updatedAt;
+  // Extras del backend para historial
+  final double? latitude;
+  final double? longitude;
+  final int? receivedBy;
+  final Usuario? cobrador; // info del cobrador que recibió el pago
 
   Pago({
     required this.id,
@@ -416,15 +421,24 @@ class Pago {
     required this.createdAt,
     required this.updatedAt,
     this.installmentNumber,
+    this.latitude,
+    this.longitude,
+    this.receivedBy,
+    this.cobrador,
   });
 
   factory Pago.fromJson(Map<String, dynamic> json) {
+    double? _tryDouble(dynamic v) {
+      if (v == null) return null;
+      return double.tryParse(v.toString());
+    }
+
     return Pago(
       id: json['id'] ?? 0,
       creditId: json['credit_id'] ?? 0,
       cobradorId: json['cobrador_id'],
       amount: double.tryParse(json['amount'].toString()) ?? 0.0,
-      paymentType: json['payment_type'],
+      paymentType: json['payment_type'] ?? json['payment_method'],
       status: json['status'] ?? 'completed',
       paymentDate:
           DateTime.tryParse(json['payment_date'] ?? '') ?? DateTime.now(),
@@ -433,6 +447,12 @@ class Pago {
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       installmentNumber:
           json['installment_number'] ?? json['numero_cuota'] ?? 0,
+      latitude: _tryDouble(json['latitude']),
+      longitude: _tryDouble(json['longitude']),
+      receivedBy: json['received_by'],
+      cobrador: json['cobrador'] is Map<String, dynamic>
+          ? Usuario.fromJson(json['cobrador'])
+          : null,
     );
   }
 
@@ -449,6 +469,10 @@ class Pago {
       'installment_number': installmentNumber,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'received_by': receivedBy,
+      // No serializamos 'cobrador' completo aquí por simplicidad
     };
   }
 }

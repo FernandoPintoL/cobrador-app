@@ -7,13 +7,15 @@ import '../../negocio/providers/profile_image_provider.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/profile_image_widget.dart';
-import '../widgets/websocket_widgets.dart';
+// import '../widgets/websocket_widgets.dart'; // removed unused import
 import '../pantallas/profile_settings_screen.dart';
 import '../pantallas/notifications_screen.dart';
 import '../widgets/logout_dialog.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import '../creditos/credit_type_screen.dart';
 import '../reports/reports_screen.dart';
+import '../map/map_screen.dart';
+import '../cajas/cash_balances_list_screen.dart';
 // import 'package:intl/intl.dart'; // no usado
 
 class CobradorDashboardScreen extends ConsumerStatefulWidget {
@@ -199,6 +201,73 @@ class _CobradorDashboardScreenState
                 ),
               ),
               const SizedBox(height: 24),
+              // Estadísticas del cobrador
+              const Text(
+                'Mis estadísticas',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Builder(
+                builder: (context) {
+                  final creditState = ref.watch(creditProvider);
+                  final stats = creditState.stats;
+
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final spacing = 12.0;
+                      final itemWidth = (constraints.maxWidth - spacing) / 2;
+                      return Wrap(
+                        spacing: spacing,
+                        runSpacing: spacing,
+                        children: [
+                          SizedBox(
+                            width: itemWidth,
+                            child: _buildStatCard(
+                              context,
+                              'Créditos Totales',
+                              '${stats?.totalCredits ?? 0}',
+                              Icons.credit_score,
+                              Colors.blue,
+                            ),
+                          ),
+                          SizedBox(
+                            width: itemWidth,
+                            child: _buildStatCard(
+                              context,
+                              'Créditos Activos',
+                              '${stats?.activeCredits ?? 0}',
+                              Icons.play_circle,
+                              Colors.green,
+                            ),
+                          ),
+                          /* SizedBox(
+                            width: itemWidth,
+                            child: _buildStatCard(
+                              context,
+                              'Monto Total',
+                              '\$${stats?.totalAmount.toStringAsFixed(2) ?? '0.00'}',
+                              Icons.attach_money,
+                              Colors.orange,
+                            ),
+                          ),
+                          SizedBox(
+                            width: itemWidth,
+                            child: _buildStatCard(
+                              context,
+                              'Balance Total',
+                              '\$${stats?.totalBalance.toStringAsFixed(2) ?? '0.00'}',
+                              Icons.account_balance_wallet,
+                              Colors.purple,
+                            ),
+                          ), */
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
+
+              const SizedBox(height: 24),
 
               // Acciones rápidas
               Text(
@@ -232,6 +301,23 @@ class _CobradorDashboardScreenState
                     () => _navigateToClientManagement(context),
                   ),
                   const SizedBox(height: 12),
+                  _buildCobradorActionCard(
+                    context,
+                    'Mapa de Clientes',
+                    'Ver mis clientes en el mapa',
+                    Icons.map,
+                    Colors.teal,
+                    () => _navigateToMap(context),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildCobradorActionCard(
+                    context,
+                    'Cajas',
+                    'Abrir, ver y cerrar mi caja del día',
+                    Icons.point_of_sale,
+                    Colors.orange,
+                    () => _navigateToCashBalances(context),
+                  ),
                 ],
               ),
               const SizedBox(height: 20), // Espacio adicional al final
@@ -373,6 +459,13 @@ class _CobradorDashboardScreenState
     );
   }
 
+  void _navigateToCashBalances(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CashBalancesListScreen()),
+    );
+  }
+
   void _navigateToDailyRoute(BuildContext context) {
     // TODO: Implementar ruta diaria
     ScaffoldMessenger.of(context).showSnackBar(
@@ -408,4 +501,14 @@ class _CobradorDashboardScreenState
       MaterialPageRoute(builder: (context) => const ProfileSettingsScreen()),
     );
   }
+
+  void _navigateToMap(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MapScreen()),
+    );
+  }
+
+  // NOTE: the above navigation helpers may not be referenced directly yet but
+  // are kept for future feature links and to maintain parity with manager UI.
 }

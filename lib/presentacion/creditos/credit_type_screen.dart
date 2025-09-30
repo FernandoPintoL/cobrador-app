@@ -52,6 +52,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   double? _overdueAmountMin; // Monto mínimo atrasado
   double? _overdueAmountMax; // Monto máximo atrasado
 
+  // Filtro por categoría de cliente
+  final Set<String> _clientCategories = {};
+
   // Nuevas variables para filtros rápidos
   bool _showQuickFilters = false;
   final ScrollController _quickFiltersController = ScrollController();
@@ -111,6 +114,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       _isOverdue = null;
       _overdueAmountMin = null;
       _overdueAmountMax = null;
+      _clientCategories.clear();
     });
     _loadInitialData();
   }
@@ -126,7 +130,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         _search.isNotEmpty ||
         _isOverdue != null ||
         _overdueAmountMin != null ||
-        _overdueAmountMax != null;
+        _overdueAmountMax != null ||
+        _clientCategories.isNotEmpty;
   }
 
   void _loadInitialData() {
@@ -568,7 +573,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           ],
         ),
       ),
-      drawer: AppDrawer(role: currentUserRole),
+      // drawer: AppDrawer(role: currentUserRole),
       body: Stack(
         children: [
           Column(
@@ -736,14 +741,12 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               spacing: 8,
               runSpacing: 8,
               children: [
-                chip('busqueda_general', 'General', Icons.search),
-                chip('cliente', 'Cliente', Icons.person),
-                chip('credit_id', 'ID Crédito', Icons.numbers),
                 chip('estado', 'Estado', Icons.verified),
                 chip('frecuencia', 'Frecuencia', Icons.event_repeat),
                 chip('montos', 'Montos', Icons.attach_money),
                 chip('fechas', 'Fechas', Icons.date_range),
                 chip('cuotas_atrasadas', 'Cuotas Atrasadas', Icons.money_off),
+                chip('categoria_cliente', 'Categoría', Icons.category),
               ],
             ),
             const SizedBox(height: 16),
@@ -1043,15 +1046,44 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
             ),
           ],
         );
+      case 'categoria_cliente':
+        final allCredits = ref.watch(creditProvider).credits;
+        final available = allCredits
+            .map((c) => c.client?.clientCategory)
+            .where((e) => e != null && (e as String).isNotEmpty)
+            .cast<String>()
+            .toSet()
+            .toList()
+          ..sort();
+        final categories = available.isNotEmpty ? available : ['A', 'B', 'C'];
+        return Wrap(
+          spacing: 8,
+          children: [
+            for (final cat in categories)
+              FilterChip(
+                label: Text(cat),
+                selected: _clientCategories.contains(cat),
+                onSelected: (v) => setState(() {
+                  if (v) {
+                    _clientCategories.add(cat);
+                  } else {
+                    _clientCategories.remove(cat);
+                  }
+                }),
+              ),
+          ],
+        );
       default:
-        return TextField(
-          key: const ValueKey('general'),
-          controller: _specificController,
-          decoration: const InputDecoration(
-            labelText: 'Buscar en todos los campos (general)',
-            prefixIcon: Icon(Icons.search),
-            border: OutlineInputBorder(),
-          ),
+        return Row(
+          children: const [
+            Icon(Icons.info_outline, size: 16),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Usa la barra superior para buscar. Aquí solo configura filtros avanzados.',
+              ),
+            ),
+          ],
         );
     }
   }
@@ -1092,9 +1124,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         // Se maneja por parámetros dedicados (_isOverdue, _overdueAmountMin, _overdueAmountMax)
         return _search.isEmpty ? null : _search;
       default:
-        final v = _specificController.text.trim();
-        if (v.isEmpty) return null;
-        return _normalizeQuery(v);
+        // No aplicar búsqueda desde filtros avanzados; usar solo la barra superior
+        return null;
     }
   }
 
@@ -1384,7 +1415,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               '${_selectedCobradorId != null ? ', Cobrador: $_selectedCobradorId' : ''}'
               '${_isOverdue != null ? ', Cuotas atrasadas: ${_isOverdue! ? 'Sí' : 'No'}' : ''}'
               '${_overdueAmountMin != null ? ', Monto atrasado mín.: $_overdueAmountMin' : ''}'
-              '${_overdueAmountMax != null ? ', Monto atrasado máx.: $_overdueAmountMax' : ''}',
+              '${_overdueAmountMax != null ? ', Monto atrasado máx.: $_overdueAmountMax' : ''}'
+              '${_clientCategories.isNotEmpty ? ', Categorías: ${_clientCategories.join(', ')}' : ''}',
               style: TextStyle(
                 fontSize: 14,
                 color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -1411,7 +1443,16 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   Widget _buildCreditsList(List<Credito> credits, String listType) {
     final creditState = ref.watch(creditProvider);
 
-    if (credits.isEmpty) {
+    // Aplicar filtro por categorías de cliente (solo en UI)
+    List<Credito> filtered = credits;
+    if (_clientCategories.isNotEmpty) {
+      filtered = credits.where((c) {
+        final cat = c.client?.clientCategory;
+        return cat != null && _clientCategories.contains(cat);
+      }).toList();
+    }
+
+    if (filtered.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1451,10 +1492,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       },
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: credits.length + 1,
+        itemCount: filtered.length + 1,
         itemBuilder: (context, index) {
-          if (index < credits.length) {
-            final credit = credits[index];
+          if (index < filtered.length) {
+            final credit = filtered[index];
             return _buildCreditCard(credit, listType);
           }
           // Footer
@@ -2069,16 +2110,21 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   ),
                   _buildInfoChip(
                     'Pagado',
-                    'Bs. ${NumberFormat('#,##0.00').format((credit.totalAmount ?? credit.amount) - credit.balance)}',
+                    'Bs. ${NumberFormat('#,##0.00').format(credit.totalPaid ?? ((credit.totalAmount ?? credit.amount) - credit.balance))}',
                   ),
                   if (credit.installmentAmount != null)
                     _buildInfoChip(
                       'Cuota',
                       'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount)}',
                     ),
+                  // Mostrar valores calculados por el backend para cuotas
                   _buildInfoChip(
-                    'Cuotas',
-                    '${credit.paidInstallments}/${credit.totalInstallments}',
+                    'Pagadas',
+                    '${credit.completedPaymentsCount ?? credit.paidInstallments}',
+                  ),
+                  _buildInfoChip(
+                    'Por pagar',
+                    '${credit.backendPendingInstallments ?? credit.pendingInstallments}',
                   ),
                   _buildInfoChip('Frecuencia', credit.frequencyLabel),
                 ],
