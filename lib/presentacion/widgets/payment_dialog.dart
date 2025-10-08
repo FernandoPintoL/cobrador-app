@@ -416,60 +416,108 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
           const SizedBox(height: 16),
           // Si el usuario es cobrador, mostrar estado de caja y opción para abrirla
           if (isCobrador) ...[
-            if (isCajaOpenChecking)
-              Row(
-                children: const [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 8),
-                  Text('Verificando caja...'),
-                ],
-              )
-            else if (!isCajaOpen)
-              Card(
-                color: Colors.orange.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'No se detectó caja abierta para hoy. Abra la caja antes de procesar cobros.',
-                          style: TextStyle(fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: isCajaOpenChecking ? null : _openCajaManual,
-                        child: const Text('Abrir caja'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
+            Container(
+              decoration: BoxDecoration(
+                color: isCajaOpenChecking
+                    ? Colors.blue.shade50
+                    : (!isCajaOpen ? Colors.orange.shade50 : Colors.green.shade50),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isCajaOpenChecking
+                      ? Colors.blue.shade200
+                      : (!isCajaOpen ? Colors.orange.shade300 : Colors.green.shade300),
+                  width: 1,
                 ),
-              )
-            else
-              Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Caja abierta',
-                    style: TextStyle(color: Colors.green.shade700),
-                  ),
-                ],
               ),
-            const SizedBox(height: 12),
+              padding: const EdgeInsets.all(12),
+              child: isCajaOpenChecking
+                  ? Row(
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Verificando estado de caja...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                      ],
+                    )
+                  : (!isCajaOpen
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: Colors.orange.shade700,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Caja no abierta',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.orange.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Debe abrir la caja antes de procesar pagos. Los pagos se registrarán en la caja del día actual.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: isCajaOpenChecking ? null : _openCajaManual,
+                                icon: const Icon(Icons.lock_open, size: 18),
+                                label: const Text('Abrir caja ahora'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.orange.shade700,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              color: Colors.green.shade700,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Caja abierta correctamente',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ],
+                        )),
+            ),
+            const SizedBox(height: 16),
           ],
           // Monto del pago
           TextFormField(

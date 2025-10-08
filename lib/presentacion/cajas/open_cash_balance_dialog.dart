@@ -83,79 +83,136 @@ class _OpenCashBalanceDialogState extends ConsumerState<OpenCashBalanceDialog> {
     final auth = ref.watch(authProvider);
     final assignState = ref.watch(cobradorAssignmentProvider);
 
-    return AlertDialog(
-      title: const Text('Abrir caja'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (auth.isAdmin || auth.isManager)
-              DropdownButtonFormField<Usuario>(
-                isExpanded: true,
-                value: _selectedCobrador,
-                decoration: const InputDecoration(
-                  labelText: 'Seleccionar cobrador',
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.lock_open,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Abrir caja',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              if (auth.isAdmin || auth.isManager)
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline,
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: DropdownButtonFormField<Usuario>(
+                    isExpanded: true,
+                    value: _selectedCobrador,
+                    decoration: const InputDecoration(
+                      labelText: 'Seleccionar cobrador',
+                      border: InputBorder.none,
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    items: assignState.cobradores
+                        .map((u) => DropdownMenuItem<Usuario>(
+                              value: u,
+                              child: Text(u.nombre),
+                            ))
+                        .toList(),
+                    onChanged: isProcessing
+                        ? null
+                        : (val) {
+                            setState(() => _selectedCobrador = val);
+                          },
+                    validator: (val) {
+                      if (auth.isAdmin || auth.isManager) {
+                        if (val == null) return 'Seleccione un cobrador';
+                      }
+                      return null;
+                    },
+                  ),
                 ),
-                items: assignState.cobradores
-                    .map((u) => DropdownMenuItem<Usuario>(
-                          value: u,
-                          child: Text(u.nombre),
-                        ))
-                    .toList(),
-                onChanged: isProcessing
-                    ? null
-                    : (val) {
-                        setState(() => _selectedCobrador = val);
-                      },
-                validator: (val) {
-                  if (auth.isAdmin || auth.isManager) {
-                    if (val == null) return 'Seleccione un cobrador';
-                  }
+              if (auth.isAdmin || auth.isManager)
+                const SizedBox(height: 16),
+              TextFormField(
+                controller: initialController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Monto inicial',
+                  hintText: '0.00',
+                  prefixIcon: const Icon(Icons.attach_money),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final parsed = double.tryParse(v.replaceAll(',', '.').trim());
+                  if (parsed == null) return 'Ingrese un número válido';
+                  if (parsed < 0) return 'No puede ser negativo';
                   return null;
                 },
               ),
-            if (auth.isAdmin || auth.isManager)
-              const SizedBox(height: 12),
-            TextFormField(
-              controller: initialController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Monto inicial (opcional)',
+              if (assignState.isLoading && (auth.isAdmin || auth.isManager))
+                const Padding(
+                  padding: EdgeInsets.only(top: 12.0),
+                  child: LinearProgressIndicator(minHeight: 3),
+                ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: isProcessing ? null : () => Navigator.of(context).pop(false),
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: isProcessing ? null : _submit,
+                    icon: isProcessing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check, size: 20),
+                    label: const Text('Abrir'),
+                  ),
+                ],
               ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return null;
-                final parsed = double.tryParse(v.replaceAll(',', '.').trim());
-                if (parsed == null) return 'Ingrese un número válido';
-                if (parsed < 0) return 'No puede ser negativo';
-                return null;
-              },
-            ),
-            if (assignState.isLoading && (auth.isAdmin || auth.isManager))
-              const Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: LinearProgressIndicator(minHeight: 2),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: isProcessing ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: isProcessing ? null : _submit,
-          child: isProcessing
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Abrir'),
-        ),
-      ],
     );
   }
 }

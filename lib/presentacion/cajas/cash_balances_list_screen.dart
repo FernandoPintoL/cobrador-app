@@ -151,82 +151,151 @@ class _CashBalancesListScreenState
       ),
       body: Column(
         children: [
-          // Barra de filtros
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              children: [
-                if (isAdminOrManager)
-                  DropdownButtonFormField<Usuario>(
-                    isExpanded: true,
-                    value: _selectedCobrador,
-                    decoration: const InputDecoration(
-                      labelText: 'Cobrador',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: assignState.cobradores
-                        .map((u) => DropdownMenuItem<Usuario>(
-                              value: u,
-                              child: Text(u.nombre),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedCobrador = val),
-                  ),
-                if (isAdminOrManager) const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.date_range),
-                        label: Text(_dateFrom == null
-                            ? 'Desde'
-                            : 'Desde: ${_dateFrom}'),
-                        onPressed: () => _pickDate(from: true),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.date_range),
-                        label: Text(_dateTo == null
-                            ? 'Hasta'
-                            : 'Hasta: ${_dateTo}'),
-                        onPressed: () => _pickDate(from: false),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed: state.isLoading ? null : _buscar,
-                      icon: const Icon(Icons.search),
-                      label: const Text('Buscar'),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: state.isLoading ? null : _limpiar,
-                      icon: const Icon(Icons.clear),
-                      label: const Text('Limpiar'),
-                    ),
-                  ],
+          // Barra de filtros modernizada
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                  width: 1,
                 ),
-                if (state.errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      state.errorMessage!,
-                      style: const TextStyle(color: Colors.red),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  if (isAdminOrManager)
+                    Card(
+                      elevation: 0,
+                      color: Theme.of(context).colorScheme.surface,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        child: DropdownButtonFormField<Usuario>(
+                          isExpanded: true,
+                          value: _selectedCobrador,
+                          decoration: const InputDecoration(
+                            labelText: 'Cobrador',
+                            border: InputBorder.none,
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                          items: assignState.cobradores
+                              .map((u) => DropdownMenuItem<Usuario>(
+                                    value: u,
+                                    child: Text(u.nombre),
+                                  ))
+                              .toList(),
+                          onChanged: (val) => setState(() => _selectedCobrador = val),
+                        ),
+                      ),
                     ),
+                  if (isAdminOrManager) const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            _dateFrom ?? 'Desde',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          onPressed: () => _pickDate(from: true),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            _dateTo ?? 'Hasta',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          onPressed: () => _pickDate(from: false),
+                        ),
+                      ),
+                    ],
                   ),
-              ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: state.isLoading ? null : _buscar,
+                          icon: const Icon(Icons.search),
+                          label: const Text('Buscar'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: state.isLoading ? null : _limpiar,
+                          icon: const Icon(Icons.clear),
+                          label: const Text('Limpiar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (state.errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12.0),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: Theme.of(context).colorScheme.error,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                state.errorMessage!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           if (state.isLoading)
-            const LinearProgressIndicator(minHeight: 2),
+            const LinearProgressIndicator(minHeight: 3),
           Expanded(
             child: state.items.isEmpty && !state.isLoading
-                ? const Center(child: Text('Sin resultados'))
-                : ListView.separated(
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Sin resultados',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
                     itemCount: state.items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final item = state.items[index] as Map<String, dynamic>;
                       final date = item['date'] ?? '';
@@ -244,45 +313,176 @@ class _CashBalancesListScreenState
                         final parsed = double.tryParse(initialRaw?.toString() ?? '');
                         initial = parsed != null ? parsed.toStringAsFixed(2) : (initialRaw?.toString() ?? '0.00');
                       }
-                      return ListTile(
-                        title: Text('$date — $cobrador'),
-                        subtitle: Text('Inicial: $initial • Estado: $status'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => CashBalanceDetailScreen(
-                                  id: (item['id'] as int)),
+
+                      final isOpen = status.toLowerCase() == 'open';
+                      final statusColor = isOpen
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.tertiary;
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                            width: 1,
+                          ),
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => CashBalanceDetailScreen(
+                                    id: (item['id'] as int)),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        isOpen ? Icons.lock_open : Icons.lock,
+                                        color: statusColor,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            cobrador,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.calendar_today,
+                                                size: 14,
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                date,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        status,
+                                        style: TextStyle(
+                                          color: statusColor,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                const Divider(height: 1),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Monto inicial: ',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                        Text(
+                                          '\$$initial',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Icon(
+                                      Icons.chevron_right,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       );
                     },
                   ),
           ),
-          // Paginación
+          // Paginación mejorada
           if (state.lastPage > 1)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                border: Border(
+                  top: BorderSide(
+                    color: Theme.of(context).dividerColor,
+                    width: 1,
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Página ${state.currentPage} de ${state.lastPage} (Total: ${state.total})'),
+                  Text(
+                    'Página ${state.currentPage} de ${state.lastPage}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   Row(
                     children: [
-                      IconButton(
+                      FilledButton.tonal(
                         onPressed: state.currentPage > 1 && !state.isLoading
                             ? () => _cambiarPagina(state.currentPage - 1)
                             : null,
-                        icon: const Icon(Icons.chevron_left),
-                        tooltip: 'Anterior',
+                        child: const Icon(Icons.chevron_left, size: 20),
                       ),
-                      IconButton(
+                      const SizedBox(width: 8),
+                      FilledButton.tonal(
                         onPressed: state.currentPage < state.lastPage && !state.isLoading
                             ? () => _cambiarPagina(state.currentPage + 1)
                             : null,
-                        icon: const Icon(Icons.chevron_right),
-                        tooltip: 'Siguiente',
+                        child: const Icon(Icons.chevron_right, size: 20),
                       ),
                     ],
                   ),

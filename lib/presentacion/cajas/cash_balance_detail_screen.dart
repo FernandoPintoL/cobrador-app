@@ -67,23 +67,130 @@ class _CashBalanceDetailScreenState
       body: state.isLoading
           ? const Center(child: CircularProgressIndicator())
           : detail == null
-          ? const Center(child: Text('No hay detalle'))
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No hay detalle',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            )
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Fecha: ${detail['cash_balance']?['date'] ?? ''}'),
-                  Text(
-                    'Cobrador: ${detail['cash_balance']?['cobrador_name'] ?? detail['cash_balance']?['cobrador_id'] ?? ''}',
+                  // Card de información general
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                        width: 1,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  Icons.account_balance_wallet,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Información de Caja',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      detail['cash_balance']?['cobrador_name'] ?? detail['cash_balance']?['cobrador_id']?.toString() ?? '—',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Divider(height: 1),
+                          const SizedBox(height: 16),
+                          _buildInfoRow(
+                            context,
+                            Icons.calendar_today,
+                            'Fecha',
+                            detail['cash_balance']?['date'] ?? '—',
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoRow(
+                            context,
+                            Icons.flag_outlined,
+                            'Estado',
+                            detail['cash_balance']?['status'] ?? '—',
+                            valueColor: (detail['cash_balance']?['status']?.toString().toLowerCase() == 'open')
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.tertiary,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  Text('Estado: ${detail['cash_balance']?['status'] ?? ''}'),
+                  const SizedBox(height: 16),
+
+                  // Sección de Pagos
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.payments_outlined,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Pagos',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Pagos:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
                   if (detail['payments'] is List && (detail['payments'] as List).isNotEmpty)
                     ...((detail['payments'] as List).map(
                       (p) {
@@ -101,23 +208,104 @@ class _CashBalanceDetailScreenState
                         final creditInfo = (p['credit'] is Map)
                             ? '#${p['credit']['id']?.toString() ?? ''}'
                             : (p['credit_id'] != null ? '#${p['credit_id']}' : '');
-                        return ListTile(
-                          leading: const Icon(Icons.payments_outlined),
-                          title: Text('Pago #${p['id']} — $amountStr ${clientName.isNotEmpty ? '• $clientName' : ''}'),
-                          subtitle: Text(
-                            '${p['payment_method'] ?? ''} - ${p['payment_date'] ?? ''} ${creditInfo.isNotEmpty ? '• Crédito $creditInfo' : ''}',
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.outlineVariant,
+                              width: 1,
+                            ),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.attach_money,
+                                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              '\$$amountStr',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (clientName.isNotEmpty)
+                                  Text(clientName),
+                                Text(
+                                  '${p['payment_method'] ?? ''} - ${p['payment_date'] ?? ''}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                if (creditInfo.isNotEmpty)
+                                  Text(
+                                    'Crédito $creditInfo',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         );
                       },
                     ))
                   else
-                    const Text('Sin pagos'),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Créditos:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    Card(
+                      elevation: 0,
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Sin pagos registrados',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+
+                  // Sección de Créditos
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.request_page_outlined,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Créditos',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   if (detail['credits'] is List && (detail['credits'] as List).isNotEmpty)
                     ...((detail['credits'] as List).map(
                       (c) {
@@ -132,21 +320,96 @@ class _CashBalanceDetailScreenState
                         final clientName = (c['client'] is Map)
                             ? (c['client']['name']?.toString() ?? '')
                             : (c['client_name']?.toString() ?? '');
-                        return ListTile(
-                          leading: const Icon(Icons.request_page_outlined),
-                          title: Text('Crédito #${c['id']} — $amountStr ${clientName.isNotEmpty ? '• $clientName' : ''}'),
-                          subtitle: Text('${c['created_at'] ?? ''}'),
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.outlineVariant,
+                              width: 1,
+                            ),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.tertiaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.description_outlined,
+                                color: Theme.of(context).colorScheme.onTertiaryContainer,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              '\$$amountStr',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (clientName.isNotEmpty)
+                                  Text(clientName),
+                                Text(
+                                  c['created_at'] ?? '',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
                         );
                       },
                     ))
                   else
-                    const Text('Sin créditos'),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Conciliación:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    Card(
+                      elevation: 0,
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Sin créditos registrados',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+
+                  // Sección de Conciliación
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.account_balance_outlined,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Conciliación',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Builder(builder: (_) {
                     final rec = detail['reconciliation'] as Map?;
                     final expected = rec?['expected_final'];
@@ -163,27 +426,76 @@ class _CashBalanceDetailScreenState
                     final actualStr = fmt(actual);
                     final diffStr = fmt(diff);
                     return Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isBalanced
+                              ? Colors.green.shade300
+                              : Colors.red.shade300,
+                          width: 2,
+                        ),
+                      ),
                       color: isBalanced ? Colors.green.shade50 : Colors.red.shade50,
                       child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Esperado: $expectedStr'),
-                                  Text('Final reportado: $actualStr'),
-                                  Text('Diferencia: $diffStr'),
-                                ],
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isBalanced
+                                        ? Colors.green.shade100
+                                        : Colors.red.shade100,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isBalanced ? Icons.check_circle : Icons.warning,
+                                        color: isBalanced ? Colors.green.shade700 : Colors.red.shade700,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        isBalanced ? 'Cuadrado' : 'Con Diferencia',
+                                        style: TextStyle(
+                                          color: isBalanced ? Colors.green.shade700 : Colors.red.shade700,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            Chip(
-                              label: Text(isBalanced ? 'Cuadrado' : 'Diferencia'),
-                              backgroundColor: isBalanced
-                                  ? Colors.green.shade200
-                                  : Colors.red.shade200,
+                            const SizedBox(height: 16),
+                            const Divider(height: 1),
+                            const SizedBox(height: 16),
+                            _buildReconciliationRow(
+                              context,
+                              'Esperado',
+                              '\$$expectedStr',
+                              isBalanced ? Colors.green.shade700 : Colors.red.shade700,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildReconciliationRow(
+                              context,
+                              'Final reportado',
+                              '\$$actualStr',
+                              isBalanced ? Colors.green.shade700 : Colors.red.shade700,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildReconciliationRow(
+                              context,
+                              'Diferencia',
+                              '\$$diffStr',
+                              isBalanced ? Colors.green.shade700 : Colors.red.shade700,
+                              isBold: true,
                             ),
                           ],
                         ),
@@ -193,6 +505,54 @@ class _CashBalanceDetailScreenState
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value, {Color? valueColor}) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: valueColor ?? Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReconciliationRow(BuildContext context, String label, String value, Color color, {bool isBold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 15,
+            color: color,
+            fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            color: color,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }
