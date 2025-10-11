@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,6 +10,7 @@ import '../../datos/modelos/usuario.dart';
 import '../../datos/modelos/credito.dart';
 import '../cliente/cliente_form_screen.dart';
 import '../cliente/location_picker_screen.dart';
+import '../widgets/client_search_widget.dart';
 import '../../ui/widgets/loading_overlay.dart';
 import '../../negocio/utils/schedule_utils.dart';
 
@@ -1085,142 +1085,34 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                       ),
                                     ],
                                   )
-                                : DropdownSearch<Usuario>(
+                                : Container(
                                     key: _clientFieldKey,
-                                    items: clientState.clientes,
-                                    selectedItem: _selectedClient,
-                                    itemAsString: (Usuario u) {
-                                      final cat = (u.clientCategory ?? 'B')
-                                          .toUpperCase();
-                                      return '${u.nombre} (Cat. $cat) - CI: ${u.ci} - ${u.telefono}';
-                                    },
-                                    filterFn: (usuario, searchText) {
-                                      // Buscar por nombre, CI, teléfono o categoría (A/B/C)
-                                      final searchLower = searchText
-                                          .toLowerCase();
-                                      final cat = (usuario.clientCategory ?? '')
-                                          .toLowerCase();
-                                      return usuario.nombre
-                                              .toLowerCase()
-                                              .contains(searchLower) ||
-                                          usuario.ci.toLowerCase().contains(
-                                            searchLower,
-                                          ) ||
-                                          usuario.telefono
-                                              .toLowerCase()
-                                              .contains(searchLower) ||
-                                          cat.contains(searchLower);
-                                    },
-                                    dropdownDecoratorProps:
-                                        DropDownDecoratorProps(
-                                          dropdownSearchDecoration:
-                                              InputDecoration(
-                                                labelText: 'Cliente *',
-                                                border:
-                                                    const OutlineInputBorder(),
-                                                prefixIcon: const Icon(
-                                                  Icons.person,
-                                                ),
-                                                errorText: _clientError,
-                                              ),
-                                        ),
-                                    onChanged: (Usuario? value) {
-                                      setState(() {
-                                        _selectedClient = value;
-                                        _clearFieldError('client');
-                                      });
-                                    },
-                                    validator: (Usuario? value) {
-                                      if (value == null) {
-                                        return 'Por favor selecciona un cliente';
-                                      }
-                                      return null;
-                                    },
-                                    popupProps: PopupProps.menu(
-                                      showSearchBox: true,
-                                      searchFieldProps: TextFieldProps(
-                                        decoration: const InputDecoration(
-                                          labelText:
-                                              'Buscar por nombre, CI o teléfono',
-                                          border: OutlineInputBorder(),
-                                          prefixIcon: Icon(Icons.search),
-                                          hintText: 'Ej: Juan Pérez o 77123456',
-                                        ),
-                                      ),
-                                      emptyBuilder: (context, searchEntry) {
-                                        return Container(
-                                          padding: const EdgeInsets.all(16),
-                                          child: Center(
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.person_search,
-                                                  size: 48,
-                                                  color: Colors.grey[400],
-                                                ),
-                                                const SizedBox(height: 12),
-                                                Text(
-                                                  'No se encontró ningún cliente',
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: Colors.grey[600],
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  searchEntry.isEmpty
-                                                      ? 'No hay clientes registrados'
-                                                      : 'No hay coincidencias para "$searchEntry"',
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    color: Colors.grey[500],
-                                                  ),
-                                                  textAlign: TextAlign.center,
-                                                ),
-                                                const SizedBox(height: 16),
-                                                ElevatedButton.icon(
-                                                  onPressed: () async {
-                                                    Navigator.pop(
-                                                      context,
-                                                    ); // Cerrar el dropdown
-                                                    final result =
-                                                        await Navigator.push(
-                                                          context,
-                                                          MaterialPageRoute(
-                                                            builder: (_) =>
-                                                                ClienteFormScreen(
-                                                                  initialName:
-                                                                      searchEntry,
-                                                                ),
-                                                          ),
-                                                        );
-                                                    await _handleClientCreationResult(
-                                                      result,
-                                                    );
-                                                  },
-                                                  icon: const Icon(
-                                                    Icons.person_add,
-                                                  ),
-                                                  label: const Text(
-                                                    'Crear nuevo cliente',
-                                                  ),
-                                                  style:
-                                                      ElevatedButton.styleFrom(
-                                                        backgroundColor:
-                                                            Theme.of(context)
-                                                                .colorScheme
-                                                                .primary,
-                                                        foregroundColor:
-                                                            Colors.white,
-                                                      ),
-                                                ),
-                                              ],
+                                    child: ClientSearchWidget(
+                                      mode: 'dropdown',
+                                      selectedClient: _selectedClient,
+                                      onClientSelected: (Usuario? value) {
+                                        setState(() {
+                                          _selectedClient = value;
+                                          _clearFieldError('client');
+                                        });
+                                      },
+                                      hint: 'Cliente',
+                                      isRequired: true,
+                                      errorText: _clientError,
+                                      allowCreate: true,
+                                      onCreateClient: (String searchText) async {
+                                        final result = await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ClienteFormScreen(
+                                              initialName: searchText,
                                             ),
                                           ),
                                         );
+                                        await _handleClientCreationResult(result);
                                       },
+                                      allowClear: false,
+                                      showClientDetails: true,
                                     ),
                                   ),
 

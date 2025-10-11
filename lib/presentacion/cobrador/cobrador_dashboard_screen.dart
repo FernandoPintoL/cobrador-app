@@ -16,6 +16,8 @@ import '../creditos/credit_type_screen.dart';
 import '../reports/reports_screen.dart';
 import '../map/map_screen.dart';
 import '../cajas/cash_balances_list_screen.dart';
+import 'daily_route_screen.dart';
+import 'quick_payment_screen.dart';
 // import 'package:intl/intl.dart'; // no usado
 
 class CobradorDashboardScreen extends ConsumerStatefulWidget {
@@ -240,7 +242,7 @@ class _CobradorDashboardScreenState
                               Colors.green,
                             ),
                           ),
-                          /* SizedBox(
+                          SizedBox(
                             width: itemWidth,
                             child: _buildStatCard(
                               context,
@@ -259,7 +261,7 @@ class _CobradorDashboardScreenState
                               Icons.account_balance_wallet,
                               Colors.purple,
                             ),
-                          ), */
+                          ),
                         ],
                       );
                     },
@@ -285,6 +287,24 @@ class _CobradorDashboardScreenState
                 children: [
                   _buildCobradorActionCard(
                     context,
+                    'Ruta del Día',
+                    'Ver mis clientes a visitar hoy',
+                    Icons.route,
+                    Colors.teal,
+                    () => _navigateToDailyRoute(context),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildCobradorActionCard(
+                    context,
+                    'Registro Rápido',
+                    'Registrar cobros de forma rápida',
+                    Icons.flash_on,
+                    Colors.amber,
+                    () => _navigateToQuickPayment(context),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildCobradorActionCard(
+                    context,
                     'Gestionar Créditos',
                     'Ver y gestionar créditos de clientes',
                     Icons.credit_card,
@@ -306,7 +326,7 @@ class _CobradorDashboardScreenState
                     'Mapa de Clientes',
                     'Ver mis clientes en el mapa',
                     Icons.map,
-                    Colors.teal,
+                    Colors.indigo,
                     () => _navigateToMap(context),
                   ),
                   const SizedBox(height: 12),
@@ -317,6 +337,15 @@ class _CobradorDashboardScreenState
                     Icons.point_of_sale,
                     Colors.orange,
                     () => _navigateToCashBalances(context),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildCobradorActionCard(
+                    context,
+                    'Mis Reportes',
+                    'Ver estadísticas y reportes de mi desempeño',
+                    Icons.analytics,
+                    Colors.purple,
+                    () => _navigateToReports(context),
                   ),
                 ],
               ),
@@ -467,22 +496,16 @@ class _CobradorDashboardScreenState
   }
 
   void _navigateToDailyRoute(BuildContext context) {
-    // TODO: Implementar ruta diaria
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ruta del día - En desarrollo'),
-        backgroundColor: Colors.orange,
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const DailyRouteScreen()),
     );
   }
 
-  void _navigateToRecordPayment(BuildContext context) {
-    // TODO: Implementar registro de cobros
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Registro de cobros - En desarrollo'),
-        backgroundColor: Colors.orange,
-      ),
+  void _navigateToQuickPayment(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const QuickPaymentScreen()),
     );
   }
 

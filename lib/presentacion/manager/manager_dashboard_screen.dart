@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:io';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/manager_provider.dart';
+import '../../negocio/providers/profile_image_provider.dart';
 import '../widgets/logout_dialog.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../config/role_colors.dart';
@@ -15,6 +17,7 @@ import '../pantallas/notifications_screen.dart';
 // import 'manager_client_assignment_screen.dart'; // removed unused import
 import '../pantallas/profile_settings_screen.dart';
 import '../cajas/cash_balances_list_screen.dart';
+import '../widgets/profile_image_widget.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -56,6 +59,32 @@ class _ManagerDashboardScreenState
     final authState = ref.watch(authProvider);
     final usuario = authState.usuario;
     final managerState = ref.watch(managerProvider);
+    final profileImageState = ref.watch(profileImageProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Escuchar cambios en el estado de la imagen de perfil
+    ref.listen<ProfileImageState>(profileImageProvider, (previous, next) {
+      // Mostrar error solo cuando cambie
+      if (previous?.error != next.error && next.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: isDark ? Colors.red[800] : Colors.red,
+          ),
+        );
+      }
+
+      if (previous?.successMessage != next.successMessage &&
+          next.successMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.successMessage!),
+            backgroundColor: isDark ? Colors.green[800] : Colors.green,
+          ),
+        );
+        ref.read(profileImageProvider.notifier).clearSuccess();
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -120,17 +149,17 @@ class _ManagerDashboardScreenState
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Theme.of(context).primaryColor,
-                      child: Text(
-                        usuario?.nombre.substring(0, 1).toUpperCase() ?? 'M',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                    // Widget de imagen de perfil con funcionalidad de subida
+                    ProfileImageWithUpload(
+                      profileImage: usuario?.profileImage,
+                      size: 60,
+                      isUploading: profileImageState.isUploading,
+                      uploadError: profileImageState.error,
+                      onImageSelected: (File imageFile) {
+                        ref
+                            .read(profileImageProvider.notifier)
+                            .uploadProfileImage(imageFile);
+                      },
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -147,23 +176,20 @@ class _ManagerDashboardScreenState
                           Text(
                             usuario?.email ?? '',
                             style: TextStyle(
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
+                              color: isDark
                                   ? Colors.grey[400]
                                   : Colors.grey[600],
                               fontSize: 14,
                             ),
                           ),
+                          const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
+                              color: isDark
                                   ? Colors.orange.withValues(alpha: 0.2)
                                   : Colors.orange[100],
                               borderRadius: BorderRadius.circular(12),
@@ -171,9 +197,7 @@ class _ManagerDashboardScreenState
                             child: Text(
                               'Manager',
                               style: TextStyle(
-                                color:
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark
+                                color: isDark
                                     ? Colors.orange[300]
                                     : Colors.orange,
                                 fontWeight: FontWeight.bold,
@@ -224,7 +248,7 @@ class _ManagerDashboardScreenState
                         Colors.green,
                       ),
                     ),
-                    /* SizedBox(
+                    SizedBox(
                       width: itemWidth,
                       child: _buildStatCard(
                         context,
@@ -243,7 +267,7 @@ class _ManagerDashboardScreenState
                         Icons.attach_money,
                         Colors.purple,
                       ),
-                    ), */
+                    ),
                   ],
                 );
               },

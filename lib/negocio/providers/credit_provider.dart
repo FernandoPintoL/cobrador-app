@@ -120,6 +120,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
     double? totalAmountMax,
     double? balanceMin,
     double? balanceMax,
+    double? totalPaidMin,
+    double? totalPaidMax,
     bool? isOverdue, // Filtro para cuotas atrasadas
     double? overdueAmountMin, // Monto mínimo atrasado
     double? overdueAmountMax, // Monto máximo atrasado
@@ -147,6 +149,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
         'totalAmountMax': totalAmountMax,
         'balanceMin': balanceMin,
         'balanceMax': balanceMax,
+        'totalPaidMin': totalPaidMin,
+        'totalPaidMax': totalPaidMax,
         'isOverdue': isOverdue,
         'overdueAmountMin': overdueAmountMin,
         'overdueAmountMax': overdueAmountMax,
@@ -171,6 +175,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
         totalAmountMax: totalAmountMax,
         balanceMin: balanceMin,
         balanceMax: balanceMax,
+        totalPaidMin: totalPaidMin,
+        totalPaidMax: totalPaidMax,
         isOverdue: isOverdue,
         overdueAmountMin: overdueAmountMin,
         overdueAmountMax: overdueAmountMax,
@@ -253,6 +259,11 @@ class CreditNotifier extends StateNotifier<CreditState> {
         totalAmountMax: query['totalAmountMax'] as double?,
         balanceMin: query['balanceMin'] as double?,
         balanceMax: query['balanceMax'] as double?,
+        totalPaidMin: query['totalPaidMin'] as double?,
+        totalPaidMax: query['totalPaidMax'] as double?,
+        isOverdue: query['isOverdue'] as bool?,
+        overdueAmountMin: query['overdueAmountMin'] as double?,
+        overdueAmountMax: query['overdueAmountMax'] as double?,
         page: nextPage,
         perPage: perPage,
       );
@@ -296,12 +307,14 @@ class CreditNotifier extends StateNotifier<CreditState> {
   /// Crea un nuevo crédito
   Future<bool> createCredit({
     required int clientId,
+    int? cobradorId,
     required double amount,
     required double balance,
     required String frequency,
     required DateTime startDate,
     required DateTime endDate,
     double? interestRate,
+    int? interestRateId,
     double? totalAmount,
     double? installmentAmount,
     int? totalInstallments,
@@ -335,11 +348,17 @@ class CreditNotifier extends StateNotifier<CreditState> {
       };
 
       // Agregar campos opcionales
+      if (cobradorId != null) {
+        creditData['cobrador_id'] = cobradorId;
+      }
       if (scheduledDeliveryDate != null) {
         creditData['scheduled_delivery_date'] = scheduledDeliveryDate
             .toIso8601String();
       }
-      if (interestRate != null && interestRate > 0) {
+      // Prioridad: interest_rate_id > interest_rate manual
+      if (interestRateId != null) {
+        creditData['interest_rate_id'] = interestRateId;
+      } else if (interestRate != null && interestRate > 0) {
         creditData['interest_rate'] = interestRate;
       }
       if (totalAmount != null) {
@@ -373,9 +392,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
           isLoading: false,
           successMessage: 'Crédito creado exitosamente',
         );
-
-        // Notificar vía WebSocket
-        _notifyCreditCreated(nuevoCredito);
 
         print('✅ Crédito creado exitosamente');
         return true;
@@ -876,10 +892,49 @@ class CreditNotifier extends StateNotifier<CreditState> {
         throw Exception(response['message'] ?? 'Error al cargar estadísticas');
       }
     } catch (e) {
-      print('❌ Error al cargar estadísticas: $e');
+      print('❌ Error al cargar estadísticas del cobrador: $e');
       state = state.copyWith(
         isLoading: false,
         errorMessage: 'Error al cargar estadísticas: $e',
+      );
+    }
+  }
+
+  /// Carga estadísticas del manager actual o de un manager específico
+  /// Incluye métricas consolidadas de:
+  /// - Clientes directos del manager
+  /// - Clientes de cobradores bajo su supervisión
+  Future<void> loadManagerStats({int? managerId}) async {
+    try {
+      final authState = _ref.read(authProvider);
+      if (authState.usuario == null) return;
+
+      // Usar el ID proporcionado o el del usuario autenticado
+      final targetManagerId = managerId ?? authState.usuario!.id.toInt();
+
+      state = state.copyWith(isLoading: true, errorMessage: null);
+      print('🔄 Cargando estadísticas del manager: $targetManagerId');
+
+      final response = await _creditApiService.getManagerStats(
+        targetManagerId,
+      );
+
+      if (response['success'] == true) {
+        final stats = CreditStats.fromJson(response['data']);
+
+        state = state.copyWith(stats: stats, isLoading: false);
+
+        print('✅ Estadísticas del manager cargadas exitosamente');
+      } else {
+        throw Exception(
+          response['message'] ?? 'Error al cargar estadísticas del manager',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al cargar estadísticas del manager: $e');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Error al cargar estadísticas del manager: $e',
       );
     }
   }
@@ -1272,13 +1327,13 @@ class CreditNotifier extends StateNotifier<CreditState> {
         creditId: creditId.toString(),
         scheduledDeliveryDate: scheduledDeliveryDate,
         notes: notes,
+        immediateDelivery: immediate,
       );
 
       if (response['success'] == true) {
         final creditoActualizado = Credito.fromJson(response['data']['credit']);
 
         _updateCreditInAllLists(creditoActualizado);
-        _notifyCreditApproved(creditoActualizado, immediate: immediate);
 
         state = state.copyWith(
           isLoading: false,
@@ -1340,7 +1395,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
         final creditoActualizado = Credito.fromJson(response['data']['credit']);
 
         _updateCreditInAllLists(creditoActualizado);
-        _notifyCreditRejected(creditoActualizado, reason);
 
         state = state.copyWith(
           isLoading: false,
@@ -1470,7 +1524,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
             : Credito.fromJson(response['data']['credit']);
 
         _updateCreditInAllLists(creditoActualizado);
-        _notifyCreditDelivered(creditoActualizado, notes: notes);
 
         state = state.copyWith(
           isLoading: false,
@@ -1666,154 +1719,77 @@ class CreditNotifier extends StateNotifier<CreditState> {
     );
   }
 
-  /// Notifica la creación de un crédito vía WebSocket
-  void _notifyCreditCreated(Credito credito) {
-    try {
-      final authState = _ref.read(authProvider);
-      final wsNotifier = _ref.read(webSocketProvider.notifier);
-
-      if (authState.usuario != null) {
-        // Notificar al manager (targetUserId) que el cobrador solicitó crédito
-        final managerId = authState.usuario!.assignedManagerId?.toString();
-        wsNotifier.notifyCreditLifecycle(
-          action: 'created',
-          creditId: credito.id!,
-          targetUserId: managerId,
-          credit: {
-            'id': credito.id,
-            'client_id': credito.clientId,
-            'client_name': credito.client?.nombre,
-            'amount': credito.amount,
-          },
-          userType: 'cobrador',
-          message: 'Nuevo crédito solicitado',
-        );
-        print('🔔 WS: evento credit_lifecycle(created) emitido');
-      }
-    } catch (e) {
-      print('⚠️ Error enviando notificación WebSocket: $e');
-    }
-  }
-
-  /// Notifica la aprobación de un crédito vía WebSocket
-  void _notifyCreditApproved(Credito credito, {bool immediate = false}) {
-    try {
-      final authState = _ref.read(authProvider);
-      final wsNotifier = _ref.read(webSocketProvider.notifier);
-
-      if (authState.usuario != null) {
-        // Notificar al creador del crédito (puede ser manager o cobrador), sin importar su rol
-        final String? creatorIdStr = (() {
-          final int? creatorId =
-              credito.createdBy ??
-              (credito.creator?.id is int ? credito.creator?.id as int? : null);
-          return creatorId != null ? creatorId.toString() : null;
-        })();
-
-        wsNotifier.notifyCreditLifecycle(
-          action: 'approved',
-          creditId: credito.id!,
-          targetUserId: creatorIdStr,
-          credit: {
-            'id': credito.id,
-            'client_id': credito.clientId,
-            'client_name': credito.client?.nombre,
-            'amount': credito.amount,
-            'entrega_inmediata': immediate,
-          },
-          userType: 'manager',
-          message: 'Crédito aprobado',
-        );
-        print('🔔 WS: evento credit_lifecycle(approved) emitido');
-      }
-    } catch (e) {
-      print('⚠️ Error enviando notificación WebSocket: $e');
-    }
-  }
-
-  /// Notifica el rechazo de un crédito vía WebSocket
-  void _notifyCreditRejected(Credito credito, String reason) {
-    try {
-      final authState = _ref.read(authProvider);
-      final wsNotifier = _ref.read(webSocketProvider.notifier);
-
-      if (authState.usuario != null) {
-        // Notificar al cobrador que el manager rechazó el crédito
-        wsNotifier.notifyCreditLifecycle(
-          action: 'rejected',
-          creditId: credito.id!,
-          targetUserId: credito.cobrador?.id.toString(),
-          credit: {
-            'id': credito.id,
-            'client_id': credito.clientId,
-            'client_name': credito.client?.nombre,
-            'amount': credito.amount,
-            'reason': reason,
-          },
-          userType: 'manager',
-          message: 'Crédito rechazado: $reason',
-        );
-        print('🔔 WS: evento credit_lifecycle(rejected) emitido');
-      }
-    } catch (e) {
-      print('⚠️ Error enviando notificación WebSocket: $e');
-    }
-  }
 
   /// Orquesta aprobación y entrega inmediata del crédito
+  /// Usa el parámetro immediate_delivery=true del API para hacer ambas acciones en una sola llamada
   Future<bool> approveAndDeliverCredit({
     required int creditId,
     required DateTime scheduledDeliveryDate,
     String? approvalNotes,
     String? deliveryNotes,
   }) async {
-    // Primero aprobar para entrega
-    final approved = await approveCreditForDelivery(
-      creditId: creditId,
-      scheduledDeliveryDate: scheduledDeliveryDate,
-      notes: approvalNotes,
-      immediate: true,
-    );
-    if (!approved) return false;
-
-    // Luego entregar al cliente
-    final delivered = await deliverCreditToClient(
-      creditId: creditId,
-      notes: deliveryNotes,
-    );
-    return delivered;
-  }
-
-  /// Notifica la entrega de un crédito vía WebSocket
-  void _notifyCreditDelivered(Credito credito, {String? notes}) {
     try {
-      final authState = _ref.read(authProvider);
-      final wsNotifier = _ref.read(webSocketProvider.notifier);
+      state = state.copyWith(
+        isLoading: true,
+        errorMessage: null,
+        successMessage: null,
+      );
+      print('🚀 Aprobando y entregando crédito inmediatamente: $creditId');
 
-      if (authState.usuario != null) {
-        // Notificar al manager que se realizó la entrega del crédito
-        final authUser = authState.usuario!;
-        final managerId = authUser.assignedManagerId?.toString();
-        wsNotifier.notifyCreditLifecycle(
-          action: 'delivered',
-          creditId: credito.id!,
-          targetUserId: managerId,
-          credit: {
-            'id': credito.id,
-            'client_id': credito.clientId,
-            'client_name': credito.client?.nombre,
-            'amount': credito.amount,
-            if (notes != null) 'notes': notes,
-          },
-          userType: 'cobrador',
-          message: 'Crédito entregado',
+      // Combinar notas si existen ambas
+      String? combinedNotes;
+      if (approvalNotes != null && deliveryNotes != null) {
+        combinedNotes = 'Aprobación: $approvalNotes\nEntrega: $deliveryNotes';
+      } else {
+        combinedNotes = approvalNotes ?? deliveryNotes;
+      }
+
+      // Una sola llamada con immediate_delivery=true
+      // El backend se encarga de aprobar Y entregar el crédito
+      final response = await _creditApiService.approveCreditForDelivery(
+        creditId: creditId.toString(),
+        scheduledDeliveryDate: scheduledDeliveryDate,
+        notes: combinedNotes,
+        immediateDelivery: true,
+      );
+
+      if (response['success'] == true) {
+        final creditoActualizado = Credito.fromJson(response['data']['credit']);
+
+        _updateCreditInAllLists(creditoActualizado);
+
+        state = state.copyWith(
+          isLoading: false,
+          successMessage: 'Crédito aprobado y entregado exitosamente',
         );
-        print('🔔 WS: evento credit_lifecycle(delivered) emitido');
+
+        print('✅ Crédito aprobado y entregado exitosamente en una sola operación');
+        return true;
+      } else {
+        throw Exception(
+          response['message'] ?? 'Error al aprobar y entregar crédito',
+        );
       }
     } catch (e) {
-      print('⚠️ Error enviando notificación WebSocket: $e');
+      print('❌ Error al aprobar y entregar crédito: $e');
+
+      String errorMessage = 'Error al aprobar y entregar crédito';
+      if (e.toString().contains('403')) {
+        errorMessage = 'No tienes permisos para realizar esta acción';
+      } else if (e.toString().contains('404')) {
+        errorMessage = 'Crédito no encontrado';
+      } else if (e.toString().toLowerCase().contains('caja')) {
+        errorMessage = e.toString();
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: errorMessage,
+      );
+      return false;
     }
   }
+
 }
 
 // Provider para gestionar créditos

@@ -30,6 +30,8 @@ class CreditApiService extends BaseApiService {
     double? totalAmountMax,
     double? balanceMin,
     double? balanceMax,
+    double? totalPaidMin,
+    double? totalPaidMax,
     bool? isOverdue, // Filtro para cuotas atrasadas
     double? overdueAmountMin, // Monto mínimo atrasado
     double? overdueAmountMax, // Monto máximo atrasado
@@ -60,6 +62,8 @@ class CreditApiService extends BaseApiService {
         queryParams['total_amount_max'] = totalAmountMax;
       if (balanceMin != null) queryParams['balance_min'] = balanceMin;
       if (balanceMax != null) queryParams['balance_max'] = balanceMax;
+      if (totalPaidMin != null) queryParams['total_paid_min'] = totalPaidMin;
+      if (totalPaidMax != null) queryParams['total_paid_max'] = totalPaidMax;
       if (isOverdue != null) queryParams['is_overdue'] = isOverdue;
       if (overdueAmountMin != null)
         queryParams['overdue_amount_min'] = overdueAmountMin;
@@ -294,8 +298,28 @@ class CreditApiService extends BaseApiService {
         );
       }
     } catch (e) {
-      print('❌ Error al obtener estadísticas: $e');
-      throw Exception('Error al obtener estadísticas: $e');
+      print('❌ Error al obtener estadísticas del cobrador: $e');
+      throw Exception('Error al obtener estadísticas del cobrador: $e');
+    }
+  }
+
+  /// Obtiene estadísticas de créditos de un manager
+  /// Incluye métricas consolidadas de todos los clientes bajo su supervisión
+  /// (clientes directos + clientes de sus cobradores)
+  Future<Map<String, dynamic>> getManagerStats(int managerId) async {
+    try {
+      final response = await get('/credits/manager/$managerId/stats');
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        return data;
+      } else {
+        throw Exception(
+          'Error al obtener estadísticas del manager: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener estadísticas del manager: $e');
+      throw Exception('Error al obtener estadísticas del manager: $e');
     }
   }
 
@@ -492,11 +516,13 @@ class CreditApiService extends BaseApiService {
     required String creditId,
     required DateTime scheduledDeliveryDate,
     String? notes,
+    bool? immediateDelivery,
   }) async {
     try {
       final data = {
         'scheduled_delivery_date': scheduledDeliveryDate.toIso8601String(),
         if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (immediateDelivery != null) 'immediate_delivery': immediateDelivery,
       };
 
       final response = await post(

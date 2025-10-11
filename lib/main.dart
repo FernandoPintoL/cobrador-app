@@ -12,7 +12,6 @@ import 'presentacion/pantallas/login_screen.dart';
 import 'presentacion/superadmin/admin_dashboard_screen.dart';
 import 'presentacion/manager/manager_dashboard_screen.dart';
 import 'presentacion/cobrador/cobrador_dashboard_screen.dart';
-// import 'presentacion/creditos/credit_type_screen.dart';
 
 Future<void> main() async {
   // Configurar logging para debug
