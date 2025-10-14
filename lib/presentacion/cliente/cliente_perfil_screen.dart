@@ -11,8 +11,8 @@ import '../../ui/widgets/response_viewer_dialog.dart';
 import '../widgets/profile_image_widget.dart';
 import 'cliente_creditos_screen.dart';
 import 'location_picker_screen.dart';
-import '../../datos/servicios/base_api_service.dart';
-import '../../datos/servicios/user_api_service.dart';
+import '../../datos/api_services/base_api_service.dart';
+import '../../datos/api_services/user_api_service.dart';
 
 class ClientePerfilScreen extends ConsumerWidget {
   final Usuario cliente;

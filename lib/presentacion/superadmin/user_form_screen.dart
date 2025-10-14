@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../negocio/servicios/allowed_apps_helper.dart';
+import '../../negocio/domain_services/allowed_apps_helper.dart';
 import '../../ui/utilidades/image_utils.dart';
 import '../../ui/utilidades/phone_utils.dart';
 import '../../negocio/providers/user_management_provider.dart';

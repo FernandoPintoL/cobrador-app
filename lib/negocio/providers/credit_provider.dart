@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/api_exception.dart';
-import '../../datos/servicios/credit_api_service.dart';
-import '../../datos/servicios/cash_balance_api_service.dart';
+import '../../datos/api_services/credit_api_service.dart';
+import '../../datos/api_services/cash_balance_api_service.dart';
 import '../../datos/modelos/credit_full_details.dart';
 import '../../datos/modelos/credito.dart';
 import 'auth_provider.dart';
-import 'websocket_provider.dart';
 import 'pago_provider.dart';
 import '../utils/schedule_utils.dart';
+import '../utils/payment_schedule_generator.dart';
 
 // Estado del provider de créditos
 class CreditState {
@@ -130,7 +130,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
   }) async {
     try {
       state = state.copyWith(isLoading: true, errorMessage: null);
-      print('🔄 Cargando créditos...');
+      print(
+        '🔄 Cargando créditos con filtros: status=$status, clientId=$clientId, cobradorId=$cobradorId, search=$search',
+      );
 
       // Guardar últimos parámetros de consulta
       _lastQuery = {
@@ -186,13 +188,62 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
       if (response['success'] == true) {
         final data = response['data'];
+        // Verificar la estructura completa de la respuesta
+        print('🔄 Estructura de datos recibida:');
+        print('  - success: ${response['success']}');
+        print('  - data keys: ${data.keys.toList()}');
+        print(
+          '  - pagination: current=${data['current_page']}, last=${data['last_page']}, total=${data['total']}',
+        );
+
         final creditsData = data['data'] as List? ?? [];
 
+        print('📊 API retornó ${creditsData.length} créditos en formato JSON');
+
+        if (creditsData.isEmpty) {
+          print('⚠️ La lista de créditos está vacía en la respuesta del API');
+          // Revisar si hay un mensaje explicando por qué está vacía
+          if (response.containsKey('message')) {
+            print('ℹ️ Mensaje del servidor: ${response['message']}');
+          }
+        } else {
+          print('🔍 Primer crédito en respuesta: ${creditsData.first}');
+          // Verificar campos clave en el primer crédito
+          if (creditsData.first is Map) {
+            final firstCreditMap = creditsData.first as Map;
+            print(
+              '🔍 Campos del primer crédito: ${firstCreditMap.keys.toList()}',
+            );
+            print(
+              '🔍 ID: ${firstCreditMap['id']}, Estado: ${firstCreditMap['status']}',
+            );
+
+            // Verificar cliente
+            if (firstCreditMap.containsKey('client')) {
+              print('🔍 Cliente: ${firstCreditMap['client']}');
+            } else {
+              print('⚠️ El crédito no tiene cliente asociado');
+            }
+          }
+        }
+
         final credits = creditsData
-            .map(
-              (creditJson) =>
-                  Credito.fromJson(creditJson as Map<String, dynamic>),
-            )
+            .map((creditJson) {
+              try {
+                final credito = Credito.fromJson(
+                  creditJson as Map<String, dynamic>,
+                );
+                print(
+                  '✅ Convertido crédito ID=${credito.id}, Estado=${credito.status}, ClienteID=${credito.clientId}',
+                );
+                return credito;
+              } catch (e) {
+                print('❌ Error al convertir crédito: $e');
+                print('❌ JSON problemático: $creditJson');
+                return null;
+              }
+            })
+            .whereType<Credito>() // Filtrar nulos
             .toList();
 
         state = state.copyWith(
@@ -205,6 +256,22 @@ class CreditNotifier extends StateNotifier<CreditState> {
         );
 
         print('✅ ${credits.length} créditos cargados exitosamente');
+        print('📑 Estados de créditos: ${_countCreditsByStatus(credits)}');
+
+        // Verificar si cada tipo de lista recibe sus créditos correspondientes
+        final pendingApproval = credits
+            .where((c) => c.status == 'pendiente_aprobacion')
+            .toList();
+        final attentionList = credits
+            .where((c) => c.status == 'atencion')
+            .toList();
+        final waitingDelivery = credits
+            .where((c) => c.status == 'esperando_entrega')
+            .toList();
+        print('📋 Resumen de listas específicas:');
+        print('  - Pendientes de aprobación: ${pendingApproval.length}');
+        print('  - Atención: ${attentionList.length}');
+        print('  - Esperando entrega: ${waitingDelivery.length}');
       } else {
         throw Exception(response['message'] ?? 'Error al cargar créditos');
       }
@@ -915,9 +982,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
       state = state.copyWith(isLoading: true, errorMessage: null);
       print('🔄 Cargando estadísticas del manager: $targetManagerId');
 
-      final response = await _creditApiService.getManagerStats(
-        targetManagerId,
-      );
+      final response = await _creditApiService.getManagerStats(targetManagerId);
 
       if (response['success'] == true) {
         final stats = CreditStats.fromJson(response['data']);
@@ -1085,6 +1150,23 @@ class CreditNotifier extends StateNotifier<CreditState> {
       final response = await _creditApiService.getCreditDetails(creditId);
       if (response['success'] == true) {
         final details = CreditFullDetails.fromApi(response);
+
+        // Si el backend no proveyó cronograma, generarlo localmente
+        if (details.schedule == null || details.schedule!.isEmpty) {
+          // Usar la clase PaymentScheduleGenerator para crear el cronograma
+          final generatedSchedule = await _generateScheduleFromApiData(
+            response,
+          );
+
+          // Crear una nueva instancia con el cronograma generado
+          return CreditFullDetails(
+            credit: details.credit,
+            summary: details.summary,
+            schedule: generatedSchedule,
+            paymentsHistory: details.paymentsHistory,
+          );
+        }
+
         return details;
       } else {
         throw Exception(response['message'] ?? 'Error al obtener detalles');
@@ -1488,21 +1570,25 @@ class CreditNotifier extends StateNotifier<CreditState> {
         if (isCobrador) {
           final cobradorId = authState.usuario!.id.toInt();
           final today = DateTime.now().toIso8601String().split('T')[0];
-          print('🔍 Verificando/abriendo caja para cobrador=$cobradorId en fecha=$today');
+          print(
+            '🔍 Verificando/abriendo caja para cobrador=$cobradorId en fecha=$today',
+          );
           final cashApi = CashBalanceApiService();
           final openResp = await cashApi.openCashBalance(
             cobradorId: cobradorId,
             date: today,
           );
           if (openResp['success'] == false) {
-            final msg = openResp['message']?.toString() ?? 'No se pudo abrir la caja';
+            final msg =
+                openResp['message']?.toString() ?? 'No se pudo abrir la caja';
             state = state.copyWith(isLoading: false, errorMessage: msg);
             return false;
           }
         }
       } catch (e) {
         // Si falla la verificación de caja, detener y mostrar mensaje claro
-        final msg = 'No se pudo preparar la caja para la entrega: ${e.toString()}';
+        final msg =
+            'No se pudo preparar la caja para la entrega: ${e.toString()}';
         print('❌ $msg');
         state = state.copyWith(isLoading: false, errorMessage: msg);
         return false;
@@ -1533,7 +1619,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
         print('✅ Crédito entregado al cliente exitosamente');
         return true;
       } else {
-        final msg = response['message']?.toString() ?? 'Error al entregar crédito';
+        final msg =
+            response['message']?.toString() ?? 'Error al entregar crédito';
         throw ApiException(message: msg, errorData: response);
       }
     } catch (e) {
@@ -1546,7 +1633,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
         errorMessage = 'No tienes permisos para entregar este crédito';
       } else if (rawMsg != null && rawMsg.contains('404')) {
         errorMessage = 'Crédito no encontrado';
-      } else if (rawMsg != null && (rawMsg.toLowerCase().contains('caja') || rawMsg.toLowerCase().contains('cash'))) {
+      } else if (rawMsg != null &&
+          (rawMsg.toLowerCase().contains('caja') ||
+              rawMsg.toLowerCase().contains('cash'))) {
         // Mensajes relevantes a caja/efectivo insuficiente
         errorMessage = rawMsg;
       }
@@ -1597,6 +1686,27 @@ class CreditNotifier extends StateNotifier<CreditState> {
   }
 
   /// Genera un cronograma de pagos local basado en los datos del crédito
+  /// Genera el cronograma a partir de los datos de API
+  Future<List<PaymentSchedule>> _generateScheduleFromApiData(
+    Map<String, dynamic> apiData,
+  ) async {
+    try {
+      return PaymentScheduleGenerator.extractFromPayments(apiData);
+    } catch (e) {
+      print('❌ Error generando cronograma desde API: $e');
+      // Si falla, intentar con el crédito de la respuesta
+      if (apiData['data'] != null) {
+        final creditJson = apiData['data'];
+        if (creditJson is Map<String, dynamic>) {
+          final credit = Credito.fromJson(creditJson);
+          return _generatePaymentSchedule(credit);
+        }
+      }
+      // Si todo falla, devolver lista vacía
+      return [];
+    }
+  }
+
   List<PaymentSchedule> _generatePaymentSchedule(Credito credit) {
     final schedule = <PaymentSchedule>[];
 
@@ -1683,6 +1793,16 @@ class CreditNotifier extends StateNotifier<CreditState> {
     return schedule;
   }
 
+  /// Cuenta los créditos agrupados por estado
+  String _countCreditsByStatus(List<Credito> credits) {
+    final counts = <String, int>{};
+    for (final c in credits) {
+      final status = c.status;
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+  }
+
   /// Actualiza un crédito en todas las listas donde pueda estar presente
   void _updateCreditInAllLists(Credito creditoActualizado) {
     final creditosActualizados = state.credits.map((credito) {
@@ -1718,7 +1838,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
       overdueDeliveryCredits: overdueUpdated,
     );
   }
-
 
   /// Orquesta aprobación y entrega inmediata del crédito
   /// Usa el parámetro immediate_delivery=true del API para hacer ambas acciones en una sola llamada
@@ -1763,7 +1882,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
           successMessage: 'Crédito aprobado y entregado exitosamente',
         );
 
-        print('✅ Crédito aprobado y entregado exitosamente en una sola operación');
+        print(
+          '✅ Crédito aprobado y entregado exitosamente en una sola operación',
+        );
         return true;
       } else {
         throw Exception(
@@ -1782,14 +1903,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
         errorMessage = e.toString();
       }
 
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: errorMessage,
-      );
+      state = state.copyWith(isLoading: false, errorMessage: errorMessage);
       return false;
     }
   }
-
 }
 
 // Provider para gestionar créditos

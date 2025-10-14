@@ -244,8 +244,8 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             const Divider(),
-                            _buildInfoRow('Balance:', '\$${_selectedCredit!.balance.toStringAsFixed(2)}'),
-                            _buildInfoRow('Cuota:', '\$${_selectedCredit!.installmentAmount?.toStringAsFixed(2) ?? 'N/A'}'),
+                            _buildInfoRow('Balance:', 'Bs ${_selectedCredit!.balance.toStringAsFixed(2)}'),
+                            _buildInfoRow('Cuota:', 'Bs ${_selectedCredit!.installmentAmount?.toStringAsFixed(2) ?? 'N/A'}'),
                             _buildInfoRow('Frecuencia:', _selectedCredit!.frequencyLabel),
                             if (_selectedCredit!.backendIsOverdue == true)
                               Container(
@@ -261,7 +261,7 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
                                     const Icon(Icons.warning, size: 16, color: Colors.red),
                                     const SizedBox(width: 4),
                                     Text(
-                                      'Crédito con mora: \$${_selectedCredit!.overdueAmount?.toStringAsFixed(2) ?? 'N/A'}',
+                                      'Crédito con mora: Bs ${_selectedCredit!.overdueAmount?.toStringAsFixed(2) ?? 'N/A'}',
                                       style: const TextStyle(color: Colors.red, fontSize: 12),
                                     ),
                                   ],
@@ -295,7 +295,7 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                         hintText: '0.00',
-                        prefixText: '\$ ',
+                        prefixText: 'Bs ',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -358,7 +358,7 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            /*const SizedBox(height: 16),
 
             // Notas opcionales
             Card(
@@ -386,7 +386,7 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
                   ],
                 ),
               ),
-            ),
+            ),*/
 
             const SizedBox(height: 24),
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../datos/servicios/user_api_service.dart';
+import '../../datos/api_services/user_api_service.dart';
 import '../../datos/modelos/usuario.dart';
 
 /// Pantalla para cambio de contraseñas por parte de admins y managers

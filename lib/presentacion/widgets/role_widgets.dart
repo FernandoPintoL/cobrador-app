@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/role_colors.dart';
-import '../../datos/servicios/api_service.dart';
+import '../../datos/api_services/api_service.dart';
 
 /// Widget que muestra información del rol de manera consistente
 class RoleDisplayWidget extends StatelessWidget {

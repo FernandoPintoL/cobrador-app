@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
-import '../../datos/servicios/api_service.dart';
+import '../../datos/api_services/api_service.dart';
 
 class ProfileImageState {
   final bool isUploading;

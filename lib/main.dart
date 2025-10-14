@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/app_bootstrap.dart';
 import 'negocio/providers/auth_provider.dart';
-import 'negocio/servicios/allowed_apps_helper.dart';
-import 'negocio/servicios/auto_logout_service.dart';
+import 'negocio/domain_services/allowed_apps_helper.dart';
+import 'negocio/domain_services/auto_logout_service.dart';
 import 'presentacion/pantallas/splash_screen.dart';
 import 'presentacion/pantallas/login_screen.dart';
 import 'presentacion/superadmin/admin_dashboard_screen.dart';
@@ -357,13 +357,13 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
   Widget _buildDashboardByRole(AuthState authState) {
     // Debug: Imprimir información del usuario y sus roles
-    print('🔍 DEBUG: Información del usuario:');
+    /* print('🔍 DEBUG: Información del usuario:');
     print('  - Usuario: ${authState.usuario?.nombre}');
     print('  - Email: ${authState.usuario?.email}');
     print('  - Roles: ${authState.usuario?.roles}');
     print('  - isAdmin: ${authState.isAdmin}');
     print('  - isManager: ${authState.isManager}');
-    print('  - isCobrador: ${authState.isCobrador}');
+    print('  - isCobrador: ${authState.isCobrador}'); */
 
     // Verificar que el usuario existe
     if (authState.usuario == null) {
@@ -397,10 +397,10 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       return const CobradorDashboardScreen();
     } else {
       // Verificar roles individuales como fallback
-      print(
+      /* print(
         '⚠️ No se detectó rol específico, verificando roles individuales...',
       );
-      print('⚠️ Roles disponibles: ${authState.usuario!.roles}');
+      print('⚠️ Roles disponibles: ${authState.usuario!.roles}'); */
 
       if (authState.usuario!.tieneRol("admin")) {
         print('✅ Detectado rol admin por verificación individual');

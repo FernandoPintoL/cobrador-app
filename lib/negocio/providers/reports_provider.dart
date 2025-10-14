@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../datos/servicios/reports_api_service.dart';
+import '../../datos/api_services/reports_api_service.dart';
 
 final reportsApiProvider = Provider((ref) => ReportsApiService());
 

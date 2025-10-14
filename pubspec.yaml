@@ -40,9 +40,8 @@ dependencies:
   http: ^1.1.0
   dio: ^5.4.0
   
-  # Tiempo real (Laravel Reverb - Pusher)
-  laravel_echo: ^1.0.0-beta.1
-  pusher_channels_flutter: ^2.5.0
+  # Tiempo real (Socket.IO)
+  socket_io_client: ^2.0.3+1
   
   # Estado y gestión de datos
   provider: ^6.1.1
@@ -57,8 +56,7 @@ dependencies:
   geocoding: ^4.0.0
   
   # WebSocket y conectividad en tiempo real
-  connectivity_plus: ^6.1.5  # actualizado para compatibilidad con js ^0.7.x (pusher_channels_flutter >=2.5.0)
-  socket_io_client: ^3.1.2
+  connectivity_plus: ^6.1.5
   
   # Mapas
   google_maps_flutter: ^2.12.3

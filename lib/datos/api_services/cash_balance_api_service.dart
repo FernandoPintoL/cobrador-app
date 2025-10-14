@@ -276,17 +276,66 @@ class CashBalanceApiService extends BaseApiService {
     }
   }
 
-  /// Cerrar caja (se puede usar updateCashBalance para cambiar status a 'closed')
+  /// Obtener cajas pendientes de cierre
+  Future<Map<String, dynamic>> getPendingClosures({int? cobradorId}) async {
+    try {
+      final query = <String, dynamic>{};
+      if (cobradorId != null) query['cobrador_id'] = cobradorId;
+
+      final response = await get(
+        '/cash-balances/pending-closures',
+        queryParameters: query.isEmpty ? null : query,
+      );
+      if (response.statusCode == 200) {
+        final raw = response.data;
+        if (raw is Map<String, dynamic>) return raw;
+        throw ApiException(
+          message: 'Formato inesperado en cajas pendientes',
+          statusCode: response.statusCode,
+          errorData: raw,
+        );
+      }
+      throw ApiException(
+        message: 'Error obteniendo cajas pendientes',
+        statusCode: response.statusCode,
+        errorData: response.data,
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      String message = 'Error obteniendo cajas pendientes';
+      if (data is Map<String, dynamic> && data['message'] != null)
+        message = data['message'].toString();
+      throw ApiException(
+        message: message,
+        statusCode: status,
+        errorData: data,
+        originalError: e,
+      );
+    } catch (e) {
+      throw ApiException(
+        message: 'Error obteniendo cajas pendientes: $e',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Cerrar caja usando el endpoint correcto POST /cash-balances/{id}/close
   Future<Map<String, dynamic>> closeCashBalance(
     int id, {
     double? finalAmount,
     String? notes,
+    String status = 'closed', // Añadimos el parámetro status con valor por defecto 'closed'
   }) async {
     try {
-      final payload = <String, dynamic>{'status': 'closed'};
+      final payload = <String, dynamic>{
+        'status': status, // Incluimos siempre el status en el payload
+      };
       if (finalAmount != null) payload['final_amount'] = finalAmount;
       if (notes != null) payload['notes'] = notes;
-      final response = await put('/cash-balances/$id', data: payload);
+
+      // Usar POST /cash-balances/{id}/close según documentación
+      final response = await post('/cash-balances/$id/close', data: payload);
       if (response.statusCode == 200) {
         final raw = response.data;
         if (raw is Map<String, dynamic>) return raw;

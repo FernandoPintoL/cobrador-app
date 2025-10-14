@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/modelos/usuario.dart';
-import '../../datos/servicios/user_api_service.dart';
+import '../../datos/api_services/user_api_service.dart';
 
 class UserManagementState {
   final List<Usuario> usuarios;

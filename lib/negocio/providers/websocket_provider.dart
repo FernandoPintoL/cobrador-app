@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
-import '../../datos/servicios/websocket_service.dart';
-import '../../datos/servicios/notification_service.dart';
+import '../../datos/api_services/websocket_service.dart';
+import '../../datos/api_services/notification_service.dart';
 
 // Modelo para notificaciones
 class AppNotification {

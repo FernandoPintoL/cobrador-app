@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../datos/servicios/map_api_service.dart';
+import '../../datos/api_services/map_api_service.dart';
 
 // Servicio API
 final mapApiProvider = Provider<MapApiService>((ref) => MapApiService());

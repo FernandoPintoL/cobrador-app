@@ -99,24 +99,33 @@ class Usuario {
       }
 
       // Parsear coordenadas con debug
-      double? latitud = _parseDouble(json['latitude']) ??
-                       _parseDouble(json['latitud']) ??
-                       json['location']?['coordinates']?[1]?.toDouble();
+      double? latitud =
+          _parseDouble(json['latitude']) ??
+          _parseDouble(json['latitud']) ??
+          json['location']?['coordinates']?[1]?.toDouble();
 
-      double? longitud = _parseDouble(json['longitude']) ??
-                        _parseDouble(json['longitud']) ??
-                        json['location']?['coordinates']?[0]?.toDouble();
+      double? longitud =
+          _parseDouble(json['longitude']) ??
+          _parseDouble(json['longitud']) ??
+          json['location']?['coordinates']?[0]?.toDouble();
 
       // Debug de coordenadas
-      print('🗺️ DEBUG coordenadas - Usuario: ${json['name']} | Lat: $latitud | Lng: $longitud');
-      print('🗺️ JSON original - latitude: ${json['latitude']} | longitude: ${json['longitude']}');
+      /* print(
+        '🗺️ DEBUG coordenadas - Usuario: ${json['name']} | Lat: $latitud | Lng: $longitud',
+      );
+      print(
+        '🗺️ JSON original - latitude: ${json['latitude']} | longitude: ${json['longitude']}',
+      ); */
 
       return Usuario(
         id: id,
         assignedCobradorId: assignedCobradorId,
         assignedManagerId: assignedManagerId,
         nombre: json['name']?.toString() ?? '',
-        profileImage: (json['profile_image_url']?.toString() ?? json['profile_image']?.toString() ?? ''),
+        profileImage:
+            (json['profile_image_url']?.toString() ??
+            json['profile_image']?.toString() ??
+            ''),
         email: json['email']?.toString() ?? '',
         telefono: json['phone']?.toString() ?? '',
         direccion: json['address']?.toString() ?? '',
@@ -202,9 +211,9 @@ class Usuario {
 
   bool tieneRol(String rol) {
     final tiene = roles.contains(rol);
-    print(
+    /* print(
       '🔍 DEBUG: Verificando rol "$rol" - Resultado: $tiene (Roles disponibles: $roles)',
-    );
+    ); */
     return tiene;
   }
 

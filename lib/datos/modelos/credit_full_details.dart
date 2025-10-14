@@ -53,9 +53,25 @@ class CreditFullDetails {
           .toList();
     }
 
-    final summary = (data is Map<String, dynamic> && data['summary'] is Map<String, dynamic>)
-        ? data['summary'] as Map<String, dynamic>
-        : null;
+    // Construir summary desde los datos disponibles en data
+    Map<String, dynamic>? summary;
+    if (data is Map<String, dynamic>) {
+      // Si hay un campo 'summary' explícito, usarlo
+      if (data['summary'] is Map<String, dynamic>) {
+        summary = data['summary'] as Map<String, dynamic>;
+      } else {
+        // Si no, construir el summary a partir de los campos disponibles en data
+        summary = {
+          'installment_amount': data['installment_amount'],
+          'pending_installments': data['pending_installments'],
+          'completed_installments_count': data['completed_installments_count'],
+          'total_installments': data['total_installments'],
+          'balance': data['balance'],
+          'total_amount': data['total_amount'],
+          'amount': data['amount'],
+        };
+      }
+    }
 
     return CreditFullDetails(
       credit: credito,

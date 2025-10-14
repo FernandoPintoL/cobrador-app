@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../datos/servicios/cash_balance_api_service.dart';
+import '../../datos/api_services/cash_balance_api_service.dart';
 
 class CashBalanceState {
   final bool isLoading;
@@ -193,13 +193,25 @@ class CashBalanceNotifier extends StateNotifier<CashBalanceState> {
     int id, {
     double? finalAmount,
     String? notes,
+    String status = 'closed', // Añadimos el parámetro status con valor predeterminado 'closed'
   }) async {
     try {
       final resp = await _service.closeCashBalance(
         id,
         finalAmount: finalAmount,
         notes: notes,
+        status: status, // Pasamos el status al servicio API
       );
+      return resp;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Obtener cajas pendientes de cierre
+  Future<Map<String, dynamic>> getPendingClosures({int? cobradorId}) async {
+    try {
+      final resp = await _service.getPendingClosures(cobradorId: cobradorId);
       return resp;
     } catch (e) {
       rethrow;

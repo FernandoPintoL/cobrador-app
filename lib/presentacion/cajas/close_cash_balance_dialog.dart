@@ -17,6 +17,8 @@ class _CloseCashBalanceDialogState
   final TextEditingController _finalAmountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   bool _processing = false;
+  // Definimos un estado para controlar la selección, iniciando con 'closed' como predeterminado
+  String _selectedStatus = 'closed';
 
   @override
   void dispose() {
@@ -45,6 +47,7 @@ class _CloseCashBalanceDialogState
             notes: _notesController.text.trim().isEmpty
                 ? null
                 : _notesController.text.trim(),
+            status: _selectedStatus, // Pasamos el estado seleccionado
           );
 
       // Refrescar detalle y listado
@@ -147,6 +150,40 @@ class _CloseCashBalanceDialogState
                   fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
                 ),
                 maxLines: 3,
+              ),
+              const SizedBox(height: 24),
+              // Selector de estado
+              Row(
+                children: [
+                  Expanded(
+                    child: ListTile(
+                      title: const Text('Cerrada'),
+                      leading: Radio<String>(
+                        value: 'closed',
+                        groupValue: _selectedStatus,
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedStatus = value!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListTile(
+                      title: const Text('Reconciliada'),
+                      leading: Radio<String>(
+                        value: 'reconciled',
+                        groupValue: _selectedStatus,
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedStatus = value!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
               Row(

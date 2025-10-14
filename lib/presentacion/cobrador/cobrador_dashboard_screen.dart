@@ -5,6 +5,7 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../negocio/providers/profile_image_provider.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../negocio/providers/cash_balance_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/profile_image_widget.dart';
 // import '../widgets/websocket_widgets.dart'; // removed unused import
@@ -18,7 +19,7 @@ import '../map/map_screen.dart';
 import '../cajas/cash_balances_list_screen.dart';
 import 'daily_route_screen.dart';
 import 'quick_payment_screen.dart';
-// import 'package:intl/intl.dart'; // no usado
+import 'package:intl/intl.dart';
 
 class CobradorDashboardScreen extends ConsumerStatefulWidget {
   const CobradorDashboardScreen({super.key});
@@ -37,7 +38,131 @@ class _CobradorDashboardScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(creditProvider.notifier).loadCredits();
       ref.read(creditProvider.notifier).loadCobradorStats();
+
+      // Verificar si hay cajas pendientes de cierre
+      _verificarCajasPendientes();
     });
+  }
+
+  /// Verifica si el cobrador tiene cajas pendientes de cierre
+  Future<void> _verificarCajasPendientes() async {
+    final authState = ref.read(authProvider);
+    if (authState.usuario == null) return;
+
+    try {
+      final resp = await ref.read(cashBalanceProvider.notifier).getPendingClosures(
+        cobradorId: authState.usuario!.id.toInt(),
+      );
+
+      if (!mounted) return;
+
+      // Verificar si hay cajas pendientes
+      final pendingBoxes = resp['data'];
+      if (pendingBoxes is List && pendingBoxes.isNotEmpty) {
+        // Mostrar diálogo con las cajas pendientes
+        _mostrarDialogoCajasPendientes(pendingBoxes);
+      }
+    } catch (e) {
+      // Si hay error al verificar, no mostrar nada (silencioso)
+      debugPrint('Error verificando cajas pendientes: $e');
+    }
+  }
+
+  /// Muestra un diálogo con las cajas pendientes de cierre
+  void _mostrarDialogoCajasPendientes(dynamic pendingBoxesData) {
+    if (!mounted) return;
+
+    // Convertir a lista
+    final List<dynamic> boxes = pendingBoxesData is List
+        ? pendingBoxesData
+        : [];
+
+    if (boxes.isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange[700]),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Cajas Pendientes')),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Tienes las siguientes cajas pendientes de cierre:',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 12),
+              ...boxes.map((box) {
+                final id = box['id'];
+                final date = box['date'];
+                final amount = box['initial_amount'] ?? 0.0;
+
+                // Formatear fecha
+                String formattedDate = date?.toString() ?? 'Sin fecha';
+                try {
+                  if (date != null) {
+                    final parsedDate = DateTime.parse(date.toString());
+                    formattedDate = DateFormat('dd/MM/yyyy').format(parsedDate);
+                  }
+                } catch (e) {
+                  formattedDate = date?.toString() ?? 'Sin fecha';
+                }
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    dense: true,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.orange[100],
+                      child: Icon(Icons.calendar_today,
+                        size: 18,
+                        color: Colors.orange[700],
+                      ),
+                    ),
+                    title: Text('Caja #$id'),
+                    subtitle: Text('Fecha: $formattedDate'),
+                    trailing: Text(
+                      'Bs ${amount is num ? amount.toStringAsFixed(2) : amount}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                );
+              }).toList(),
+              const SizedBox(height: 8),
+              Text(
+                'Debes cerrar estas cajas antes de abrir una nueva.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _navigateToCashBalances(context);
+            },
+            child: const Text('Ver Cajas'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -247,7 +372,7 @@ class _CobradorDashboardScreenState
                             child: _buildStatCard(
                               context,
                               'Monto Total',
-                              '\$${stats?.totalAmount.toStringAsFixed(2) ?? '0.00'}',
+                              'Bs ${stats?.totalAmount.toStringAsFixed(2) ?? '0.00'}',
                               Icons.attach_money,
                               Colors.orange,
                             ),
@@ -257,7 +382,7 @@ class _CobradorDashboardScreenState
                             child: _buildStatCard(
                               context,
                               'Balance Total',
-                              '\$${stats?.totalBalance.toStringAsFixed(2) ?? '0.00'}',
+                              'Bs ${stats?.totalBalance.toStringAsFixed(2) ?? '0.00'}',
                               Icons.account_balance_wallet,
                               Colors.purple,
                             ),

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../datos/servicios/payment_api_service.dart';
-import '../../datos/servicios/credit_api_service.dart';
-import '../../datos/servicios/cash_balance_api_service.dart';
+import '../../datos/api_services/payment_api_service.dart';
+import '../../datos/api_services/credit_api_service.dart';
+import '../../datos/api_services/cash_balance_api_service.dart';
 import '../../datos/modelos/credito.dart';
 import 'auth_provider.dart';
 import 'websocket_provider.dart';

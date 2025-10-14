@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import '../../negocio/servicios/allowed_apps_helper.dart';
+import '../../negocio/domain_services/allowed_apps_helper.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/profile_image_provider.dart';
 import '../../negocio/providers/user_management_provider.dart';

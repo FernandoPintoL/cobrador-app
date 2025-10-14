@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../datos/servicios/user_api_service.dart';
+import '../../datos/api_services/user_api_service.dart';
 // client_api_service no se usa directamente aquí; mantenemos solo user_api
 import '../../negocio/providers/reports_provider.dart';
 import '../../negocio/providers/reports_provider.dart' as rp;

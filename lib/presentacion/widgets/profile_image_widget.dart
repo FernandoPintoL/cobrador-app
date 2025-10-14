@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../negocio/servicios/allowed_apps_helper.dart';
+import '../../negocio/domain_services/allowed_apps_helper.dart';
 import 'dart:io';
-import '../../datos/servicios/api_service.dart';
+import '../../datos/api_services/api_service.dart';
 
 class ProfileImageWidget extends StatelessWidget {
   final String? profileImage;

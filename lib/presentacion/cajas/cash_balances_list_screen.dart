@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../negocio/providers/cash_balance_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/cobrador_assignment_provider.dart';
@@ -380,7 +381,11 @@ class _CashBalancesListScreenState
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
-                                                date,
+                                                DateFormat('dd/MM/yyyy').format(
+                                                    date is DateTime
+                                                        ? date
+                                                        : DateTime.tryParse(date.toString()) ?? DateTime(1970, 1, 1)
+                                                ),
                                                 style: TextStyle(
                                                   fontSize: 13,
                                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -424,7 +429,7 @@ class _CashBalancesListScreenState
                                           ),
                                         ),
                                         Text(
-                                          '\$$initial',
+                                          'Bs $initial',
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,

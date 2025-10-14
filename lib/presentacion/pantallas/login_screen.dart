@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/auth_provider.dart';
-import '../../datos/servicios/storage_service.dart';
+import '../../datos/api_services/storage_service.dart';
 import '../superadmin/admin_dashboard_screen.dart';
 import '../manager/manager_dashboard_screen.dart';
 import '../cobrador/cobrador_dashboard_screen.dart';

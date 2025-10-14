@@ -154,7 +154,16 @@ class _CashBalanceDetailScreenState
                             context,
                             Icons.calendar_today,
                             'Fecha',
-                            detail['cash_balance']?['date'] ?? '—',
+                            detail['cash_balance']?['date'] != null
+                                ? (() {
+                              final dateStr = detail['cash_balance']?['date']?.toString() ?? '';
+                              final date = DateTime.tryParse(dateStr);
+                              if (date != null) {
+                                return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+                              }
+                              return dateStr.isNotEmpty ? dateStr : '—';
+                            })()
+                                : '—',
                           ),
                           const SizedBox(height: 12),
                           _buildInfoRow(
@@ -233,7 +242,7 @@ class _CashBalanceDetailScreenState
                               ),
                             ),
                             title: Text(
-                              '\$$amountStr',
+                              'Bs $amountStr',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -244,9 +253,73 @@ class _CashBalanceDetailScreenState
                               children: [
                                 if (clientName.isNotEmpty)
                                   Text(clientName),
-                                Text(
-                                  '${p['payment_method'] ?? ''} - ${p['payment_date'] ?? ''}',
-                                  style: const TextStyle(fontSize: 12),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (p['payment_method'] != null && p['payment_method'].toString().isNotEmpty)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.payment,
+                                              size: 14,
+                                              color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              p['payment_method'].toString(),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    if (p['payment_date'] != null && p['payment_date'].toString().isNotEmpty)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).colorScheme.tertiaryContainer.withOpacity(0.5),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.calendar_today,
+                                              size: 14,
+                                              color: Theme.of(context).colorScheme.onTertiaryContainer,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              (() {
+                                                final dateStr = p['payment_date'].toString();
+                                                final date = DateTime.tryParse(dateStr);
+                                                if (date != null) {
+                                                  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+                                                }
+                                                return dateStr;
+                                              })(),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                                color: Theme.of(context).colorScheme.onTertiaryContainer,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
                                 if (creditInfo.isNotEmpty)
                                   Text(
@@ -345,7 +418,7 @@ class _CashBalanceDetailScreenState
                               ),
                             ),
                             title: Text(
-                              '\$$amountStr',
+                              'Bs $amountStr',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -357,7 +430,11 @@ class _CashBalanceDetailScreenState
                                 if (clientName.isNotEmpty)
                                   Text(clientName),
                                 Text(
-                                  c['created_at'] ?? '',
+                                  c['created_at'] != null
+                                      ? DateTime.tryParse(c['created_at']) != null
+                                      ? '${DateTime.parse(c['created_at']).day.toString().padLeft(2, '0')}/${DateTime.parse(c['created_at']).month.toString().padLeft(2, '0')}/${DateTime.parse(c['created_at']).year}'
+                                      : c['created_at']
+                                      : '',
                                   style: const TextStyle(fontSize: 12),
                                 ),
                               ],
@@ -479,21 +556,21 @@ class _CashBalanceDetailScreenState
                             _buildReconciliationRow(
                               context,
                               'Esperado',
-                              '\$$expectedStr',
+                              'Bs $expectedStr',
                               isBalanced ? Colors.green.shade700 : Colors.red.shade700,
                             ),
                             const SizedBox(height: 12),
                             _buildReconciliationRow(
                               context,
                               'Final reportado',
-                              '\$$actualStr',
+                              'Bs $actualStr',
                               isBalanced ? Colors.green.shade700 : Colors.red.shade700,
                             ),
                             const SizedBox(height: 12),
                             _buildReconciliationRow(
                               context,
                               'Diferencia',
-                              '\$$diffStr',
+                              'Bs $diffStr',
                               isBalanced ? Colors.green.shade700 : Colors.red.shade700,
                               isBold: true,
                             ),

@@ -191,7 +191,7 @@ class _DailyRouteScreenState extends ConsumerState<DailyRouteScreen> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  'Total: \$${filteredCredits.fold<double>(0, (sum, c) => sum + c.balance).toStringAsFixed(2)}',
+                  'Total: Bs ${filteredCredits.fold<double>(0, (sum, c) => sum + c.balance).toStringAsFixed(2)}',
                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
                 ),
               ],
@@ -354,7 +354,7 @@ class _DailyRouteScreenState extends ConsumerState<DailyRouteScreen> {
                   Expanded(
                     child: _buildInfoItem(
                       'Balance',
-                      '\$${credit.balance.toStringAsFixed(2)}',
+                      'Bs ${credit.balance.toStringAsFixed(2)}',
                       Icons.account_balance_wallet,
                       Colors.blue,
                     ),
@@ -362,7 +362,7 @@ class _DailyRouteScreenState extends ConsumerState<DailyRouteScreen> {
                   Expanded(
                     child: _buildInfoItem(
                       'Cuota',
-                      '\$${credit.installmentAmount?.toStringAsFixed(2) ?? 'N/A'}',
+                      'Bs ${credit.installmentAmount?.toStringAsFixed(2) ?? 'N/A'}',
                       Icons.payments,
                       Colors.green,
                     ),
@@ -392,7 +392,7 @@ class _DailyRouteScreenState extends ConsumerState<DailyRouteScreen> {
                       const Icon(Icons.warning, color: Colors.red, size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        'Mora: \$${credit.overdueAmount!.toStringAsFixed(2)}',
+                        'Mora: Bs ${credit.overdueAmount!.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: Colors.red,
                           fontWeight: FontWeight.bold,

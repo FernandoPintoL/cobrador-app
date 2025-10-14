@@ -2,8 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../../datos/modelos/usuario.dart';
-import '../../datos/servicios/api_service.dart';
-import '../../datos/servicios/storage_service.dart';
+import '../../datos/api_services/api_service.dart';
+import '../../datos/api_services/storage_service.dart';
 import 'websocket_provider.dart';
 
 class AuthState {

@@ -961,10 +961,10 @@ packages:
     dependency: transitive
     description:
       name: js
-      sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
+      sha256: f2c445dce49627136094980615a031419f7f3eb393237e4ecd97ac15dea343f3
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.2"
+    version: "0.6.7"
   json_annotation:
     dependency: transitive
     description:
@@ -981,14 +981,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
-  laravel_echo:
-    dependency: "direct main"
-    description:
-      name: laravel_echo
-      sha256: aec1c8a989f8718ffbb9864e746eed2181638e156d4e22724230a5be9cdf43ab
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0-beta.1"
   latlong2:
     dependency: transitive
     description:
@@ -1341,14 +1333,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.0"
-  pusher_channels_flutter:
-    dependency: "direct main"
-    description:
-      name: pusher_channels_flutter
-      sha256: "4d83b2012079c7d1a3c42cee1d37a48c974504d869b6a9c085144b2d4e35e58a"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.5.0"
   qr:
     dependency: transitive
     description:
@@ -1494,18 +1478,18 @@ packages:
     dependency: "direct main"
     description:
       name: socket_io_client
-      sha256: c8471c2c6843cf308a5532ff653f2bcdb7fa9ae79d84d1179920578a06624f0d
+      sha256: ede469f3e4c55e8528b4e023bdedbc20832e8811ab9b61679d1ba3ed5f01f23b
       url: "https://pub.dev"
     source: hosted
-    version: "3.1.2"
+    version: "2.0.3+1"
   socket_io_common:
     dependency: transitive
     description:
       name: socket_io_common
-      sha256: "162fbaecbf4bf9a9372a62a341b3550b51dcef2f02f3e5830a297fd48203d45b"
+      sha256: "2ab92f8ff3ebbd4b353bf4a98bee45cc157e3255464b2f90f66e09c4472047eb"
       url: "https://pub.dev"
     source: hosted
-    version: "3.1.1"
+    version: "2.0.3"
   source_gen:
     dependency: transitive
     description:

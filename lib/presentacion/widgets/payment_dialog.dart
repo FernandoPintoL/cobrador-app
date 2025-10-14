@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../datos/modelos/api_exception.dart';
 import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
-import '../../datos/servicios/cash_balance_api_service.dart';
+import '../../datos/api_services/cash_balance_api_service.dart';
+import '../cajas/cash_balances_list_screen.dart';
 
 class PaymentDialog extends ConsumerStatefulWidget {
   final Credito credit;
@@ -250,8 +252,7 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
       });
       if (!esC) return;
 
-      // Opcional: podríamos consultar endpoint para verificar si hay caja abierta.
-      // Por simplicidad usamos un intento de apertura con solo fecha (idempotente) en background
+      // Verificar si hay caja abierta usando el endpoint idempotente
       setState(() => isCajaOpenChecking = true);
       try {
         final today = DateTime.now().toIso8601String().split('T')[0];
@@ -264,6 +265,22 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
         setState(() {
           isCajaOpen = ok;
         });
+      } on ApiException catch (e) {
+        // Error 422: Cajas pendientes de cierre
+        if (e.statusCode == 422) {
+          setState(() {
+            isCajaOpen = false;
+          });
+          if (mounted) {
+            _mostrarDialogoCajasPendientes(
+              e.errorData?['data']?['pending_boxes'],
+            );
+          }
+        } else {
+          setState(() {
+            isCajaOpen = false;
+          });
+        }
       } catch (_) {
         setState(() {
           isCajaOpen = false;
@@ -276,34 +293,138 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
     }
   }
 
-  Future<void> _openCajaManual() async {
-    try {
-      setState(() => isCajaOpenChecking = true);
-      final authState = ref.read(authProvider);
-      final usuario = authState.usuario;
-      if (usuario == null) {
-        _showSnackBar('Usuario no autenticado', isError: true);
-        return;
+  void _openCajaManual() {
+    // En lugar de intentar abrir la caja, redirigimos al usuario a la pantalla de cajas
+    // para que pueda gestionar primero el cierre de la caja pendiente
+    Navigator.pop(context); // Cerrar el diálogo de pago
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CashBalancesListScreen()),
+    );
+  }
+
+  void _mostrarDialogoCajasPendientes(dynamic pendingBoxesData) {
+    if (pendingBoxesData == null) return;
+
+    // Convertir datos a lista
+    final List<Map<String, dynamic>> pendingBoxes = [];
+    if (pendingBoxesData is List) {
+      for (final box in pendingBoxesData) {
+        if (box is Map) {
+          pendingBoxes.add(Map<String, dynamic>.from(box));
+        }
       }
-      final today = DateTime.now().toIso8601String().split('T')[0];
-      final resp = await CashBalanceApiService().openCashBalance(
-        cobradorId: usuario.id.toInt(),
-        date: today,
-      );
-      if (resp['success'] == true || resp['status'] == 'ok') {
-        setState(() {
-          isCajaOpen = true;
-        });
-        _showSnackBar('Caja abierta correctamente', isError: false);
-      } else {
-        final msg = resp['message'] ?? 'No se pudo abrir la caja';
-        _showSnackBar(msg, isError: true);
-      }
-    } catch (e) {
-      _showSnackBar('Error al abrir caja: $e', isError: true);
-    } finally {
-      setState(() => isCajaOpenChecking = false);
     }
+
+    if (pendingBoxes.isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // No puede cerrar tocando fuera
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.orange.shade700,
+                size: 28,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Cajas Pendientes',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Debes cerrar las siguientes cajas antes de abrir una nueva:',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                SizedBox(height: 16),
+                ...pendingBoxes.map((caja) {
+                  final fechaStr = caja['date']?.toString() ?? '';
+                  DateTime? fecha;
+                  try {
+                    fecha = DateTime.parse(fechaStr);
+                  } catch (_) {}
+
+                  final monto =
+                      caja['final_amount'] ?? caja['collected_amount'] ?? 0;
+
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 8),
+                    color: Colors.orange.shade50,
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.orange.shade700,
+                        child: Icon(
+                          Icons.money_off,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        'Caja #${caja['id']}',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (fecha != null)
+                            Text(
+                              'Fecha: ${DateFormat('dd/MM/yyyy').format(fecha)}',
+                            ),
+                          Text(
+                            'Monto: Bs. ${NumberFormat('#,##0.00').format(monto)}',
+                          ),
+                        ],
+                      ),
+                      trailing: Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: Colors.orange.shade700,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Entendido'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(context); // Cerrar diálogo actual
+                Navigator.pop(context); // Cerrar diálogo de pago
+                // Navegar a la pantalla de cajas
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CashBalancesListScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.account_balance_wallet),
+              label: const Text('Ver Cajas'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.orange.shade700,
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showSnackBar(String message, {required bool isError}) {
@@ -420,12 +541,16 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
               decoration: BoxDecoration(
                 color: isCajaOpenChecking
                     ? Colors.blue.shade50
-                    : (!isCajaOpen ? Colors.orange.shade50 : Colors.green.shade50),
+                    : (!isCajaOpen
+                          ? Colors.orange.shade50
+                          : Colors.green.shade50),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isCajaOpenChecking
                       ? Colors.blue.shade200
-                      : (!isCajaOpen ? Colors.orange.shade300 : Colors.green.shade300),
+                      : (!isCajaOpen
+                            ? Colors.orange.shade300
+                            : Colors.green.shade300),
                   width: 1,
                 ),
               ),
@@ -452,70 +577,72 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                       ],
                     )
                   : (!isCajaOpen
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: Colors.orange.shade700,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Caja no abierta',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.orange.shade700,
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: Colors.orange.shade700,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Caja no abierta',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.orange.shade700,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Debe abrir la caja antes de procesar pagos. Los pagos se registrarán en la caja del día actual.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.orange.shade900,
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed: isCajaOpenChecking ? null : _openCajaManual,
-                                icon: const Icon(Icons.lock_open, size: 18),
-                                label: const Text('Abrir caja ahora'),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.orange.shade700,
-                                  foregroundColor: Colors.white,
+                              const SizedBox(height: 8),
+                              Text(
+                                'Debe abrir la caja antes de procesar pagos. Los pagos se registrarán en la caja del día actual.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.orange.shade900,
                                 ),
                               ),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Icon(
-                              Icons.check_circle,
-                              color: Colors.green.shade700,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Caja abierta correctamente',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  onPressed: isCajaOpenChecking
+                                      ? null
+                                      : _openCajaManual,
+                                  icon: const Icon(Icons.lock_open, size: 18),
+                                  label: const Text('Abrir caja ahora'),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: Colors.orange.shade700,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle,
                                 color: Colors.green.shade700,
+                                size: 20,
                               ),
-                            ),
-                          ],
-                        )),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Caja abierta correctamente',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green.shade700,
+                                ),
+                              ),
+                            ],
+                          )),
             ),
             const SizedBox(height: 16),
           ],
@@ -573,11 +700,17 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                 onPressed: isProcessing
                     ? null
                     : () {
-                        widget.onCancel?.call();
-                        widget.onFinished?.call({
-                          'success': false,
-                          'message': null,
-                        });
+                        /* widget.onCancel?.call();
+                        // Solo llamar a onFinished si está definido
+                        if (widget.onFinished != null) {
+                          widget.onFinished!({
+                            'success': false,
+                            'message': null,
+                          });
+                        } else {
+                          Navigator.of(context).pop();
+                        } */
+                        Navigator.of(context).pop();
                       },
                 child: const Text('Cancelar'),
               ),
