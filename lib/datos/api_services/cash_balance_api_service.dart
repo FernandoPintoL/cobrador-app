@@ -366,4 +366,51 @@ class CashBalanceApiService extends BaseApiService {
       throw ApiException(message: 'Error cerrando caja: $e', originalError: e);
     }
   }
+
+  /// Obtener el estado actual de la caja (GET /cash-balances/current-status)
+  /// Retorna información sobre si la caja de hoy está abierta, si hay cajas pendientes, etc.
+  Future<Map<String, dynamic>> getCurrentStatus({int? cobradorId}) async {
+    try {
+      final query = <String, dynamic>{};
+      if (cobradorId != null) query['cobrador_id'] = cobradorId;
+
+      final response = await get(
+        '/cash-balances/current-status',
+        queryParameters: query.isEmpty ? null : query,
+      );
+
+      if (response.statusCode == 200) {
+        final raw = response.data;
+        if (raw is Map<String, dynamic>) return raw;
+        throw ApiException(
+          message: 'Formato inesperado en estado actual de caja',
+          statusCode: response.statusCode,
+          errorData: raw,
+        );
+      }
+
+      throw ApiException(
+        message: 'Error obteniendo estado actual de caja',
+        statusCode: response.statusCode,
+        errorData: response.data,
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      String message = 'Error obteniendo estado actual de caja';
+      if (data is Map<String, dynamic> && data['message'] != null)
+        message = data['message'].toString();
+      throw ApiException(
+        message: message,
+        statusCode: status,
+        errorData: data,
+        originalError: e,
+      );
+    } catch (e) {
+      throw ApiException(
+        message: 'Error obteniendo estado actual de caja: $e',
+        originalError: e,
+      );
+    }
+  }
 }

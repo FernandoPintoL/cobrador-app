@@ -9,6 +9,7 @@ import '../../datos/modelos/credito.dart';
 import '../../ui/widgets/validation_error_display.dart';
 import '../../ui/widgets/loading_overlay.dart';
 import '../widgets/payment_dialog.dart';
+import '../cajas/cash_balances_list_screen.dart';
 import 'credit_detail_screen.dart';
 import 'credit_form_screen.dart';
 import 'widgets/credits_list_widget.dart';
@@ -40,7 +41,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     // Listener para búsqueda en tiempo real desactivado (se usará botón de búsqueda u onSubmitted)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
@@ -287,6 +288,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               text:
                   'Activos ('
                   '${creditState.credits.where((c) => c.status == 'active').length}'
+                  '${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).isNotEmpty ? ' • ${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).length} ⚠' : ''}'
                   ')',
               icon: const Icon(Icons.playlist_add_check_circle),
             ),
@@ -306,24 +308,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
             ),
             Tab(
               text:
-                  'Entregar ('
-                  '${creditState.credits.where((c) => c.isReadyForDelivery).length}'
+                  'Para Entregar ('
+                  '${creditState.credits.where((c) => c.isReadyForDelivery || c.isOverdueForDelivery).length}'
                   ')',
-              icon: const Icon(Icons.today),
-            ),
-            Tab(
-              text:
-                  'Entregas Atrasadas ('
-                  '${creditState.credits.where((c) => c.isOverdueForDelivery).length}'
-                  ')',
-              icon: const Icon(Icons.warning),
-            ),
-            Tab(
-              text:
-                  'Con Mora ('
-                  '${creditState.credits.where((c) => c.isOverdue).length}'
-                  ')',
-              icon: const Icon(Icons.money_off),
+              icon: const Icon(Icons.local_shipping),
             ),
           ],
         ),
@@ -398,20 +386,21 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                         }
                       },
                       onCardTap: _navigateToCreditDetail,
-                      canDeliver: true,
-                      onDeliver: _showQuickDeliveryDialog,
+                      // Créditos activos ya fueron entregados, no necesitan botón de entrega
+                      // Todos los roles pueden registrar pagos
+                      enablePayment: true,
                       onPayment: _showPaymentDialogFromList,
                     ),
                     CreditsListWidget(
                       credits: creditState.credits
                           .where((c) => c.status == 'pending_approval')
                           .toList(),
-                      listType: 'pending',
+                      listType: 'pending_approval',
                       isLoadingMore: creditState.isLoading,
                       clientCategoryFilters: _filterState.clientCategories,
                       onCardTap: _navigateToCreditDetail,
-                      canApprove: true,
-                      // canReject: true,
+                      // SOLO managers y admins pueden aprobar/rechazar créditos
+                      canApprove: currentUserRole == 'manager' || currentUserRole == 'admin',
                       onLoadMore: () {
                         if (!creditState.isLoading &&
                             creditState.totalPages > creditState.currentPage) {
@@ -420,21 +409,26 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                               .loadCredits(page: creditState.currentPage + 1);
                         }
                       },
-                      onApprove: _showQuickApprovalDialog,
-                      onReject: _showQuickRejectionDialog,
+                      onApprove: currentUserRole == 'manager' || currentUserRole == 'admin'
+                          ? _showQuickApprovalDialog
+                          : null,
+                      onReject: currentUserRole == 'manager' || currentUserRole == 'admin'
+                          ? _showQuickRejectionDialog
+                          : null,
                     ),
                     CreditsListWidget(
                       credits: creditState.credits
                           .where((c) => c.status == 'waiting_delivery')
                           .toList(),
-                      listType: 'waiting',
+                      listType: 'waiting_delivery',
                       clientCategoryFilters: _filterState.clientCategories,
                       isLoadingMore: creditState.isLoading,
                       hasMore: creditState.totalPages > creditState.currentPage,
                       currentPage: creditState.currentPage,
                       totalPages: creditState.totalPages,
                       onCardTap: _navigateToCreditDetail,
-                      canDeliver: true,
+                      // Solo cobradores y admins pueden entregar créditos
+                      canDeliver: currentUserRole == 'cobrador' || currentUserRole == 'admin',
                       onLoadMore: () {
                         if (!creditState.isLoading &&
                             creditState.totalPages > creditState.currentPage) {
@@ -443,20 +437,24 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                               .loadCredits(page: creditState.currentPage + 1);
                         }
                       },
-                      onDeliver: _showQuickDeliveryDialog,
+                      onDeliver: currentUserRole == 'cobrador' || currentUserRole == 'admin'
+                          ? _showQuickDeliveryDialog
+                          : null,
                     ),
+                    // Tab "Para Entregar": combina listos hoy + atrasados
                     CreditsListWidget(
                       credits: creditState.credits
-                          .where((c) => c.isReadyForDelivery)
+                          .where((c) => c.isReadyForDelivery || c.isOverdueForDelivery)
                           .toList(),
-                      listType: 'ready',
+                      listType: 'ready_for_delivery',
                       clientCategoryFilters: _filterState.clientCategories,
                       isLoadingMore: creditState.isLoading,
                       hasMore: creditState.totalPages > creditState.currentPage,
                       currentPage: creditState.currentPage,
                       totalPages: creditState.totalPages,
                       onCardTap: _navigateToCreditDetail,
-                      canDeliver: true,
+                      // Solo cobradores y admins pueden entregar créditos
+                      canDeliver: currentUserRole == 'cobrador' || currentUserRole == 'admin',
                       onLoadMore: () {
                         if (!creditState.isLoading &&
                             creditState.totalPages > creditState.currentPage) {
@@ -465,51 +463,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                               .loadCredits(page: creditState.currentPage + 1);
                         }
                       },
-                      onDeliver: _showQuickDeliveryDialog,
-                    ),
-                    CreditsListWidget(
-                      credits: creditState.credits
-                          .where((c) => c.isOverdueForDelivery)
-                          .toList(),
-                      listType: 'overdue',
-                      clientCategoryFilters: _filterState.clientCategories,
-                      isLoadingMore: creditState.isLoading,
-                      hasMore: creditState.totalPages > creditState.currentPage,
-                      currentPage: creditState.currentPage,
-                      totalPages: creditState.totalPages,
-                      onLoadMore: () {
-                        if (!creditState.isLoading &&
-                            creditState.totalPages > creditState.currentPage) {
-                          ref
-                              .read(creditProvider.notifier)
-                              .loadCredits(page: creditState.currentPage + 1);
-                        }
-                      },
-                      onCardTap: _navigateToCreditDetail,
-                      canDeliver: true,
-                      onDeliver: _showQuickDeliveryDialog,
-                    ),
-                    CreditsListWidget(
-                      credits: creditState.credits
-                          .where((c) => c.isOverdue)
-                          .toList(),
-                      listType: 'overdue',
-                      clientCategoryFilters: _filterState.clientCategories,
-                      isLoadingMore: creditState.isLoading,
-                      hasMore: creditState.totalPages > creditState.currentPage,
-                      currentPage: creditState.currentPage,
-                      totalPages: creditState.totalPages,
-                      onLoadMore: () {
-                        if (!creditState.isLoading &&
-                            creditState.totalPages > creditState.currentPage) {
-                          ref
-                              .read(creditProvider.notifier)
-                              .loadCredits(page: creditState.currentPage + 1);
-                        }
-                      },
-                      onCardTap: _navigateToCreditDetail,
-                      enablePayment: true,
-                      onPayment: _showPaymentDialogFromList,
+                      onDeliver: currentUserRole == 'cobrador' || currentUserRole == 'admin'
+                          ? _showQuickDeliveryDialog
+                          : null,
                     ),
                   ],
                 ),
@@ -524,13 +480,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const CreditFormScreen()),
-          );
-          _loadInitialData();
-        },
+        onPressed: _checkCashBalanceAndNavigateToForm,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(
           'Nuevo Crédito',
@@ -970,5 +920,222 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       // Tras reprogramar, refrescar listas para reflejar la nueva fecha
       _loadInitialData();
     }
+  }
+
+  /// Verifica el estado de la caja antes de crear un crédito
+  /// Si hay problemas, muestra un diálogo y redirige a la pantalla de cajas
+  Future<void> _checkCashBalanceAndNavigateToForm() async {
+    final authState = ref.read(authProvider);
+    final isCobrador = authState.usuario?.esCobrador() ?? false;
+
+    // Si no es cobrador, navegar directamente al formulario
+    if (!isCobrador) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const CreditFormScreen()),
+      );
+      _loadInitialData();
+      return;
+    }
+
+    // Mostrar indicador de carga mientras verificamos el estado
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Verificando estado de caja...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final status = await ref
+          .read(creditProvider.notifier)
+          .checkCashBalanceStatus();
+
+      // Cerrar el indicador de carga
+      if (mounted) Navigator.of(context).pop();
+
+      if (status == null) {
+        // Error al verificar estado
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error al verificar estado de caja'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Caso 1: Todo OK - caja abierta sin pendientes
+      if (status.isOpen && !status.hasPendingClosures) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const CreditFormScreen()),
+        );
+        _loadInitialData();
+        return;
+      }
+
+      // Caso 2: Caja NO abierta, CON cajas pendientes
+      if (!status.isOpen && status.hasPendingClosures) {
+        await _showCashBalanceErrorDialog(
+          title: 'Cajas Pendientes de Cerrar',
+          message:
+              'Tienes ${status.pendingClosures.length} caja(s) pendiente(s) de cerrar:\n\n'
+              '${status.pendingClosures.map((c) => '• ${DateFormat('dd/MM/yyyy').format(DateTime.parse(c.date))}').join('\n')}\n\n'
+              'Debes cerrar estas cajas antes de poder crear nuevos créditos.',
+          icon: Icons.warning_amber_rounded,
+          iconColor: Colors.orange,
+        );
+        return;
+      }
+
+      // Caso 3: Caja NO abierta, sin pendientes
+      if (!status.isOpen && !status.hasPendingClosures) {
+        await _showCashBalanceErrorDialog(
+          title: 'Caja No Abierta',
+          message:
+              'No has abierto la caja de hoy (${DateFormat('dd/MM/yyyy').format(DateTime.parse(status.date))}).\n\n'
+              'Debes abrir la caja antes de poder crear nuevos créditos.',
+          icon: Icons.info_outline,
+          iconColor: Colors.blue,
+        );
+        return;
+      }
+
+      // Caso 4: Caja abierta, PERO hay cajas pendientes
+      if (status.isOpen && status.hasPendingClosures) {
+        final proceed = await _showCashBalanceWarningDialog(
+          title: 'Advertencia: Cajas Pendientes',
+          message:
+              'Tu caja de hoy está abierta, pero tienes ${status.pendingClosures.length} caja(s) pendiente(s) de cerrar:\n\n'
+              '${status.pendingClosures.map((c) => '• ${DateFormat('dd/MM/yyyy').format(DateTime.parse(c.date))}').join('\n')}\n\n'
+              'Puedes crear el crédito, pero recuerda cerrar estas cajas pronto.',
+        );
+
+        if (proceed == true) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CreditFormScreen()),
+          );
+          _loadInitialData();
+        }
+        return;
+      }
+    } catch (e) {
+      // Cerrar el indicador de carga si aún está abierto
+      if (mounted) Navigator.of(context).pop();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al verificar caja: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Muestra un diálogo de error con opción de ir a la pantalla de cajas
+  Future<void> _showCashBalanceErrorDialog({
+    required String title,
+    required String message,
+    required IconData icon,
+    required Color iconColor,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 28),
+            const SizedBox(width: 12),
+            Expanded(child: Text(title)),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CashBalancesListScreen(),
+                ),
+              ).then((_) => _loadInitialData());
+            },
+            icon: const Icon(Icons.account_balance_wallet),
+            label: const Text('Ir a Cajas'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: iconColor,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Muestra un diálogo de advertencia con opción de continuar o ir a cajas
+  Future<bool?> _showCashBalanceWarningDialog({
+    required String title,
+    required String message,
+  }) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            const SizedBox(width: 12),
+            Expanded(child: Text(title)),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context, false);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CashBalancesListScreen(),
+                ),
+              ).then((_) => _loadInitialData());
+            },
+            icon: const Icon(Icons.account_balance_wallet),
+            label: const Text('Ir a Cajas'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Continuar de Todos Modos'),
+          ),
+        ],
+      ),
+    );
   }
 }

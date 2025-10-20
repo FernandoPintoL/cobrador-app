@@ -263,11 +263,14 @@ class Credito {
   }
 
   // Usar la lógica del backend si está disponible, sino calcular
+  // IMPORTANTE: El backend debe calcular mora con 3 DÍAS DE GRACIA
+  // Es decir, un pago vencido hoy no está en mora hasta el día 4
   bool get isOverdue {
-    // Si tenemos datos del backend, usarlos
+    // Si tenemos datos del backend, usarlos (preferido)
     if (backendIsOverdue != null) return backendIsOverdue!;
 
-    // Fallback al cálculo original
+    // Fallback al cálculo original (sin días de gracia)
+    // NOTA: Este fallback es solo de emergencia, el backend debe enviar is_overdue
     return DateTime.now().isAfter(endDate) && !isCompleted;
   }
 

@@ -273,16 +273,7 @@ class WebSocketService {
       }
     });
 
-    _socket?.on('auth_error', (data) {
-      try {
-        print(
-          '⛔ Error de autenticación: ${data is String ? data : jsonEncode(data)}',
-        );
-      } catch (_) {
-        print('⛔ Error de autenticación');
-      }
-    });
-
+    // Solo authentication_error según documentación (auth_error removido por redundancia)
     _socket?.on('authentication_error', (data) {
       try {
         print(
@@ -351,10 +342,16 @@ class WebSocketService {
   }
 
   /// Configurar listeners para eventos de negocio
+  /// Optimizado: sin duplicados. El servidor filtra por rol/sala automáticamente.
   void _setupBusinessEventListeners() {
-    // --- EVENTOS DE CRÉDITOS (MANAGERS) ---
+    // --- EVENTOS DE CRÉDITOS (MANAGERS reciben estos del servidor) ---
     _socket?.on('credit_waiting_approval', (data) {
       print('📨 [MANAGER] Crédito pendiente de aprobación');
+      _handleNotification(data);
+    });
+
+    _socket?.on('credit_pending_approval', (data) {
+      print('📨 [MANAGER] Crédito pendiente (socket)');
       _handleNotification(data);
     });
 
@@ -363,7 +360,17 @@ class WebSocketService {
       _handleNotification(data);
     });
 
-    // --- EVENTOS DE CRÉDITOS (COBRADORES) ---
+    _socket?.on('credit_delivered_notification', (data) {
+      print('📨 [MANAGER] Notificación de entrega');
+      _handleNotification(data);
+    });
+
+    _socket?.on('new_credit_notification', (data) {
+      print('📨 Nueva notificación de crédito');
+      _handleNotification(data);
+    });
+
+    // --- EVENTOS DE CRÉDITOS (COBRADORES reciben estos del servidor) ---
     _socket?.on('credit_approved', (data) {
       print('📨 [COBRADOR] Crédito aprobado');
       _handleNotification(data);
@@ -374,37 +381,54 @@ class WebSocketService {
       _handleNotification(data);
     });
 
-    // --- EVENTOS DE PAGOS (COBRADORES) ---
+    _socket?.on('credit_attention_required', (data) {
+      print('📨 [COBRADOR] Crédito requiere atención');
+      _handleNotification(data);
+    });
+
+    _socket?.on('credit_decision', (data) {
+      print('📨 [COBRADOR] Decisión sobre crédito');
+      _handleNotification(data);
+    });
+
+    _socket?.on('credit_lifecycle_update', (data) {
+      print('📨 Actualización de ciclo de vida de crédito');
+      _handleNotification(data);
+    });
+
+    // --- EVENTOS DE PAGOS ---
     _socket?.on('payment_received', (data) {
       print('📨 [COBRADOR] Pago recibido');
       _handlePaymentUpdate(data);
     });
 
-    // --- EVENTOS DE PAGOS (MANAGERS) ---
     _socket?.on('cobrador_payment_received', (data) {
       print('📨 [MANAGER] Pago de cobrador recibido');
       _handlePaymentUpdate(data);
     });
 
-    // --- EVENTOS DE CAJAS (COBRADORES) ---
+    // --- EVENTOS DE CAJAS ---
     _socket?.on('cash_balance_reminder', (data) {
       print('📨 [COBRADOR] Recordatorio de cierre de caja');
       _handleNotification(data);
     });
 
-    // --- EVENTOS DE RUTAS Y UBICACIONES ---
-    _socket?.on('route_update', (data) {
+    // --- EVENTOS DE RUTAS (solo route_updated según documentación) ---
+    _socket?.on('route_updated', (data) {
+      print('📨 [MANAGER] Ruta actualizada');
       _handleRouteUpdate(data);
     });
 
-    // --- EVENTOS DE MENSAJES ---
-    _socket?.on('message', (data) {
-      _handleMessage(data);
+    // --- EVENTOS DE UBICACIÓN ---
+    _socket?.on('cobrador_location_update', (data) {
+      print('📨 [ADMIN/MANAGER] Ubicación de cobrador');
+      _handleLocationUpdate(data);
     });
 
-    // --- EVENTOS DE UBICACIONES ---
-    _socket?.on('location_update', (data) {
-      _handleLocationUpdate(data);
+    // --- EVENTOS DE MENSAJES (solo new_message según documentación) ---
+    _socket?.on('new_message', (data) {
+      print('📨 Nuevo mensaje');
+      _handleMessage(data);
     });
   }
 
@@ -712,33 +736,23 @@ class WebSocketService {
   }
 
   /// Actualización de ubicación
+  /// Solo envía latitude y longitude según documentación del WebSocket
   void updateLocation(
     double latitude,
     double longitude, {
     String? address,
     double? accuracy,
   }) {
-    Map<String, dynamic> _prune(Map<String, dynamic> m) {
-      final out = <String, dynamic>{};
-      m.forEach((k, v) {
-        if (v == null) return;
-        out[k] = v;
-      });
-      return out;
-    }
-
     try {
-      final raw = {
-        'user_id': _currentUserId,
+      // Según la documentación, solo enviar latitude y longitude
+      // El servidor agregará automáticamente cobradorId, cobradorName y timestamp
+      final payload = {
         'latitude': latitude,
         'longitude': longitude,
-        'address': address,
-        'accuracy': accuracy,
-        'timestamp': DateTime.now().toIso8601String(),
       };
 
-      final payload = _prune(raw);
       _socket?.emit('location_update', payload);
+      print('📍 Ubicación actualizada: $latitude, $longitude');
     } catch (e) {
       print('❌ Error enviando actualización de ubicación: $e');
     }
@@ -822,6 +836,43 @@ class WebSocketService {
       _socket?.emit('send_message', payload);
     } catch (e) {
       print('❌ Error enviando mensaje: $e');
+    }
+  }
+
+  /// Envío de notificaciones de rutas
+  void sendRouteNotification({
+    required Map<String, dynamic> routeData,
+  }) {
+    Map<String, dynamic> _prune(Map<String, dynamic> m) {
+      final out = <String, dynamic>{};
+      m.forEach((k, v) {
+        if (v == null) return;
+        if (v is Map<String, dynamic>) {
+          final x = _prune(v);
+          if (x.isNotEmpty) out[k] = x;
+        } else {
+          out[k] = v;
+        }
+      });
+      return out;
+    }
+
+    try {
+      final raw = {
+        ...routeData,
+        'from': {
+          'id': _currentUserId,
+          'name': _currentUserName,
+          'type': _currentUserType,
+        },
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      final payload = _prune(raw);
+      _socket?.emit('route_notification', payload);
+      print('📤 Notificación de ruta enviada');
+    } catch (e) {
+      print('❌ Error enviando notificación de ruta: $e');
     }
   }
 

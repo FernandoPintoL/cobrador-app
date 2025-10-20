@@ -72,7 +72,37 @@ class CreditCardHeader extends StatelessWidget {
             ],
           ),
         ),
-        CreditStatusChip(status: credit.status),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // Badge de MORA si tiene pagos atrasados
+            if (credit.isOverdue && credit.status == 'active')
+              Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.warning, color: Colors.white, size: 12),
+                    SizedBox(width: 4),
+                    Text(
+                      'MORA',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            CreditStatusChip(status: credit.status),
+          ],
+        ),
       ],
     );
   }

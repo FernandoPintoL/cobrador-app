@@ -4,6 +4,7 @@ import '../../datos/api_services/credit_api_service.dart';
 import '../../datos/api_services/cash_balance_api_service.dart';
 import '../../datos/modelos/credit_full_details.dart';
 import '../../datos/modelos/credito.dart';
+import '../../datos/modelos/cash_balance_status.dart';
 import 'auth_provider.dart';
 import 'pago_provider.dart';
 import '../utils/schedule_utils.dart';
@@ -260,17 +261,17 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
         // Verificar si cada tipo de lista recibe sus créditos correspondientes
         final pendingApproval = credits
-            .where((c) => c.status == 'pendiente_aprobacion')
+            .where((c) => c.status == 'pending_approval')
             .toList();
-        final attentionList = credits
-            .where((c) => c.status == 'atencion')
-            .toList();
+        // final attentionList = credits
+        //     .where((c) => c.status == 'atencion')
+        //     .toList();
         final waitingDelivery = credits
-            .where((c) => c.status == 'esperando_entrega')
+            .where((c) => c.status == 'waiting_delivery')
             .toList();
         print('📋 Resumen de listas específicas:');
         print('  - Pendientes de aprobación: ${pendingApproval.length}');
-        print('  - Atención: ${attentionList.length}');
+        // print('  - Atención: ${attentionList.length}');
         print('  - Esperando entrega: ${waitingDelivery.length}');
       } else {
         throw Exception(response['message'] ?? 'Error al cargar créditos');
@@ -368,6 +369,44 @@ class CreditNotifier extends StateNotifier<CreditState> {
         isLoadingMore: false,
         errorMessage: 'Error al cargar más créditos: $e',
       );
+    }
+  }
+
+  /// Verifica el estado de la caja antes de crear un crédito
+  /// Retorna el estado de la caja o null si hay un error
+  Future<CashBalanceStatus?> checkCashBalanceStatus() async {
+    try {
+      final authState = _ref.read(authProvider);
+      final isCobrador = authState.usuario?.esCobrador() ?? false;
+
+      if (!isCobrador) {
+        // Si no es cobrador, no necesita verificación de caja
+        return null;
+      }
+
+      final cobradorId = authState.usuario!.id.toInt();
+      print('🔍 Verificando estado de caja para cobrador=$cobradorId');
+
+      final cashApi = CashBalanceApiService();
+      final response = await cashApi.getCurrentStatus(cobradorId: cobradorId);
+
+      if (response['success'] == true) {
+        final data = response['data'];
+        final status = CashBalanceStatus.fromJson(data as Map<String, dynamic>);
+        print('✅ Estado de caja obtenido: $status');
+        return status;
+      } else {
+        final msg = response['message']?.toString() ?? 'Error al obtener estado de caja';
+        print('❌ Error al obtener estado de caja: $msg');
+        state = state.copyWith(errorMessage: msg);
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error al verificar estado de caja: $e');
+      state = state.copyWith(
+        errorMessage: 'Error al verificar estado de caja: $e',
+      );
+      return null;
     }
   }
 
