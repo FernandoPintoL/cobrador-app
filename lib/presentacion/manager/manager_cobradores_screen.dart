@@ -45,8 +45,23 @@ class _ManagerCobradoresScreenState
       ref
           .read(managerProvider.notifier)
           .establecerManagerActual(authState.usuario!);
+
+      // ✅ OPTIMIZACIÓN: Usar estadísticas del login si están disponibles
+      if (authState.statistics != null) {
+        debugPrint(
+          '📊 Usando estadísticas del login en cobradores (evitando petición innecesaria)',
+        );
+        ref
+            .read(managerProvider.notifier)
+            .establecerEstadisticas(authState.statistics!.toCompatibleMap());
+      } else {
+        debugPrint(
+          '⚠️ No hay estadísticas del login, cargando desde el backend',
+        );
+        ref.read(managerProvider.notifier).cargarEstadisticasManager(managerId);
+      }
+
       ref.read(managerProvider.notifier).cargarCobradoresAsignados(managerId);
-      ref.read(managerProvider.notifier).cargarEstadisticasManager(managerId);
     }
   }
 
@@ -55,6 +70,8 @@ class _ManagerCobradoresScreenState
     if (authState.usuario != null) {
       final managerId = authState.usuario!.id.toString();
       ref.read(managerProvider.notifier).cargarCobradoresAsignados(managerId);
+
+      // ✅ En refresh manual, siempre recargar estadísticas para tener datos frescos
       ref.read(managerProvider.notifier).cargarEstadisticasManager(managerId);
     }
   }
@@ -224,14 +241,16 @@ class _ManagerCobradoresScreenState
 
   Widget _buildListaCobradores(ManagerState managerState) {
     if (managerState.isLoading) {
-      return const Center(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text('Cargando cobradores...'),
-          SizedBox(height: 16),
-          CircularProgressIndicator(),
-        ],
-      ));
+      return const Center(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text('Cargando cobradores...'),
+            SizedBox(height: 16),
+            CircularProgressIndicator(),
+          ],
+        ),
+      );
     }
 
     if (managerState.cobradoresAsignados.isEmpty) {
@@ -417,11 +436,9 @@ class _ManagerCobradoresScreenState
   }
 
   void _navegarCrearCobrador() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const CobradorFormScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const CobradorFormScreen()));
   }
 
   void _navegarEditarCobrador(Usuario cobrador) {
@@ -498,10 +515,8 @@ class _ManagerCobradoresScreenState
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ClientesScreen(
-          userRole: 'manager',
-          cobrador: cobrador,
-        ),
+        builder: (context) =>
+            ClientesScreen(userRole: 'manager', cobrador: cobrador),
       ),
     );
   }

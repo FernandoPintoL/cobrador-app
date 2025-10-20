@@ -80,11 +80,20 @@ class _ManagerReportesScreenState extends ConsumerState<ManagerReportesScreen>
           .read(managerProvider.notifier)
           .establecerManagerActual(authState.usuario!);
 
-      // Cargar datos de forma secuencial para evitar sobrecarga
-      debugPrint('📊 Cargando estadísticas del manager...');
-      await ref
-          .read(managerProvider.notifier)
-          .cargarEstadisticasManager(managerId);
+      // ✅ OPTIMIZACIÓN: Usar estadísticas del login si están disponibles
+      if (authState.statistics != null) {
+        debugPrint(
+          '📊 Usando estadísticas del login (evitando petición innecesaria)',
+        );
+        ref
+            .read(managerProvider.notifier)
+            .establecerEstadisticas(authState.statistics!.toCompatibleMap());
+      } else {
+        debugPrint('📊 Cargando estadísticas del manager desde el backend...');
+        await ref
+            .read(managerProvider.notifier)
+            .cargarEstadisticasManager(managerId);
+      }
 
       debugPrint('👥 Cargando cobradores asignados...');
       await ref

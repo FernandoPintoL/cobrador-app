@@ -49,7 +49,20 @@ class _ManagerDashboardScreenState
       _hasLoadedInitialData = true;
       final managerId = usuario.id.toString();
       ref.read(managerProvider.notifier).establecerManagerActual(usuario);
-      ref.read(managerProvider.notifier).cargarEstadisticasManager(managerId);
+
+      // Si las estadísticas ya vienen del login, usarlas en el ManagerProvider
+      if (authState.statistics != null) {
+        print(
+          '📊 Usando estadísticas del login (evitando petición al backend)',
+        );
+        ref
+            .read(managerProvider.notifier)
+            .establecerEstadisticas(authState.statistics!.toCompatibleMap());
+      } else {
+        print('⚠️ No hay estadísticas del login, cargando desde el backend');
+        ref.read(managerProvider.notifier).cargarEstadisticasManager(managerId);
+      }
+
       ref.read(managerProvider.notifier).cargarCobradoresAsignados(managerId);
     }
   }
@@ -233,7 +246,7 @@ class _ManagerDashboardScreenState
                       child: _buildStatCard(
                         context,
                         'Cobradores Activos',
-                        '${managerState.estadisticas?['total_cobradores'] ?? managerState.cobradoresAsignados.length}',
+                        '${managerState.estadisticas?['total_cobradores'] ?? 0}',
                         Icons.person_pin,
                         Colors.blue,
                       ),
@@ -243,7 +256,7 @@ class _ManagerDashboardScreenState
                       child: _buildStatCard(
                         context,
                         'Clientes Asignados',
-                        '${managerState.estadisticas?['total_clientes'] ?? managerState.clientesDelManager.length}',
+                        '${managerState.estadisticas?['total_clientes'] ?? 0}',
                         Icons.business,
                         Colors.green,
                       ),
@@ -253,21 +266,21 @@ class _ManagerDashboardScreenState
                       child: _buildStatCard(
                         context,
                         'Préstamos Activos',
-                        '${managerState.estadisticas?['total_creditos'] ?? 0}',
+                        '${managerState.estadisticas?['creditos_activos'] ?? 0}',
                         Icons.account_balance_wallet,
                         Colors.orange,
                       ),
                     ),
-                    SizedBox(
+                    /* SizedBox(
                       width: itemWidth,
                       child: _buildStatCard(
                         context,
-                        'Cobros del Mes',
-                        '\$${managerState.estadisticas?['cobros_mes'] ?? 0}',
+                        'Saldo Total',
+                        'Bs ${(managerState.estadisticas?['saldo_total_cartera'] ?? 0).toString()}',
                         Icons.attach_money,
                         Colors.purple,
                       ),
-                    ),
+                    ), */
                   ],
                 );
               },

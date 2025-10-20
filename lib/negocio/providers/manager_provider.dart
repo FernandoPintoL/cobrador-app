@@ -412,6 +412,12 @@ class ManagerNotifier extends StateNotifier<ManagerState> {
   void establecerManagerActual(Usuario manager) {
     state = state.copyWith(managerActual: manager);
   }
+
+  /// Establece las estadísticas del manager desde datos ya cargados (ej: del login)
+  void establecerEstadisticas(Map<String, dynamic> estadisticas) {
+    state = state.copyWith(estadisticas: estadisticas);
+    print('📊 Estadísticas del manager establecidas desde login');
+  }
 }
 
 /// Provider para la gestión de managers

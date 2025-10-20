@@ -2,18 +2,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../../datos/modelos/usuario.dart';
+import '../../datos/modelos/dashboard_statistics.dart';
 import '../../datos/api_services/api_service.dart';
 import '../../datos/api_services/storage_service.dart';
 import 'websocket_provider.dart';
 
 class AuthState {
   final Usuario? usuario;
+  final DashboardStatistics? statistics;
   final bool isLoading;
   final String? error;
   final bool isInitialized;
 
   const AuthState({
     this.usuario,
+    this.statistics,
     this.isLoading = false,
     this.error,
     this.isInitialized = false,
@@ -21,13 +24,16 @@ class AuthState {
 
   AuthState copyWith({
     Usuario? usuario,
+    DashboardStatistics? statistics,
     bool? isLoading,
     String? error,
     bool? isInitialized,
     bool clearError = false,
+    bool clearStatistics = false,
   }) {
     return AuthState(
       usuario: usuario ?? this.usuario,
+      statistics: clearStatistics ? null : (statistics ?? this.statistics),
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
       isInitialized: isInitialized ?? this.isInitialized,
@@ -57,8 +63,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Si se requiere re-autenticación (por logout parcial), no restaurar sesión
       final requiresReauth = await _storageService.getRequiresReauth();
       if (requiresReauth) {
-        debugPrint('🔐 requiresReauth=true: mostrando Login (solo contraseña si hay identificador)');
-        state = state.copyWith(isLoading: false, isInitialized: true, usuario: null);
+        debugPrint(
+          '🔐 requiresReauth=true: mostrando Login (solo contraseña si hay identificador)',
+        );
+        state = state.copyWith(
+          isLoading: false,
+          isInitialized: true,
+          usuario: null,
+        );
         return;
       }
     } catch (e) {
@@ -72,6 +84,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (hasSession) {
         // Obtener usuario desde almacenamiento local primero
         final usuario = await _storageService.getUser();
+        // Obtener estadísticas del dashboard desde almacenamiento local
+        final statistics = await _storageService.getDashboardStatistics();
         /*print('🔍 DEBUG: Usuario recuperado del almacenamiento:');
         print('  - Usuario: ${usuario?.nombre}');
         print('  - Email: ${usuario?.email}');
@@ -96,6 +110,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           final currentUser = state.usuario ?? usuario;
           state = state.copyWith(
             usuario: currentUser,
+            statistics: statistics,
             isLoading: false,
             isInitialized: true,
           );
@@ -127,7 +142,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login(String emailOrPhone, String password, {bool rememberMe = false}) async {
+  Future<void> login(
+    String emailOrPhone,
+    String password, {
+    bool rememberMe = false,
+  }) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -160,7 +179,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       if (usuario != null) {
         debugPrint('✅ Login exitoso, guardando usuario en el estado');
-        state = state.copyWith(usuario: usuario, isLoading: false);
+
+        // Cargar estadísticas del dashboard desde almacenamiento local
+        final statistics = await _storageService.getDashboardStatistics();
+        if (statistics != null) {
+          debugPrint('📊 Estadísticas cargadas desde almacenamiento local');
+        }
+
+        state = state.copyWith(
+          usuario: usuario,
+          statistics: statistics,
+          isLoading: false,
+        );
 
         // Conectar WebSocket después del login exitoso
         _connectWebSocketIfAvailable();
@@ -286,8 +316,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
         // Guardar el usuario actualizado en almacenamiento local
         await _storageService.saveUser(usuario);
 
-        state = state.copyWith(usuario: usuario);
-        debugPrint('✅ Usuario actualizado exitosamente');
+        // ✅ NUEVO: Recuperar estadísticas si están disponibles
+        DashboardStatistics? statistics;
+        if (response['statistics'] != null) {
+          statistics = DashboardStatistics.fromJson(
+            response['statistics'] as Map<String, dynamic>,
+          );
+          debugPrint('📊 Estadísticas actualizadas desde /api/me');
+          debugPrint('  - Total clientes: ${statistics.totalClientes}');
+          debugPrint('  - Créditos activos: ${statistics.creditosActivos}');
+
+          // ✅ NUEVO: Guardar estadísticas en almacenamiento local
+          await _storageService.saveDashboardStatistics(statistics);
+        }
+
+        state = state.copyWith(usuario: usuario, statistics: statistics);
+        debugPrint('✅ Usuario y estadísticas actualizados exitosamente');
       }
     } catch (e) {
       debugPrint('⚠️ Error al actualizar usuario desde el servidor: $e');
@@ -344,8 +388,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Verificar que al menos uno de los roles principales está presente
       final hasValidRole =
           state.usuario!.tieneRol('admin') ||
-              state.usuario!.tieneRol('manager') ||
-              state.usuario!.tieneRol('cobrador');
+          state.usuario!.tieneRol('manager') ||
+          state.usuario!.tieneRol('cobrador');
 
       if (!hasValidRole) {
         debugPrint('❌ Usuario sin roles válidos, limpiando sesión');
@@ -374,11 +418,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
 
         wsNotifier.connectWithUser(
-            userId: user.id.toString(),
-            userType: userType,
-            userName: user.nombre ?? 'Usuario'
+          userId: user.id.toString(),
+          userType: userType,
+          userName: user.nombre,
         );
-        debugPrint('🔌 Iniciando conexión WebSocket para $userType: ${user.nombre}');
+        debugPrint(
+          '🔌 Iniciando conexión WebSocket para $userType: ${user.nombre}',
+        );
       } catch (e) {
         debugPrint('⚠️ Error al conectar WebSocket: $e');
       }

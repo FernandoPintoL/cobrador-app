@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../modelos/usuario.dart';
+import '../modelos/dashboard_statistics.dart';
 
 class StorageService {
   static const String _tokenKey = 'auth_token';
@@ -9,6 +10,7 @@ class StorageService {
   static const String _lastLoginKey = 'last_login';
   static const String _savedIdentifierKey = 'saved_identifier';
   static const String _requiresReauthKey = 'requires_reauth'; // Nuevo flag para re-autenticación
+  static const String _dashboardStatsKey = 'dashboard_statistics'; // Estadísticas del dashboard
 
   // Guardar token de autenticación
   Future<void> saveToken(String token) async {
@@ -125,12 +127,46 @@ class StorageService {
     await prefs.remove(_savedIdentifierKey);
   }
 
+  // Guardar estadísticas del dashboard
+  Future<void> saveDashboardStatistics(DashboardStatistics statistics) async {
+    final prefs = await SharedPreferences.getInstance();
+    final statsJson = statistics.toJson();
+    final statsJsonString = jsonEncode(statsJson);
+
+    print('💾 DEBUG: Guardando estadísticas del dashboard');
+    print('  - Estadísticas: $statistics');
+
+    await prefs.setString(_dashboardStatsKey, statsJsonString);
+    print('✅ Estadísticas del dashboard guardadas exitosamente');
+  }
+
+  // Obtener estadísticas del dashboard
+  Future<DashboardStatistics?> getDashboardStatistics() async {
+    final prefs = await SharedPreferences.getInstance();
+    final statsJson = prefs.getString(_dashboardStatsKey);
+
+    if (statsJson != null) {
+      try {
+        final statsMap = jsonDecode(statsJson) as Map<String, dynamic>;
+        final statistics = DashboardStatistics.fromJson(statsMap);
+        print('📖 DEBUG: Estadísticas del dashboard recuperadas');
+        return statistics;
+      } catch (e) {
+        print('❌ Error al parsear estadísticas desde almacenamiento: $e');
+        return null;
+      }
+    }
+    print('ℹ️ No se encontraron estadísticas del dashboard en almacenamiento');
+    return null;
+  }
+
   // Limpiar toda la sesión
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
     await prefs.remove(_lastLoginKey);
+    await prefs.remove(_dashboardStatsKey);
 
     // No limpiar rememberMe para mantener la preferencia del usuario
     // await prefs.remove(_rememberMeKey);

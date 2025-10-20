@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/credit_provider.dart';
-import '../../negocio/providers/auth_provider.dart';
-import '../../negocio/providers/client_provider.dart';
 import '../../datos/modelos/credito.dart';
 import '../../datos/modelos/usuario.dart';
-import '../widgets/client_search_widget.dart';
-import 'package:intl/intl.dart';
 
 class QuickPaymentScreen extends ConsumerStatefulWidget {
   const QuickPaymentScreen({super.key});
@@ -17,55 +13,85 @@ class QuickPaymentScreen extends ConsumerStatefulWidget {
 
 class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
   final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   Usuario? _selectedClient;
   Credito? _selectedCredit;
   String _paymentMethod = 'cash';
   bool _isProcessing = false;
-  String? _clientError;
+  List<Credito> _searchResults = [];
+  bool _loadingResults = false;
+  bool _showSearchResults = false;
 
-  @override
-  void initState() {
-    super.initState();
-    // Cargar clientes y créditos activos al iniciar
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authState = ref.read(authProvider);
-      if (authState.usuario != null) {
-        // Cargar clientes
-        ref.read(clientProvider.notifier).cargarClientes(
-          cobradorId: authState.usuario!.id.toString(),
-        );
-        // Cargar créditos activos
-        ref.read(creditProvider.notifier).loadCredits(
-          cobradorId: authState.usuario!.id.toInt(),
-          status: 'active',
-        );
-      }
+  /// Busca créditos por CI o nombre de cliente
+  /// Usa el mismo endpoint que credit_type_screen: GET /api/credits?search=...
+  Future<void> _searchCredits(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _showSearchResults = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _loadingResults = true;
+      _showSearchResults = true;
     });
+
+    try {
+      // Usar el mismo endpoint de credit_type_screen
+      // GET /api/credits?search=8956887&page=1&per_page=15
+      await ref
+          .read(creditProvider.notifier)
+          .loadCredits(
+            search: query,
+            status: 'active', // Solo créditos activos
+            page: 1,
+          );
+
+      final creditState = ref.read(creditProvider);
+
+      // Extraer créditos que tengan cliente asociado
+      final creditsWithClient = creditState.credits
+          .where((c) => c.client != null)
+          .toList();
+
+      setState(() {
+        _searchResults = creditsWithClient;
+        _loadingResults = false;
+      });
+
+      if (_searchResults.isEmpty) {
+        _showError('No hay créditos activos para "$query"');
+      }
+    } catch (e) {
+      setState(() {
+        _loadingResults = false;
+      });
+      _showError('Error al buscar: $e');
+    }
   }
 
-  void _onClientSelected(Usuario? client) {
+  /// Selecciona un cliente y crédito desde los resultados de búsqueda
+  void _selectFromSearchResults(Credito credit) {
+    if (credit.client == null) {
+      _showError('Información de cliente incompleta');
+      return;
+    }
+
     setState(() {
-      _selectedClient = client;
-      _clientError = null;
-
-      if (client != null) {
-        // Buscar el crédito activo de este cliente
-        final creditState = ref.read(creditProvider);
-        final credit = creditState.credits.firstWhere(
-          (c) => c.clientId == client.id && c.isActive,
-          orElse: () => creditState.credits.first, // Fallback
-        );
-
-        _selectedCredit = credit;
-        // Sugerir el monto de la cuota
-        _amountController.text = credit.installmentAmount?.toStringAsFixed(2) ?? '';
-      } else {
-        _selectedCredit = null;
-        _amountController.clear();
-      }
+      _selectedClient = credit.client;
+      _selectedCredit = credit;
+      _searchResults = [];
+      _showSearchResults = false;
+      _searchController.text =
+          '${credit.client!.nombre} (CI: ${credit.client!.ci})';
+      _amountController.text =
+          credit.installmentAmount?.toStringAsFixed(2) ?? '';
     });
+    _searchFocusNode.unfocus();
   }
 
   Future<void> _processPayment() async {
@@ -83,7 +109,7 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
     if (amount > _selectedCredit!.balance) {
       final confirmar = await _showConfirmDialog(
         '¿Confirmar pago?',
-        'El monto ingresado (\$${amount.toStringAsFixed(2)}) es mayor al balance (\$${_selectedCredit!.balance.toStringAsFixed(2)}). ¿Deseas continuar?',
+        'El monto ingresado (Bs ${amount.toStringAsFixed(2)}) es mayor al balance (Bs ${_selectedCredit!.balance.toStringAsFixed(2)}). ¿Deseas continuar?',
       );
       if (!confirmar) return;
     }
@@ -93,24 +119,21 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
     });
 
     try {
-      final result = await ref.read(creditProvider.notifier).processPayment(
-        creditId: _selectedCredit!.id,
-        amount: amount,
-        paymentType: _paymentMethod,
-        notes: _notesController.text.isEmpty ? null : _notesController.text,
-      );
+      final result = await ref
+          .read(creditProvider.notifier)
+          .processPayment(
+            creditId: _selectedCredit!.id,
+            amount: amount,
+            paymentType: _paymentMethod,
+          );
 
       if (result != null && mounted) {
         _showSuccess('Pago registrado exitosamente');
         _resetForm();
 
-        // Recargar créditos
-        final authState = ref.read(authProvider);
-        if (authState.usuario != null) {
-          ref.read(creditProvider.notifier).loadCredits(
-            cobradorId: authState.usuario!.id.toInt(),
-            status: 'active',
-          );
+        // Recargar créditos del cliente si es necesario
+        if (_selectedClient != null) {
+          _searchCredits(_searchController.text);
         }
       } else {
         final errorMsg = ref.read(creditProvider).errorMessage;
@@ -132,27 +155,22 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
       _selectedClient = null;
       _selectedCredit = null;
       _amountController.clear();
-      _notesController.clear();
+      _searchController.clear();
       _paymentMethod = 'cash';
-      _clientError = null;
+      _searchResults = [];
+      _showSearchResults = false;
     });
   }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
   void _showSuccess(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.green),
     );
   }
 
@@ -179,9 +197,6 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final creditState = ref.watch(creditProvider);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Registro Rápido de Cobros'),
@@ -193,7 +208,7 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Búsqueda de cliente
+            // Búsqueda de cliente/crédito
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -201,198 +216,293 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Buscar Cliente',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      'Buscar Cliente por CI o Nombre',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 12),
 
-                    // Usar el widget reutilizable en modo inline
-                    ClientSearchWidget(
-                      mode: 'inline',
-                      selectedClient: _selectedClient,
-                      onClientSelected: _onClientSelected,
-                      hint: 'Buscar por nombre, teléfono, CI, categoría...',
-                      errorText: _clientError,
-                      allowClear: true,
-                      showClientDetails: true,
-                      allowCreate: false, // No permitir crear clientes en quick payment
+                    // Campo de búsqueda dinámica
+                    TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      decoration: InputDecoration(
+                        hintText:
+                            'Ingresa CI o nombre del cliente (ej: 8956887)',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _selectedClient != null
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: _resetForm,
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: _searchCredits,
                     ),
 
-                    // Información del crédito seleccionado
-                    if (_selectedClient != null && _selectedCredit != null) ...[
-                      const SizedBox(height: 16),
-                      SelectedClientCard(
-                        cliente: _selectedClient!,
-                        onClear: _resetForm,
-                        showActions: true,
-                      ),
-
-                      // Información adicional del crédito
+                    // Resultados de búsqueda
+                    if (_showSearchResults && _searchResults.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        constraints: const BoxConstraints(maxHeight: 300),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
+                          border: Border.all(color: Colors.grey.shade300),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.withOpacity(0.3)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Información del Crédito',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            const Divider(),
-                            _buildInfoRow('Balance:', 'Bs ${_selectedCredit!.balance.toStringAsFixed(2)}'),
-                            _buildInfoRow('Cuota:', 'Bs ${_selectedCredit!.installmentAmount?.toStringAsFixed(2) ?? 'N/A'}'),
-                            _buildInfoRow('Frecuencia:', _selectedCredit!.frequencyLabel),
-                            if (_selectedCredit!.backendIsOverdue == true)
-                              Container(
-                                margin: const EdgeInsets.only(top: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.warning, size: 16, color: Colors.red),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Crédito con mora: Bs ${_selectedCredit!.overdueAmount?.toStringAsFixed(2) ?? 'N/A'}',
-                                      style: const TextStyle(color: Colors.red, fontSize: 12),
-                                    ),
-                                  ],
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _searchResults.length,
+                          separatorBuilder: (context, index) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final credit = _searchResults[index];
+                            final isSelected = _selectedCredit?.id == credit.id;
+
+                            return ListTile(
+                              dense: true,
+                              selected: isSelected,
+                              title: Text(
+                                '${credit.client?.nombre ?? "N/A"} - Crédito #${credit.id}',
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
                               ),
-                          ],
+                              subtitle: Text(
+                                'CI: ${credit.client?.ci ?? "N/A"} | Balance: Bs ${credit.balance.toStringAsFixed(2)}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              trailing: isSelected
+                                  ? const Icon(Icons.check, color: Colors.green)
+                                  : null,
+                              onTap: () => _selectFromSearchResults(credit),
+                            );
+                          },
                         ),
                       ),
+                    ],
+
+                    if (_loadingResults) ...[
+                      const SizedBox(height: 12),
+                      const Center(child: CircularProgressIndicator()),
                     ],
                   ],
                 ),
               ),
             ),
 
-            const SizedBox(height: 16),
-
-            // Monto a cobrar
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
+            // Detalles del crédito seleccionado
+            if (_selectedCredit != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Monto a Cobrar',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      'Detalles del Crédito Seleccionado',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        hintText: '0.00',
-                        prefixText: 'Bs ',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    const Divider(),
+                    _buildInfoRow('Cliente:', _selectedClient?.nombre ?? 'N/A'),
+                    _buildInfoRow(
+                      'Balance:',
+                      'Bs ${_selectedCredit!.balance.toStringAsFixed(2)}',
+                    ),
+                    _buildInfoRow(
+                      'Monto Original:',
+                      'Bs ${_selectedCredit!.amount.toStringAsFixed(2)}',
+                    ),
+                    _buildInfoRow(
+                      'Cuota:',
+                      'Bs ${_selectedCredit!.installmentAmount?.toStringAsFixed(2) ?? 'N/A'}',
+                    ),
+                    _buildInfoRow(
+                      'Frecuencia:',
+                      _selectedCredit!.frequencyLabel,
+                    ),
+                    _buildInfoRow(
+                      'Tasa de Interés:',
+                      '${_selectedCredit!.interestRate ?? 0}%',
+                    ),
+                    if (_selectedCredit!.backendIsOverdue == true)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.warning,
+                              size: 16,
+                              color: Colors.red,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Crédito con mora: Bs ${_selectedCredit!.overdueAmount?.toStringAsFixed(2) ?? 'N/A'}',
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      enabled: _selectedCredit != null && !_isProcessing,
-                    ),
                   ],
                 ),
               ),
-            ),
+            ],
+
+            const SizedBox(height: 16),
+
+            // Monto a cobrar
+            if (_selectedCredit != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Monto a Cobrar',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _amountController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '0.00',
+                          prefixText: 'Bs ',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        enabled: !_isProcessing,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             const SizedBox(height: 16),
 
             // Método de pago
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Método de Pago',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Efectivo'),
-                          selected: _paymentMethod == 'cash',
-                          onSelected: _selectedCredit != null && !_isProcessing
-                              ? (selected) {
-                                  if (selected) setState(() => _paymentMethod = 'cash');
-                                }
-                              : null,
-                        ),
-                        ChoiceChip(
-                          label: const Text('Transferencia'),
-                          selected: _paymentMethod == 'transfer',
-                          onSelected: _selectedCredit != null && !_isProcessing
-                              ? (selected) {
-                                  if (selected) setState(() => _paymentMethod = 'transfer');
-                                }
-                              : null,
-                        ),
-                        ChoiceChip(
-                          label: const Text('Tarjeta'),
-                          selected: _paymentMethod == 'card',
-                          onSelected: _selectedCredit != null && !_isProcessing
-                              ? (selected) {
-                                  if (selected) setState(() => _paymentMethod = 'card');
-                                }
-                              : null,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            /*const SizedBox(height: 16),
-
-            // Notas opcionales
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Notas (opcional)',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _notesController,
-                      maxLines: 3,
-                      decoration: InputDecoration(
-                        hintText: 'Observaciones sobre el pago...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+            if (_selectedCredit != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Método de Pago',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      enabled: _selectedCredit != null && !_isProcessing,
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Efectivo'),
+                            selected: _paymentMethod == 'cash',
+                            onSelected: !_isProcessing
+                                ? (selected) {
+                                    if (selected) {
+                                      setState(() => _paymentMethod = 'cash');
+                                    }
+                                  }
+                                : null,
+                          ),
+                          ChoiceChip(
+                            label: const Text('Transferencia'),
+                            selected: _paymentMethod == 'transfer',
+                            onSelected: !_isProcessing
+                                ? (selected) {
+                                    if (selected) {
+                                      setState(
+                                        () => _paymentMethod = 'transfer',
+                                      );
+                                    }
+                                  }
+                                : null,
+                          ),
+                          ChoiceChip(
+                            label: const Text('Tarjeta'),
+                            selected: _paymentMethod == 'card',
+                            onSelected: !_isProcessing
+                                ? (selected) {
+                                    if (selected) {
+                                      setState(() => _paymentMethod = 'card');
+                                    }
+                                  }
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),*/
+
+            if (_selectedCredit == null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32.0),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 64,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Busca un cliente para ver sus créditos activos',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             const SizedBox(height: 24),
 
             // Botón de registro
             ElevatedButton(
-              onPressed: _selectedCredit != null && !_isProcessing ? _processPayment : null,
+              onPressed: _selectedCredit != null && !_isProcessing
+                  ? _processPayment
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
@@ -411,8 +521,11 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
                       ),
                     )
                   : const Text(
-                      'Registrar Cobro',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      'Procesar Pago',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
             ),
           ],
@@ -437,7 +550,8 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
   @override
   void dispose() {
     _amountController.dispose();
-    _notesController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 }

@@ -396,7 +396,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
         print('✅ Estado de caja obtenido: $status');
         return status;
       } else {
-        final msg = response['message']?.toString() ?? 'Error al obtener estado de caja';
+        final msg =
+            response['message']?.toString() ??
+            'Error al obtener estado de caja';
         print('❌ Error al obtener estado de caja: $msg');
         state = state.copyWith(errorMessage: msg);
         return null;
@@ -973,6 +975,13 @@ class CreditNotifier extends StateNotifier<CreditState> {
         errorMessage: 'Error al cargar créditos del cobrador: $e',
       );
     }
+  }
+
+  /// Establece directamente las estadísticas sin hacer petición
+  /// Útil para usar datos que ya vienen del login
+  void setStats(CreditStats stats) {
+    print('✅ Estableciendo estadísticas directamente (desde login)');
+    state = state.copyWith(stats: stats, isLoading: false);
   }
 
   /// Carga estadísticas del cobrador actual

@@ -6,9 +6,9 @@ import '../../negocio/providers/websocket_provider.dart';
 import '../../negocio/providers/profile_image_provider.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/cash_balance_provider.dart';
+import '../../datos/modelos/credito/credit_stats.dart';
 import '../../config/role_colors.dart';
 import '../widgets/profile_image_widget.dart';
-// import '../widgets/websocket_widgets.dart'; // removed unused import
 import '../pantallas/profile_settings_screen.dart';
 import '../pantallas/notifications_screen.dart';
 import '../widgets/logout_dialog.dart';
@@ -31,17 +31,54 @@ class CobradorDashboardScreen extends ConsumerStatefulWidget {
 
 class _CobradorDashboardScreenState
     extends ConsumerState<CobradorDashboardScreen> {
+  bool _hasLoadedInitialData = false;
+
   @override
   void initState() {
     super.initState();
-    // Cargar datos iniciales
+    // Cargar datos iniciales solo UNA VEZ
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(creditProvider.notifier).loadCredits();
-      ref.read(creditProvider.notifier).loadCobradorStats();
-
-      // Verificar si hay cajas pendientes de cierre
-      _verificarCajasPendientes();
+      _cargarDatosIniciales();
     });
+  }
+
+  void _cargarDatosIniciales() {
+    // Protección contra cargas duplicadas
+    if (_hasLoadedInitialData) return;
+    _hasLoadedInitialData = true;
+
+    final authState = ref.read(authProvider);
+
+    // ✅ OPTIMIZACIÓN: Usar estadísticas del login en lugar de hacer petición
+    if (authState.statistics != null) {
+      debugPrint(
+        '✅ Usando estadísticas del login (evitando petición innecesaria)',
+      );
+      // Convertir las estadísticas del login al formato CreditStats
+      final statsFromLogin = authState.statistics!;
+      print("-------");
+      print(statsFromLogin.toJson());
+      final creditStats = CreditStats.fromDashboardStatistics(
+        statsFromLogin.toJson(),
+      );
+
+      print(creditStats.activeCredits);
+
+      // Establecer las estadísticas en el provider sin hacer petición
+      ref.read(creditProvider.notifier).setStats(creditStats);
+    } else {
+      // Solo si NO vinieron estadísticas del login, cargar del backend
+      debugPrint(
+        '⚠️ No hay estadísticas del login, cargando desde el backend...',
+      );
+      ref.read(creditProvider.notifier).loadCobradorStats();
+    }
+
+    // ✅ Cargar créditos (esto sí es necesario para la lista)
+    // ref.read(creditProvider.notifier).loadCredits();
+
+    // ✅ Verificar si hay cajas pendientes de cierre
+    _verificarCajasPendientes();
   }
 
   /// Verifica si el cobrador tiene cajas pendientes de cierre
@@ -50,9 +87,9 @@ class _CobradorDashboardScreenState
     if (authState.usuario == null) return;
 
     try {
-      final resp = await ref.read(cashBalanceProvider.notifier).getPendingClosures(
-        cobradorId: authState.usuario!.id.toInt(),
-      );
+      final resp = await ref
+          .read(cashBalanceProvider.notifier)
+          .getPendingClosures(cobradorId: authState.usuario!.id.toInt());
 
       if (!mounted) return;
 
@@ -122,7 +159,8 @@ class _CobradorDashboardScreenState
                     dense: true,
                     leading: CircleAvatar(
                       backgroundColor: Colors.orange[100],
-                      child: Icon(Icons.calendar_today,
+                      child: Icon(
+                        Icons.calendar_today,
                         size: 18,
                         color: Colors.orange[700],
                       ),
@@ -337,56 +375,230 @@ class _CobradorDashboardScreenState
               Builder(
                 builder: (context) {
                   final creditState = ref.watch(creditProvider);
-                  final stats = creditState.stats;
+                  final authState = ref.watch(authProvider);
+                  final dash =
+                      authState.statistics; // preferir datos de /api/me o login
 
                   return LayoutBuilder(
                     builder: (context, constraints) {
                       final spacing = 12.0;
                       final itemWidth = (constraints.maxWidth - spacing) / 2;
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
+
+                      // Helpers para valores con fallback
+                      String fmtAmount(double? v) =>
+                          'Bs ${(v ?? 0).toStringAsFixed(2)}';
+                      String fmtInt(int? v) => '${v ?? 0}';
+                      String fmtPct(double? v) =>
+                          '${((v ?? 0)).toStringAsFixed(1)}%';
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(
-                            width: itemWidth,
-                            child: _buildStatCard(
-                              context,
-                              'Créditos Totales',
-                              '${stats?.totalCredits ?? 0}',
-                              Icons.credit_score,
-                              Colors.blue,
+                          // Sección Resumen
+                          const Text(
+                            'Resumen',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          SizedBox(
-                            width: itemWidth,
-                            child: _buildStatCard(
-                              context,
-                              'Créditos Activos',
-                              '${stats?.activeCredits ?? 0}',
-                              Icons.play_circle,
-                              Colors.green,
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Clientes',
+                                  fmtInt(
+                                    dash?.totalClientes ??
+                                        creditState.stats?.totalCredits,
+                                  ),
+                                  Icons.people_alt,
+                                  Colors.blue,
+                                ),
+                              ),
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Créditos activos',
+                                  fmtInt(
+                                    dash?.creditosActivos ??
+                                        creditState.stats?.activeCredits,
+                                  ),
+                                  Icons.play_circle,
+                                  Colors.green,
+                                ),
+                              ),
+                              /* SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Saldo total cartera',
+                                  fmtAmount(
+                                    dash?.saldoTotalCartera ??
+                                        creditState.stats?.totalAmount,
+                                  ),
+                                  Icons.account_balance_wallet,
+                                  Colors.purple,
+                                ),
+                              ), */
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Sección Hoy
+                          /* const Text(
+                            'Hoy',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          SizedBox(
-                            width: itemWidth,
-                            child: _buildStatCard(
-                              context,
-                              'Monto Total',
-                              'Bs ${stats?.totalAmount.toStringAsFixed(2) ?? '0.00'}',
-                              Icons.attach_money,
-                              Colors.orange,
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Cobros realizados',
+                                  fmtInt(dash?.cobrosRealizadosHoy),
+                                  Icons.check_circle,
+                                  Colors.teal,
+                                ),
+                              ),
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Monto cobrado',
+                                  fmtAmount(dash?.totalCobradoHoy),
+                                  Icons.attach_money,
+                                  Colors.orange,
+                                ),
+                              ),
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Pendientes hoy',
+                                  fmtInt(dash?.pendientesHoy),
+                                  Icons.timelapse,
+                                  Colors.indigo,
+                                ),
+                              ),
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Efectivo en caja',
+                                  fmtAmount(dash?.efectivoEnCaja),
+                                  Icons.savings,
+                                  Colors.brown,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16), */
+
+                          // Sección Alertas
+                          /* const Text(
+                            'Alertas',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          SizedBox(
-                            width: itemWidth,
-                            child: _buildStatCard(
-                              context,
-                              'Balance Total',
-                              'Bs ${stats?.totalBalance.toStringAsFixed(2) ?? '0.00'}',
-                              Icons.account_balance_wallet,
-                              Colors.purple,
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Pagos atrasados',
+                                  fmtInt(dash?.pagosAtrasados),
+                                  Icons.warning_amber_rounded,
+                                  Colors.red,
+                                ),
+                              ),
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Clientes sin ubicación',
+                                  fmtInt(dash?.clientesSinUbicacion),
+                                  Icons.location_off,
+                                  Colors.deepOrange,
+                                ),
+                              ),
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Créditos por vencer (7 días)',
+                                  fmtInt(dash?.creditosPorVencer7Dias),
+                                  Icons.hourglass_top,
+                                  Colors.amber,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16), */
+
+                          // Sección Metas
+                          /* const Text(
+                            'Metas',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
+                          const SizedBox(height: 8), */
+                          /* Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Cobros mes actual',
+                                  fmtAmount(dash?.cobrosMesActual),
+                                  Icons.stacked_line_chart,
+                                  Colors.blueGrey,
+                                ),
+                              ),
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Meta del mes',
+                                  fmtAmount(dash?.metaMes),
+                                  Icons.flag,
+                                  Colors.green,
+                                ),
+                              ),
+                              SizedBox(
+                                width: itemWidth,
+                                child: _buildStatCard(
+                                  context,
+                                  'Cumplimiento',
+                                  fmtPct(dash?.porcentajeCumplimiento),
+                                  Icons.percent,
+                                  Colors.purple,
+                                ),
+                              ),
+                            ],
+                          ), */
                         ],
                       );
                     },

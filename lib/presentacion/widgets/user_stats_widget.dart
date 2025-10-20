@@ -1,11 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../negocio/providers/auth_provider.dart';
 
 class UserStatsWidget extends ConsumerWidget {
   const UserStatsWidget({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final statistics = authState.statistics;
+
+    // Valores por defecto
+    String clientesValue = '--';
+    String cobradoresValue = '--';
+    String managersValue = '--';
+
+    // Si hay estadísticas del login, usarlas
+    if (statistics != null) {
+      clientesValue = statistics.totalClientesAdmin?.toString() ?? '--';
+      cobradoresValue = statistics.totalCobradoresAdmin?.toString() ?? '--';
+      managersValue = statistics.totalManagers?.toString() ?? '--';
+    }
+
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -14,18 +30,18 @@ class UserStatsWidget extends ConsumerWidget {
       mainAxisSpacing: 8,
       childAspectRatio: 1.5,
       children: [
-        _buildStatCard(context, 'Clientes', '--', Icons.people, Colors.blue),
+        _buildStatCard(context, 'Clientes', clientesValue, Icons.people, Colors.blue),
         _buildStatCard(
           context,
           'Cobradores',
-          '--',
+          cobradoresValue,
           Icons.person_pin,
           Colors.green,
         ),
         _buildStatCard(
           context,
           'Managers',
-          '--',
+          managersValue,
           Icons.supervisor_account,
           Colors.orange,
         ),

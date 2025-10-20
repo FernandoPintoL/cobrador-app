@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'base_api_service.dart';
 import '../modelos/usuario.dart';
+import '../modelos/dashboard_statistics.dart';
 
 /// Servicio API para autenticación y gestión de sesiones
 class AuthApiService extends BaseApiService {
@@ -10,7 +11,10 @@ class AuthApiService extends BaseApiService {
   AuthApiService._internal();
 
   /// Inicia sesión con email/teléfono y contraseña
-  Future<Map<String, dynamic>> login(String emailOrPhone, String password) async {
+  Future<Map<String, dynamic>> login(
+    String emailOrPhone,
+    String password,
+  ) async {
     try {
       // debugPrint('🔐 Iniciando login para: $emailOrPhone');
 
@@ -50,13 +54,27 @@ class AuthApiService extends BaseApiService {
             debugPrint('⚠️ No se recibieron datos de usuario');
           }
 
+          // Guardar estadísticas del dashboard si están disponibles
+          if (responseData['statistics'] != null) {
+            debugPrint('📊 Estadísticas del dashboard recibidas');
+            final statistics = DashboardStatistics.fromJson(
+              responseData['statistics'] as Map<String, dynamic>,
+            );
+            debugPrint('📊 Guardando estadísticas: $statistics');
+            await storageService.saveDashboardStatistics(statistics);
+          } else {
+            debugPrint('ℹ️ No se recibieron estadísticas del dashboard');
+          }
+
           return data;
         } else {
           debugPrint('❌ Estructura de respuesta inesperada: $data');
           throw Exception('Estructura de respuesta inesperada del servidor');
         }
       } else {
-        debugPrint('❌ Error en el login: ${response.statusCode} - ${response.data}');
+        debugPrint(
+          '❌ Error en el login: ${response.statusCode} - ${response.data}',
+        );
         throw Exception('Error en el login: ${response.statusCode}');
       }
     } catch (e) {
@@ -90,17 +108,35 @@ class AuthApiService extends BaseApiService {
   }
 
   /// Obtiene la información del usuario actual
+  /// También guarda estadísticas del dashboard si están disponibles
   Future<Map<String, dynamic>> getMe() async {
     final response = await get('/me');
     final data = response.data as Map<String, dynamic>;
+    // La respuesta real viene anidada bajo la clave 'data'
+    final payload = (data['data'] is Map<String, dynamic>)
+        ? data['data'] as Map<String, dynamic>
+        : <String, dynamic>{};
 
     // Actualizar datos del usuario en almacenamiento local
-    if (data['user'] != null) {
-      final usuario = Usuario.fromJson(data['user']);
+    if (payload['user'] != null) {
+      final usuario = Usuario.fromJson(payload['user']);
       await storageService.saveUser(usuario);
     }
 
-    return data;
+    // ✅ NUEVO: Guardar estadísticas del dashboard si están disponibles
+    // Esto es importante cuando la app se recupera o se reinicia
+    if (payload['statistics'] != null) {
+      debugPrint('📊 Estadísticas del dashboard recibidas en /api/me');
+      final statistics = DashboardStatistics.fromJson(
+        payload['statistics'] as Map<String, dynamic>,
+      );
+      debugPrint('📊 Guardando estadísticas desde /api/me: $statistics');
+      await storageService.saveDashboardStatistics(statistics);
+    } else {
+      debugPrint('ℹ️ No se recibieron estadísticas en /api/me');
+    }
+
+    return payload.isNotEmpty ? payload : data;
   }
 
   /// Verifica si existe un email o teléfono
