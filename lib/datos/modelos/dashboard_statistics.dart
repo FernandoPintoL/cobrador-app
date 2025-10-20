@@ -233,7 +233,7 @@ class DashboardStatistics {
       map['clientes_sin_ubicacion'] = clientesSinUbicacion;
     if (creditosPorVencer7Dias != null)
       map['creditos_por_vencer_7dias'] = creditosPorVencer7Dias;
-    
+
     // Metas
     if (cobrosMesActual != null) map['cobros_mes_actual'] = cobrosMesActual;
     if (metaMes != null) map['meta_mes'] = metaMes;
