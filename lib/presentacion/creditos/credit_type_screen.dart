@@ -302,7 +302,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
             Tab(
               text:
                   'En Espera ('
-                  '${creditState.credits.where((c) => c.status == 'waiting_delivery').length}'
+                  '${creditState.credits.where((c) => c.status == 'waiting_delivery' && !c.isReadyForDelivery && !c.isOverdueForDelivery).length}'
                   ')',
               icon: const Icon(Icons.schedule),
             ),
@@ -418,7 +418,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                     ),
                     CreditsListWidget(
                       credits: creditState.credits
-                          .where((c) => c.status == 'waiting_delivery')
+                          .where((c) =>
+                              c.status == 'waiting_delivery' &&
+                              !c.isReadyForDelivery &&
+                              !c.isOverdueForDelivery
+                          )
                           .toList(),
                       listType: 'waiting_delivery',
                       clientCategoryFilters: _filterState.clientCategories,
@@ -427,8 +431,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       currentPage: creditState.currentPage,
                       totalPages: creditState.totalPages,
                       onCardTap: _navigateToCreditDetail,
-                      // Solo cobradores y admins pueden entregar créditos
-                      canDeliver: currentUserRole == 'cobrador' || currentUserRole == 'admin',
+                      // NO tiene botón de entregar (aún no es la fecha)
+                      canDeliver: false,
                       onLoadMore: () {
                         if (!creditState.isLoading &&
                             creditState.totalPages > creditState.currentPage) {
@@ -437,9 +441,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                               .loadCredits(page: creditState.currentPage + 1);
                         }
                       },
-                      onDeliver: currentUserRole == 'cobrador' || currentUserRole == 'admin'
-                          ? _showQuickDeliveryDialog
-                          : null,
+                      // No se puede entregar todavía (fecha futura)
+                      onDeliver: null,
                     ),
                     // Tab "Para Entregar": combina listos hoy + atrasados
                     CreditsListWidget(
@@ -707,11 +710,12 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                 onPressed: () async {
                   bool result = false;
                   if (deliverImmediately) {
+                    // Para entrega inmediata, NO enviar fecha
+                    // El backend usa la fecha/hora actual automáticamente
                     result = await ref
                         .read(creditProvider.notifier)
                         .approveAndDeliverCredit(
                           creditId: credit.id,
-                          scheduledDeliveryDate: DateTime.now(),
                           approvalNotes:
                               'Aprobación y entrega desde lista de espera',
                         );

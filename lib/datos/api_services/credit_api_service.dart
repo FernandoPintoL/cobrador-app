@@ -514,16 +514,26 @@ class CreditApiService extends BaseApiService {
   /// Aprueba un crédito para entrega
   Future<Map<String, dynamic>> approveCreditForDelivery({
     required String creditId,
-    required DateTime scheduledDeliveryDate,
+    DateTime? scheduledDeliveryDate,
     String? notes,
     bool? immediateDelivery,
   }) async {
     try {
-      final data = {
-        'scheduled_delivery_date': scheduledDeliveryDate.toIso8601String(),
-        if (notes != null && notes.isNotEmpty) 'notes': notes,
-        if (immediateDelivery != null) 'immediate_delivery': immediateDelivery,
-      };
+      final data = <String, dynamic>{};
+
+      // Solo incluir scheduled_delivery_date si se proporciona
+      // Si immediate_delivery es true, la fecha es opcional (el backend usa "now")
+      if (scheduledDeliveryDate != null) {
+        data['scheduled_delivery_date'] = scheduledDeliveryDate.toIso8601String();
+      }
+
+      if (notes != null && notes.isNotEmpty) {
+        data['notes'] = notes;
+      }
+
+      if (immediateDelivery != null) {
+        data['immediate_delivery'] = immediateDelivery;
+      }
 
       final response = await post(
         '/credits/$creditId/waiting-list/approve',
@@ -542,9 +552,9 @@ class CreditApiService extends BaseApiService {
       final errorMessage = handleDioError(e);
       print('❌ Error al aprobar crédito para entrega: $errorMessage');
 
-      // Lanzamos una excepción con los detalles del error para poder mostrarlos en la UI
+      // Lanzamos una excepción con el mensaje específico del backend
       throw ApiException(
-        message: 'Error al aprobar crédito para entrega',
+        message: errorMessage,
         statusCode: e.response?.statusCode,
         errorData: e.response?.data,
         originalError: e,

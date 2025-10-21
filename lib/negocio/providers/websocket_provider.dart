@@ -188,25 +188,36 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
             break;
           case 'approved':
             actionText = 'aprobado';
-            title = '✅ Crédito Aprobado';
-            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
-            // Mostrar si es de entrega inmediata
+            title = '✅ Crédito Aprobado - Pendiente de Entrega';
+            // Determinar si es entrega inmediata
+            bool isImmediate = false;
             try {
-              final immediate = (data['entrega_inmediata'] == true) ||
+              isImmediate = (data['entrega_inmediata'] == true) ||
+                  (data['immediate_delivery_requested'] == true) ||
                   (data['credit'] is Map && data['credit']['entrega_inmediata'] == true) ||
+                  (data['credit'] is Map && data['credit']['immediate_delivery_requested'] == true) ||
                   (data['credit'] is Map && data['credit']['immediate_delivery'] == true) ||
                   (data['credit'] is Map && data['credit']['immediateDelivery'] == true);
-              if (immediate == true) {
-                message = '$message • Entrega inmediata: Sí';
-              } else if (data.containsKey('entrega_inmediata') || (data['credit'] is Map && (data['credit'] as Map).containsKey('entrega_inmediata'))) {
-                message = '$message • Entrega inmediata: No';
-              }
             } catch (_) {}
+
+            // Mensaje según tipo de entrega
+            if (isImmediate) {
+              message = 'Tu crédito de ${amount.isNotEmpty ? '$amount Bs' : 'N/A'} ha sido aprobado. Debes entregar el dinero al cliente HOY.';
+            } else {
+              final scheduledDate = data['scheduled_delivery_date'] ?? data['credit']?['scheduled_delivery_date'];
+              if (scheduledDate != null) {
+                message = 'Tu crédito de ${amount.isNotEmpty ? '$amount Bs' : 'N/A'} ha sido aprobado. Entregar el $scheduledDate.';
+              } else {
+                message = 'Tu crédito de ${amount.isNotEmpty ? '$amount Bs' : 'N/A'} ha sido aprobado. Confirma la entrega física para activar el crédito.';
+              }
+            }
             break;
           case 'delivered':
-            actionText = 'entregado';
-            title = '🚚 Crédito Entregado';
-            message = 'Crédito #$creditId $actionText para $clientName${amount.isNotEmpty ? ' por $amount Bs' : ''}';
+            actionText = 'entregado y activado';
+            title = '🚚 Crédito Entregado y Activado';
+            // Mensaje para el manager que indica que el cronograma ha comenzado
+            final cobradorName = data['cobrador_name'] ?? data['cobradorName'] ?? data['delivered_by_name'] ?? 'El cobrador';
+            message = '$cobradorName ha entregado físicamente el crédito de ${amount.isNotEmpty ? '$amount Bs' : 'N/A'} a $clientName. El crédito está ahora ACTIVO y el cronograma de pagos ha comenzado.';
             break;
           case 'completed':
             actionText = 'completado';

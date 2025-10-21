@@ -1440,7 +1440,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
   /// Aprueba un crédito para entrega
   Future<bool> approveCreditForDelivery({
     required int creditId,
-    required DateTime scheduledDeliveryDate,
+    DateTime? scheduledDeliveryDate,
     String? notes,
     bool immediate = false,
   }) async {
@@ -1453,9 +1453,11 @@ class CreditNotifier extends StateNotifier<CreditState> {
       );
       print('✅ Aprobando crédito para entrega: $creditId');
 
+      // Si es entrega inmediata, NO enviar fecha (el backend usa "now")
+      // Si NO es inmediata, la fecha es requerida
       final response = await _creditApiService.approveCreditForDelivery(
         creditId: creditId.toString(),
-        scheduledDeliveryDate: scheduledDeliveryDate,
+        scheduledDeliveryDate: immediate ? null : scheduledDeliveryDate,
         notes: notes,
         immediateDelivery: immediate,
       );
@@ -1481,15 +1483,28 @@ class CreditNotifier extends StateNotifier<CreditState> {
     } on ApiException catch (e) {
       print('❌ ApiException: ${e.message}');
 
+      String displayMessage = e.message;
       Map<String, dynamic> validationErrors = {};
+
       if (e.hasValidationErrors) {
         validationErrors = e.validationErrors;
         print('❌ Errores de validación: $validationErrors');
+
+        // Si hay errores de validación, intentar extraer el primer mensaje
+        // ya que el mensaje principal ya debería contener el error más relevante
+        if (displayMessage.contains('Error al aprobar crédito para entrega') &&
+            validationErrors.isNotEmpty) {
+          final firstKey = validationErrors.keys.first;
+          final firstList = validationErrors[firstKey];
+          if (firstList is List && firstList.isNotEmpty) {
+            displayMessage = firstList.first.toString();
+          }
+        }
       }
 
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: displayMessage,
         validationErrors: validationErrors,
       );
       return false;
@@ -1891,7 +1906,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
   /// Usa el parámetro immediate_delivery=true del API para hacer ambas acciones en una sola llamada
   Future<bool> approveAndDeliverCredit({
     required int creditId,
-    required DateTime scheduledDeliveryDate,
+    DateTime? scheduledDeliveryDate,
     String? approvalNotes,
     String? deliveryNotes,
   }) async {
@@ -1913,9 +1928,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
       // Una sola llamada con immediate_delivery=true
       // El backend se encarga de aprobar Y entregar el crédito
+      // NO enviamos scheduled_delivery_date para entrega inmediata
       final response = await _creditApiService.approveCreditForDelivery(
         creditId: creditId.toString(),
-        scheduledDeliveryDate: scheduledDeliveryDate,
+        scheduledDeliveryDate: null, // null para entrega inmediata
         notes: combinedNotes,
         immediateDelivery: true,
       );
@@ -1939,6 +1955,33 @@ class CreditNotifier extends StateNotifier<CreditState> {
           response['message'] ?? 'Error al aprobar y entregar crédito',
         );
       }
+    } on ApiException catch (e) {
+      print('❌ ApiException al aprobar y entregar: ${e.message}');
+
+      String displayMessage = e.message;
+      Map<String, dynamic> validationErrors = {};
+
+      if (e.hasValidationErrors) {
+        validationErrors = e.validationErrors;
+        print('❌ Errores de validación: $validationErrors');
+
+        // Si el mensaje es genérico y hay errores de validación, usar el primer error
+        if (displayMessage.contains('Error al aprobar') &&
+            validationErrors.isNotEmpty) {
+          final firstKey = validationErrors.keys.first;
+          final firstList = validationErrors[firstKey];
+          if (firstList is List && firstList.isNotEmpty) {
+            displayMessage = firstList.first.toString();
+          }
+        }
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: displayMessage,
+        validationErrors: validationErrors,
+      );
+      return false;
     } catch (e) {
       print('❌ Error al aprobar y entregar crédito: $e');
 
@@ -1949,6 +1992,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
         errorMessage = 'Crédito no encontrado';
       } else if (e.toString().toLowerCase().contains('caja')) {
         errorMessage = e.toString();
+      } else if (e is ApiException) {
+        errorMessage = e.message;
       }
 
       state = state.copyWith(isLoading: false, errorMessage: errorMessage);

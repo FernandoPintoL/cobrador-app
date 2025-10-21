@@ -4,7 +4,8 @@
       "WebSearch",
       "Bash(mkdir:*)",
       "Bash(flutter analyze:*)",
-      "Bash(dart analyze lib/presentacion/creditos/credit_type_screen.dart)"
+      "Bash(dart analyze lib/presentacion/creditos/credit_type_screen.dart)",
+      "Bash(dart analyze:*)"
     ],
     "deny": [],
     "ask": []

@@ -71,18 +71,16 @@ class CreditCardFooter extends StatelessWidget {
         ),
       ]);
     }
-    // Botones para créditos listos para entrega
-    else if ((listType == 'ready_for_delivery' ||
-            (listType == 'waiting_delivery' && credit.isReadyForDelivery)) &&
-        canDeliver) {
+    // Botones para créditos listos para entrega (solo en el tab "Para Entregar")
+    else if (listType == 'ready_for_delivery' && canDeliver) {
       buttons.add(
         Expanded(
           child: ElevatedButton.icon(
             onPressed: onDeliver,
             icon: const Icon(Icons.local_shipping, size: 16),
-            label: const Text('Entregar', style: TextStyle(fontSize: 12)),
+            label: const Text('Confirmar Entrega', style: TextStyle(fontSize: 12)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+              backgroundColor: Colors.green,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 8),
               minimumSize: const Size(0, 32),
@@ -90,6 +88,11 @@ class CreditCardFooter extends StatelessWidget {
           ),
         ),
       );
+    }
+    // Créditos en espera (aún no listos) solo pueden verse, no entregarse
+    else if (listType == 'waiting_delivery') {
+      // No hay botón de acción - solo información
+      // Los créditos aquí tienen fecha programada futura
     }
     // Botón para pagos en créditos activos
     else if (listType == 'active' && credit.isActive) {
