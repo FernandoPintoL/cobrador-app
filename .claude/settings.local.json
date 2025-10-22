@@ -5,7 +5,8 @@
       "Bash(mkdir:*)",
       "Bash(flutter analyze:*)",
       "Bash(dart analyze lib/presentacion/creditos/credit_type_screen.dart)",
-      "Bash(dart analyze:*)"
+      "Bash(dart analyze:*)",
+      "Bash(del \"D:\\josecarlos\\app-cobrador\\temp_widgets_overdue.dart\")"
     ],
     "deny": [],
     "ask": []

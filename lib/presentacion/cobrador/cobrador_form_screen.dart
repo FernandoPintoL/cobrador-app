@@ -62,6 +62,11 @@ class _ManagerCobradorFormScreenState
   File? _profileImage;
   final _picker = ImagePicker();
 
+  // Estados de carga para procesamiento de imágenes
+  bool _isProcessingIdFront = false;
+  bool _isProcessingIdBack = false;
+  bool _isProcessingProfile = false;
+
   // URLs existentes (modo edición)
   String? _idFrontUrl;
   String? _idBackUrl;
@@ -555,6 +560,7 @@ class _ManagerCobradorFormScreenState
                             file: _idFront,
                             existingUrl: _idFrontUrl,
                             onTap: () => _pickImage('id_front'),
+                            isProcessing: _isProcessingIdFront,
                           ),
                           const SizedBox(width: 12),
                           _buildImagePicker(
@@ -562,6 +568,7 @@ class _ManagerCobradorFormScreenState
                             file: _idBack,
                             existingUrl: _idBackUrl,
                             onTap: () => _pickImage('id_back'),
+                            isProcessing: _isProcessingIdBack,
                           ),
                           const SizedBox(width: 12),
                           _buildImagePicker(
@@ -569,6 +576,7 @@ class _ManagerCobradorFormScreenState
                             file: _profileImage,
                             existingUrl: _profileImageUrl,
                             onTap: () => _pickImage('profile'),
+                            isProcessing: _isProcessingProfile,
                           ),
                         ],
                       ),
@@ -978,50 +986,92 @@ class _ManagerCobradorFormScreenState
     required File? file,
     String? existingUrl,
     required VoidCallback onTap,
+    bool isProcessing = false,
   }) {
     return Expanded(
       child: InkWell(
-        onTap: onTap,
+        onTap: isProcessing ? null : onTap,
         child: Container(
           height: 90,
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey.shade300),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Builder(
-            builder: (_) {
-              if (file != null) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    file,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
+          child: Stack(
+            children: [
+              Builder(
+                builder: (_) {
+                  if (file != null) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        file,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      ),
+                    );
+                  } else if (existingUrl != null && existingUrl.isNotEmpty) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        existingUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      ),
+                    );
+                  }
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.add_a_photo,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  );
+                },
+              ),
+              // Overlay de carga durante procesamiento
+              if (isProcessing)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                );
-              } else if (existingUrl != null && existingUrl.isNotEmpty) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    existingUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Procesando...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              }
-              return Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.add_a_photo, size: 20, color: Colors.grey),
-                  const SizedBox(height: 6),
-                  Text(
-                    label,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              );
-            },
+                ),
+            ],
           ),
         ),
       ),
@@ -1089,19 +1139,42 @@ class _ManagerCobradorFormScreenState
         imageQuality: 100,
       );
       if (picked == null) return;
+
+      // Activar indicador de carga según el tipo de imagen
+      setState(() {
+        if (type == 'id_front') {
+          _isProcessingIdFront = true;
+        } else if (type == 'id_back') {
+          _isProcessingIdBack = true;
+        } else {
+          _isProcessingProfile = true;
+        }
+      });
+
       File file = File(picked.path);
       file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);
 
       setState(() {
+        // Guardar archivo e desactivar indicador
         if (type == 'id_front') {
           _idFront = file;
+          _isProcessingIdFront = false;
         } else if (type == 'id_back') {
           _idBack = file;
+          _isProcessingIdBack = false;
         } else {
           _profileImage = file;
+          _isProcessingProfile = false;
         }
       });
     } catch (e) {
+      // Desactivar indicadores en caso de error
+      setState(() {
+        _isProcessingIdFront = false;
+        _isProcessingIdBack = false;
+        _isProcessingProfile = false;
+      });
+
       _mostrarError('No se pudo seleccionar la imagen: $e');
     }
   }

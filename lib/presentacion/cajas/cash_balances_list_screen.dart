@@ -8,6 +8,18 @@ import '../../datos/modelos/usuario.dart';
 import 'cash_balance_detail_screen.dart';
 import 'open_cash_balance_dialog.dart';
 
+// Función auxiliar para traducir estados
+String _translateStatus(String? status) {
+  if (status == null) return '—';
+  final lower = status.toLowerCase().trim();
+  return switch (lower) {
+    'open' => 'Abierta',
+    'closed' => 'Cerrada',
+    'reconciled' => 'Reconciliada',
+    _ => status,
+  };
+}
+
 class CashBalancesListScreen extends ConsumerStatefulWidget {
   const CashBalancesListScreen({super.key});
 
@@ -32,7 +44,9 @@ class _CashBalancesListScreenState
       if (auth.isAdmin || auth.isManager) {
         ref.read(cobradorAssignmentProvider.notifier).cargarCobradores();
         _page = 1;
-        ref.read(cashBalanceProvider.notifier).list(
+        ref
+            .read(cashBalanceProvider.notifier)
+            .list(
               cobradorId: _selectedCobrador?.id.toInt(),
               dateFrom: _dateFrom,
               dateTo: _dateTo,
@@ -42,7 +56,9 @@ class _CashBalancesListScreenState
       } else if (auth.isCobrador) {
         _page = 1;
         final id = auth.usuario?.id.toInt();
-        ref.read(cashBalanceProvider.notifier).list(
+        ref
+            .read(cashBalanceProvider.notifier)
+            .list(
               cobradorId: id,
               dateFrom: _dateFrom,
               dateTo: _dateTo,
@@ -51,10 +67,9 @@ class _CashBalancesListScreenState
             );
       } else {
         // Otros roles: carga básica
-        ref.read(cashBalanceProvider.notifier).list(
-              page: _page,
-              perPage: _perPage,
-            );
+        ref
+            .read(cashBalanceProvider.notifier)
+            .list(page: _page, perPage: _perPage);
       }
     });
   }
@@ -92,7 +107,9 @@ class _CashBalancesListScreenState
 
     void _buscar() {
       _page = 1;
-      ref.read(cashBalanceProvider.notifier).list(
+      ref
+          .read(cashBalanceProvider.notifier)
+          .list(
             cobradorId: isCobrador
                 ? auth.usuario?.id.toInt()
                 : (isAdminOrManager ? _selectedCobrador?.id.toInt() : null),
@@ -110,7 +127,9 @@ class _CashBalancesListScreenState
         if (isAdminOrManager) _selectedCobrador = null;
         _page = 1;
       });
-      ref.read(cashBalanceProvider.notifier).list(
+      ref
+          .read(cashBalanceProvider.notifier)
+          .list(
             cobradorId: isCobrador ? auth.usuario?.id.toInt() : null,
             page: _page,
             perPage: _perPage,
@@ -121,7 +140,9 @@ class _CashBalancesListScreenState
       if (nueva < 1) return;
       if (nueva > state.lastPage) return;
       setState(() => _page = nueva);
-      ref.read(cashBalanceProvider.notifier).list(
+      ref
+          .read(cashBalanceProvider.notifier)
+          .list(
             cobradorId: isCobrador
                 ? auth.usuario?.id.toInt()
                 : (isAdminOrManager ? _selectedCobrador?.id.toInt() : null),
@@ -155,7 +176,9 @@ class _CashBalancesListScreenState
           // Barra de filtros modernizada
           Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.surfaceVariant.withOpacity(0.3),
               border: Border(
                 bottom: BorderSide(
                   color: Theme.of(context).dividerColor,
@@ -172,7 +195,10 @@ class _CashBalancesListScreenState
                       elevation: 0,
                       color: Theme.of(context).colorScheme.surface,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                         child: DropdownButtonFormField<Usuario>(
                           isExpanded: true,
                           value: _selectedCobrador,
@@ -182,12 +208,15 @@ class _CashBalancesListScreenState
                             prefixIcon: Icon(Icons.person_outline),
                           ),
                           items: assignState.cobradores
-                              .map((u) => DropdownMenuItem<Usuario>(
-                                    value: u,
-                                    child: Text(u.nombre),
-                                  ))
+                              .map(
+                                (u) => DropdownMenuItem<Usuario>(
+                                  value: u,
+                                  child: Text(u.nombre),
+                                ),
+                              )
                               .toList(),
-                          onChanged: (val) => setState(() => _selectedCobrador = val),
+                          onChanged: (val) =>
+                              setState(() => _selectedCobrador = val),
                         ),
                       ),
                     ),
@@ -270,8 +299,7 @@ class _CashBalancesListScreenState
               ),
             ),
           ),
-          if (state.isLoading)
-            const LinearProgressIndicator(minHeight: 3),
+          if (state.isLoading) const LinearProgressIndicator(minHeight: 3),
           Expanded(
             child: state.items.isEmpty && !state.isLoading
                 ? Center(
@@ -288,7 +316,9 @@ class _CashBalancesListScreenState
                           'Sin resultados',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -303,16 +333,20 @@ class _CashBalancesListScreenState
                       final cobrador = item['cobrador'] is Map
                           ? (item['cobrador']['name']?.toString() ?? '')
                           : (item['cobrador_name'] ??
-                              item['cobrador_id']?.toString() ??
-                              '—');
+                                item['cobrador_id']?.toString() ??
+                                '—');
                       final status = item['status']?.toString() ?? '—';
                       final initialRaw = item['initial_amount'];
                       String initial;
                       if (initialRaw is num) {
                         initial = initialRaw.toStringAsFixed(2);
                       } else {
-                        final parsed = double.tryParse(initialRaw?.toString() ?? '');
-                        initial = parsed != null ? parsed.toStringAsFixed(2) : (initialRaw?.toString() ?? '0.00');
+                        final parsed = double.tryParse(
+                          initialRaw?.toString() ?? '',
+                        );
+                        initial = parsed != null
+                            ? parsed.toStringAsFixed(2)
+                            : (initialRaw?.toString() ?? '0.00');
                       }
 
                       final isOpen = status.toLowerCase() == 'open';
@@ -336,7 +370,8 @@ class _CashBalancesListScreenState
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => CashBalanceDetailScreen(
-                                    id: (item['id'] as int)),
+                                  id: (item['id'] as int),
+                                ),
                               ),
                             );
                           },
@@ -362,7 +397,8 @@ class _CashBalancesListScreenState
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             cobrador,
@@ -377,18 +413,29 @@ class _CashBalancesListScreenState
                                               Icon(
                                                 Icons.calendar_today,
                                                 size: 14,
-                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
                                                 DateFormat('dd/MM/yyyy').format(
-                                                    date is DateTime
-                                                        ? date
-                                                        : DateTime.tryParse(date.toString()) ?? DateTime(1970, 1, 1)
+                                                  date is DateTime
+                                                      ? date
+                                                      : DateTime.tryParse(
+                                                              date.toString(),
+                                                            ) ??
+                                                            DateTime(
+                                                              1970,
+                                                              1,
+                                                              1,
+                                                            ),
                                                 ),
                                                 style: TextStyle(
                                                   fontSize: 13,
-                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
                                                 ),
                                               ),
                                             ],
@@ -397,13 +444,16 @@ class _CashBalancesListScreenState
                                       ),
                                     ),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: statusColor.withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        status,
+                                        _translateStatus(status),
                                         style: TextStyle(
                                           color: statusColor,
                                           fontSize: 12,
@@ -417,7 +467,8 @@ class _CashBalancesListScreenState
                                 const Divider(height: 1),
                                 const SizedBox(height: 12),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Row(
                                       children: [
@@ -425,7 +476,9 @@ class _CashBalancesListScreenState
                                           'Monto inicial: ',
                                           style: TextStyle(
                                             fontSize: 14,
-                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
                                           ),
                                         ),
                                         Text(
@@ -439,7 +492,9 @@ class _CashBalancesListScreenState
                                     ),
                                     Icon(
                                       Icons.chevron_right,
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                     ),
                                   ],
                                 ),
@@ -484,7 +539,9 @@ class _CashBalancesListScreenState
                       ),
                       const SizedBox(width: 8),
                       FilledButton.tonal(
-                        onPressed: state.currentPage < state.lastPage && !state.isLoading
+                        onPressed:
+                            state.currentPage < state.lastPage &&
+                                !state.isLoading
                             ? () => _cambiarPagina(state.currentPage + 1)
                             : null,
                         child: const Icon(Icons.chevron_right, size: 20),
