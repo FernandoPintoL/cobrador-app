@@ -26,6 +26,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   String _format = 'json';
   rp.ReportRequest? _currentRequest;
   int? _quickRangeIndex;
+  bool _showFilters = true; // Controla si los filtros están visibles
 
   bool _hasDateRange(dynamic typeDef) {
     final filters = (typeDef?['filters'] as List<dynamic>?) ?? [];
@@ -100,211 +101,339 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
+                // 🎯 CARD DE FILTROS COLAPSABLE
                 Card(
-                  elevation: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: const [
-                              Icon(Icons.insights_outlined, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'Tipo de reporte',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ],
+                  elevation: _showFilters ? 2 : 0.5,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header colapsable
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _showFilters = !_showFilters),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: cs.outline.withValues(alpha: 0.2),
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: DropdownButton<String>(
-                              value: _selectedReport,
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              menuMaxHeight: 300,
-                              items: entries
-                                  .map(
-                                    (e) => DropdownMenuItem(
-                                      value: e.key,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                        ),
-                                        child: Text(e.value['name'] ?? e.key),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) => setState(() {
-                                _selectedReport = v;
-                                _quickRangeIndex = null;
-                                _filters.remove('start_date');
-                                _filters.remove('end_date');
-                              }),
+                          decoration: BoxDecoration(
+                            color: _showFilters
+                                ? cs.primaryContainer.withValues(alpha: 0.3)
+                                : cs.surfaceContainerHighest.withValues(
+                                    alpha: 0.5,
+                                  ),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              topRight: Radius.circular(12),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          if (_selectedReport != null) ...[
-                            if (_hasDateRange(types[_selectedReport!]))
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8.0),
-                                child: Wrap(
-                                  spacing: 8,
-                                  children: List<Widget>.generate(6, (i) {
-                                    final labels = [
-                                      'Hoy',
-                                      'Ayer',
-                                      'Últimos 7 días',
-                                      'Este mes',
-                                      'Mes pasado',
-                                      'Rango de fechas',
-                                    ];
-                                    final selected = _quickRangeIndex == i;
-                                    return ChoiceChip(
-                                      label: Text(labels[i]),
-                                      selected: selected,
-                                      labelStyle: TextStyle(
-                                        color: selected
-                                            ? cs.onPrimaryContainer
-                                            : cs.onSurfaceVariant,
-                                      ),
-                                      selectedColor: cs.primaryContainer,
-                                      backgroundColor: cs.surface,
-                                      shape: const StadiumBorder(),
-                                      side: BorderSide(
-                                        color: selected
-                                            ? cs.primary
-                                            : cs.outline.withOpacity(0.4),
-                                      ),
-                                      onSelected: (selected) {
-                                        setState(() {
-                                          if (!selected) {
-                                            // Destildado: limpiar fechas y quitar selección
-                                            _quickRangeIndex = null;
-                                            _filters.remove('start_date');
-                                            _filters.remove('end_date');
-                                          } else {
-                                            _quickRangeIndex = i;
-                                            if (i == 5) {
-                                              // Modo manual: limpiar fechas para que el usuario seleccione
-                                              _filters.remove('start_date');
-                                              _filters.remove('end_date');
-                                            } else {
-                                              final range = _rangeForIndex(i);
-                                              _filters['start_date'] =
-                                                  range['start'];
-                                              _filters['end_date'] =
-                                                  range['end'];
-                                            }
-                                          }
-                                        });
-                                      },
-                                    );
-                                  }),
-                                ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _showFilters
+                                    ? Icons.filter_alt
+                                    : Icons.filter_alt_off,
+                                color: cs.primary,
+                                size: 20,
                               ),
-                            // Envolver filtros en un Flexible + SingleChildScrollView para evitar overflow
-                            Flexible(
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: _buildFiltersFor(
-                                    types[_selectedReport!],
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Filtros de búsqueda',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: cs.primary,
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    Text(
-                                      'Formato:',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: cs.onSurfaceVariant,
-                                          ),
-                                    ),
-                                    DropdownButton<String>(
-                                      value: _format,
-                                      items:
-                                          ((types[_selectedReport]?['formats']
-                                                      as List<dynamic>?) ??
-                                                  ['json'])
-                                              .map(
-                                                (f) => DropdownMenuItem(
-                                                  value: f as String,
-                                                  child: Text(
-                                                    f.toString().toUpperCase(),
-                                                  ),
-                                                ),
-                                              )
-                                              .toList(),
-                                      onChanged: (v) =>
-                                          setState(() => _format = v ?? 'json'),
-                                    ),
-                                    OutlinedButton.icon(
-                                      onPressed: () {
-                                        setState(() {
-                                          _filters.clear();
-                                          _quickRangeIndex = null;
-                                        });
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Filtros limpiados'),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.clear_all),
-                                      label: const Text('Limpiar'),
-                                    ),
-                                  ],
+                              AnimatedRotation(
+                                turns: _showFilters ? 0 : 0.5,
+                                duration: const Duration(milliseconds: 300),
+                                child: Icon(
+                                  Icons.expand_more,
+                                  color: cs.primary,
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              FilledButton.icon(
-                                onPressed: _selectedReport == null
-                                    ? null
-                                    : _generateReport,
-                                icon: const Icon(Icons.play_arrow_rounded),
-                                label: const Text('Generar'),
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                      // Contenido colapsable
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: _showFilters
+                            ? Container(
+                                constraints: const BoxConstraints(
+                                  maxHeight:
+                                      400, // Limita altura del contenedor
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Selector de tipo de reporte
+                                        Row(
+                                          children: const [
+                                            Icon(
+                                              Icons.insights_outlined,
+                                              size: 20,
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Tipo de reporte',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: cs.outline.withValues(
+                                                alpha: 0.2,
+                                              ),
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: DropdownButton<String>(
+                                            value: _selectedReport,
+                                            isExpanded: true,
+                                            underline: const SizedBox(),
+                                            menuMaxHeight: 300,
+                                            items: entries
+                                                .map(
+                                                  (e) => DropdownMenuItem(
+                                                    value: e.key,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                          ),
+                                                      child: Text(
+                                                        e.value['name'] ??
+                                                            e.key,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                            onChanged: (v) => setState(() {
+                                              _selectedReport = v;
+                                              _quickRangeIndex = null;
+                                              _filters.remove('start_date');
+                                              _filters.remove('end_date');
+                                            }),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        if (_selectedReport != null) ...[
+                                          if (_hasDateRange(
+                                            types[_selectedReport!],
+                                          ))
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 8.0,
+                                              ),
+                                              child: Wrap(
+                                                spacing: 8,
+                                                children: List<Widget>.generate(6, (
+                                                  i,
+                                                ) {
+                                                  final labels = [
+                                                    'Hoy',
+                                                    'Ayer',
+                                                    'Últimos 7 días',
+                                                    'Este mes',
+                                                    'Mes pasado',
+                                                    'Rango de fechas',
+                                                  ];
+                                                  final selected =
+                                                      _quickRangeIndex == i;
+                                                  return ChoiceChip(
+                                                    label: Text(labels[i]),
+                                                    selected: selected,
+                                                    labelStyle: TextStyle(
+                                                      color: selected
+                                                          ? cs.onPrimaryContainer
+                                                          : cs.onSurfaceVariant,
+                                                    ),
+                                                    selectedColor:
+                                                        cs.primaryContainer,
+                                                    backgroundColor: cs.surface,
+                                                    shape:
+                                                        const StadiumBorder(),
+                                                    side: BorderSide(
+                                                      color: selected
+                                                          ? cs.primary
+                                                          : cs.outline
+                                                                .withOpacity(
+                                                                  0.4,
+                                                                ),
+                                                    ),
+                                                    onSelected: (selected) {
+                                                      setState(() {
+                                                        if (!selected) {
+                                                          _quickRangeIndex =
+                                                              null;
+                                                          _filters.remove(
+                                                            'start_date',
+                                                          );
+                                                          _filters.remove(
+                                                            'end_date',
+                                                          );
+                                                        } else {
+                                                          _quickRangeIndex = i;
+                                                          if (i == 5) {
+                                                            _filters.remove(
+                                                              'start_date',
+                                                            );
+                                                            _filters.remove(
+                                                              'end_date',
+                                                            );
+                                                          } else {
+                                                            final range =
+                                                                _rangeForIndex(
+                                                                  i,
+                                                                );
+                                                            _filters['start_date'] =
+                                                                range['start'];
+                                                            _filters['end_date'] =
+                                                                range['end'];
+                                                          }
+                                                        }
+                                                      });
+                                                    },
+                                                  );
+                                                }),
+                                              ),
+                                            ),
+                                          // Filtros dinámicos
+                                          Flexible(
+                                            child: SingleChildScrollView(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: _buildFiltersFor(
+                                                  types[_selectedReport!],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      // Footer con botones de acción
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest.withValues(
+                            alpha: 0.3,
+                          ),
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    'Formato:',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  DropdownButton<String>(
+                                    value: _format,
+                                    items:
+                                        ((types[_selectedReport]?['formats']
+                                                    as List<dynamic>?) ??
+                                                ['json'])
+                                            .map(
+                                              (f) => DropdownMenuItem(
+                                                value: f as String,
+                                                child: Text(
+                                                  f.toString().toUpperCase(),
+                                                  style:
+                                                      theme.textTheme.bodySmall,
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged: (v) =>
+                                        setState(() => _format = v ?? 'json'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _filters.clear();
+                                        _quickRangeIndex = null;
+                                      });
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Filtros limpiados'),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.clear_all, size: 18),
+                                    label: const Text('Limpiar'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed: _selectedReport == null
+                                  ? null
+                                  : _generateReport,
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: const Text('Generar'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),
+                // 📊 CARD DE RESULTADOS - Ahora toma más espacio
                 Expanded(
                   child: Card(
                     clipBehavior: Clip.antiAlias,
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(12.0),
-                      child: _ReportResultView(
-                        // Solo pasar la petición actual; si es null no se ejecuta la petición
-                        request: _currentRequest,
-                      ),
+                      child: _ReportResultView(request: _currentRequest),
                     ),
                   ),
                 ),
@@ -322,6 +451,148 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   List<Widget> _buildFiltersFor(dynamic typeDef) {
     final List<Widget> widgets = [];
     final filters = (typeDef?['filters'] as List<dynamic>?) ?? [];
+
+    // Helper para traducir nombres de campos
+    String _translateFilterLabel(String key) {
+      final normalized = key.toLowerCase().replaceAll('_', ' ');
+
+      // Diccionario de traducciones exactas
+      final translations = {
+        'start date': 'Fecha Inicio',
+        'start_date': 'Fecha Inicio',
+        'end date': 'Fecha Fin',
+        'end_date': 'Fecha Fin',
+        'client': 'Cliente',
+        'client name': 'Nombre Cliente',
+        'client_name': 'Nombre Cliente',
+        'cobrador': 'Cobrador',
+        'cobrador name': 'Nombre Cobrador',
+        'cobrador_name': 'Nombre Cobrador',
+        'category': 'Categoría',
+        'categoria': 'Categoría',
+        'status': 'Estado',
+        'credit status': 'Estado Crédito',
+        'credit_status': 'Estado Crédito',
+        'payment status': 'Estado Pago',
+        'payment_status': 'Estado Pago',
+        'amount': 'Monto',
+        'total amount': 'Monto Total',
+        'total_amount': 'Monto Total',
+        'date': 'Fecha',
+        'id': 'ID',
+        'name': 'Nombre',
+        'type': 'Tipo',
+        'description': 'Descripción',
+        'reason': 'Motivo',
+        'notes': 'Notas',
+        'observation': 'Observación',
+        'balance': 'Balance',
+        'paid': 'Pagado',
+        'pending': 'Pendiente',
+        'overdue': 'Vencido',
+        'overdue days': 'Días Vencido',
+        'overdue_days': 'Días Vencido',
+        'user': 'Usuario',
+        'username': 'Nombre Usuario',
+        'email': 'Correo',
+        'phone': 'Teléfono',
+        'location': 'Ubicación',
+        'address': 'Dirección',
+        'city': 'Ciudad',
+        'state': 'Estado',
+        'country': 'País',
+        'zip code': 'Código Postal',
+        'zip_code': 'Código Postal',
+        'created at': 'Creado',
+        'created_at': 'Creado',
+        'updated at': 'Actualizado',
+        'updated_at': 'Actualizado',
+        'deleted at': 'Eliminado',
+        'deleted_at': 'Eliminado',
+        'is active': 'Activo',
+        'is_active': 'Activo',
+        'frequency': 'Frecuencia',
+        'interest': 'Interés',
+        'commission': 'Comisión',
+        'source': 'Origen',
+        'bank': 'Banco',
+        'account': 'Cuenta',
+        'reference': 'Referencia',
+        'payment': 'Pago',
+        'payment date': 'Fecha Pago',
+        'payment_date': 'Fecha Pago',
+        'credit': 'Crédito',
+        'credit id': 'ID Crédito',
+        'credit_id': 'ID Crédito',
+        'client id': 'ID Cliente',
+        'client_id': 'ID Cliente',
+        'cobrador id': 'ID Cobrador',
+        'cobrador_id': 'ID Cobrador',
+        'user id': 'ID Usuario',
+        'user_id': 'ID Usuario',
+        'period': 'Período',
+        'month': 'Mes',
+        'year': 'Año',
+        'week': 'Semana',
+        'day': 'Día',
+        'range': 'Rango',
+        'minimum': 'Mínimo',
+        'maximum': 'Máximo',
+        'min': 'Mínimo',
+        'max': 'Máximo',
+        'total': 'Total',
+        'count': 'Cantidad',
+        'quantity': 'Cantidad',
+        'rate': 'Tasa',
+        'percentage': 'Porcentaje',
+        'percent': 'Porcentaje',
+        'summary': 'Resumen',
+        'detail': 'Detalle',
+        'details': 'Detalles',
+        'active': 'Activo',
+        'inactive': 'Inactivo',
+        'enabled': 'Habilitado',
+        'disabled': 'Deshabilitado',
+        'open': 'Abierto',
+        'closed': 'Cerrado',
+        'reconciled': 'Reconciliado',
+        'pending payment': 'Pago Pendiente',
+        'pending_payment': 'Pago Pendiente',
+        'paid payment': 'Pago Realizado',
+        'paid_payment': 'Pago Realizado',
+        'rejected': 'Rechazado',
+        'approved': 'Aprobado',
+        'collection': 'Cobranza',
+        'collected': 'Cobrado',
+        'lent': 'Prestado',
+        'owed': 'Adeudado',
+        'efficiency': 'Eficiencia',
+        'performance': 'Rendimiento',
+      };
+
+      // Buscar traducción exacta
+      if (translations.containsKey(normalized)) {
+        return translations[normalized]!;
+      }
+
+      // Búsqueda por palabras clave si no hay match exacto
+      for (final keyword in translations.keys) {
+        if (normalized.contains(keyword)) {
+          return translations[keyword]!;
+        }
+      }
+
+      // Si no hay traducción, formatear el nombre: capitalizar cada palabra
+      return key
+          .replaceAll('_', ' ')
+          .split(' ')
+          .map(
+            (word) => word.isEmpty
+                ? ''
+                : word[0].toUpperCase() + word.substring(1).toLowerCase(),
+          )
+          .join(' ');
+    }
 
     for (final f in filters) {
       final key = f as String;
@@ -352,7 +623,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: _DateFilterField(
-              label: key.replaceAll('_', ' ').toUpperCase(),
+              label: _translateFilterLabel(key),
               value: _filters[key]?.toString(),
               onChanged: (v) {
                 if (v == null || v.isEmpty) {
@@ -370,7 +641,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: _SearchSelectField(
-              label: key.replaceAll('_', ' ').toUpperCase(),
+              label: _translateFilterLabel(key),
               initialValue: _filters[key]?.toString(),
               // Tipo usado para decidir qué provider/endpoint usar internamente
               type: isCobrador
@@ -389,7 +660,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             padding: const EdgeInsets.only(bottom: 8.0),
             child: TextFormField(
               decoration: InputDecoration(
-                labelText: key.replaceAll('_', ' ').toUpperCase(),
+                labelText: _translateFilterLabel(key),
                 border: const OutlineInputBorder(),
               ),
               onChanged: (v) => _filters[key] = v,
