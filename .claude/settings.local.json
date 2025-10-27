@@ -6,7 +6,18 @@
       "Bash(flutter analyze:*)",
       "Bash(dart analyze lib/presentacion/creditos/credit_type_screen.dart)",
       "Bash(dart analyze:*)",
-      "Bash(del \"D:\\josecarlos\\app-cobrador\\temp_widgets_overdue.dart\")"
+      "Bash(del \"D:\\josecarlos\\app-cobrador\\temp_widgets_overdue.dart\")",
+      "Read(//d/**)",
+      "Bash(tree:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(awk:*)",
+      "Bash(git checkout:*)",
+      "Bash(dir:*)",
+      "Bash(for file in lib/presentacion/reports/views/*.dart)",
+      "Bash(done)",
+      "Bash(findstr:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(flutter pub get:*)"
     ],
     "deny": [],
     "ask": []

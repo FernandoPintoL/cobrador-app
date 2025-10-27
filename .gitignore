@@ -52,3 +52,4 @@ app.*.map.json
 
 # WebSocket Server (Node.js)
 /websocket-server/
+/documentaciones
