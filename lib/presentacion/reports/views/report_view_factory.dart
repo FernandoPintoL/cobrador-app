@@ -6,6 +6,7 @@ import 'base_report_view.dart';
 import 'payments_report_view.dart';
 import 'credits_report_view.dart';
 import 'balances_report_view.dart';
+import 'overdue_report_view.dart';
 
 /// Factory para crear instancias de vistas según el payload del reporte
 /// Usa el patrón Strategy para detectar el tipo de reporte automáticamente
@@ -36,7 +37,7 @@ class ReportViewFactory {
           if (summary.containsKey('total_overdue_credits') ||
               summary.containsKey('average_days_overdue') ||
               summary.containsKey('by_severity')) {
-            return _OverdueReportView(request: request, payload: payload);
+            return OverdueReportView(request: request, payload: payload);
           }
 
           // Detectar si es reporte de LISTA DE ESPERA
@@ -79,7 +80,7 @@ class ReportViewFactory {
 
       case 'overdue':
       case 'mora':
-        return _OverdueReportView(request: request, payload: payload);
+        return OverdueReportView(request: request, payload: payload);
 
       case 'waiting-list':
       case 'waiting_list':
@@ -116,28 +117,6 @@ class ReportViewFactory {
 }
 
 // ============ VISTAS PLACEHOLDERS (para futuras implementaciones) ============
-
-class _OverdueReportView extends BaseReportView {
-  const _OverdueReportView({
-    required super.request,
-    required super.payload,
-    Key? key,
-  }) : super(key: key);
-
-  @override
-  String getReportTitle() => 'Reporte de Mora';
-
-  @override
-  IconData getReportIcon() => Icons.warning;
-
-  @override
-  Widget buildReportContent(BuildContext context, WidgetRef ref) {
-    return GenericReportBuilder.buildAutomatic(
-      payload,
-      title: 'Datos de Mora',
-    );
-  }
-}
 
 class _WaitingListReportView extends BaseReportView {
   const _WaitingListReportView({

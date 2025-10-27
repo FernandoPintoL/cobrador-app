@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/report_formatters.dart';
 import '../utils/report_download_helper.dart';
 import '../widgets/payments_list_widget.dart';
-import '../widgets/report_table.dart';
 import '../widgets/summary_cards_builder.dart';
 import 'base_report_view.dart';
 
@@ -77,46 +76,233 @@ class PaymentsReportView extends BaseReportView {
       );
     }
 
-    // Formatear pagos para la tabla
-    final List<Map<String, dynamic>> rows = payments.map<Map<String, dynamic>>((
-      p,
-    ) {
-      final Map<String, dynamic> pm = Map<String, dynamic>.from(p as Map);
+    return _buildModernPaymentsTable(payments.cast<Map<String, dynamic>>());
+  }
 
-      // Extraer información
-      final clientName = ReportFormatters.extractPaymentClientName(pm);
-      final cobradorName = ReportFormatters.extractPaymentCobradorName(pm);
-      final paymentDate = ReportFormatters.formatDate(pm['payment_date'] ?? '');
-      final amount = ReportFormatters.formatCurrency(pm['amount'] ?? 0);
-      final method = pm['payment_method']?.toString() ?? 'N/A';
-      final status = pm['status']?.toString() ?? 'Completado';
+  /// Construye una tabla modernizada de pagos con colores e iconos
+  Widget _buildModernPaymentsTable(List<Map<String, dynamic>> payments) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columnSpacing: 8,
+        horizontalMargin: 12,
+        columns: [
+          DataColumn(
+            label: _buildHeaderLabel('ID'),
+          ),
+          DataColumn(
+            label: _buildHeaderLabel('Fecha'),
+          ),
+          DataColumn(
+            label: _buildHeaderLabel('Cuota'),
+          ),
+          DataColumn(
+            label: _buildHeaderLabel('Cliente'),
+          ),
+          DataColumn(
+            label: _buildHeaderLabel('Cobrador'),
+          ),
+          DataColumn(
+            label: _buildHeaderLabel('Monto'),
+            numeric: true,
+          ),
+          DataColumn(
+            label: _buildHeaderLabel('Método'),
+          ),
+          DataColumn(
+            label: _buildHeaderLabel('Estado'),
+          ),
+        ],
+        rows: payments
+            .map((pm) => _buildPaymentDataRow(pm))
+            .toList(),
+      ),
+    );
+  }
 
-      return {
-        'ID': pm['id']?.toString() ?? '',
-        'Fecha': paymentDate,
-        'Cuota': pm['installment_number']?.toString() ?? '',
-        'Cobrador': cobradorName,
-        'Cliente': clientName,
-        'Monto': amount,
-        'Tipo': method,
-        'Estado': status,
-        'Notas': pm['notes']?.toString() ?? '',
-      };
-    }).toList();
+  /// Construye una fila de datos de pago con colores e iconos
+  DataRow _buildPaymentDataRow(Map<String, dynamic> pm) {
+    final clientName = ReportFormatters.extractPaymentClientName(pm);
+    final cobradorName = ReportFormatters.extractPaymentCobradorName(pm);
+    final paymentDate = ReportFormatters.formatDate(pm['payment_date'] ?? '');
+    final amountValue = ReportFormatters.toDouble(pm['amount'] ?? 0);
+    final methodRaw = pm['payment_method']?.toString();
+    final method = ReportFormatters.translatePaymentMethod(methodRaw);
+    final statusRaw = pm['status']?.toString();
 
-    return buildTableFromJson(
-      rows,
-      columnOrder: [
-        'ID',
-        'Fecha',
-        'Cuota',
-        'Cobrador',
-        'Cliente',
-        'Monto',
-        'Tipo',
-        'Estado',
+    // Obtener color y icono basados en el método de pago
+    final methodColor = ReportFormatters.colorForPaymentMethod(methodRaw);
+    final methodIcon = ReportFormatters.iconForPaymentMethod(methodRaw);
+
+    // Obtener color basado en el estado
+    final statusColor = ReportFormatters.colorForStatus(statusRaw);
+
+    return DataRow(
+      color: MaterialStateProperty.resolveWith<Color>((Set<MaterialState> states) {
+        if (states.contains(MaterialState.hovered)) {
+          return Colors.grey.shade50;
+        }
+        return Colors.white;
+      }),
+      cells: [
+        DataCell(
+          _buildCellContent(
+            pm['id']?.toString() ?? '',
+            color: Colors.blue,
+            isNumber: true,
+          ),
+        ),
+        DataCell(
+          _buildCellContent(paymentDate),
+        ),
+        DataCell(
+          _buildCellContent(
+            pm['installment_number']?.toString() ?? '',
+            color: Colors.indigo,
+            isNumber: true,
+          ),
+        ),
+        DataCell(
+          _buildCellContent(clientName),
+        ),
+        DataCell(
+          _buildCellContent(cobradorName, color: Colors.green),
+        ),
+        DataCell(
+          _buildMoneyCell(amountValue),
+        ),
+        DataCell(
+          _buildMethodCell(method, methodIcon, methodColor),
+        ),
+        DataCell(
+          _buildStatusCell(statusRaw, statusColor),
+        ),
       ],
     );
+  }
+
+  /// Construye una celda de contenido con color opcional
+  Widget _buildCellContent(String text, {Color? color, bool isNumber = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: isNumber ? FontWeight.w600 : FontWeight.normal,
+          fontSize: 13,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  /// Construye una celda de dinero con formato especial
+  Widget _buildMoneyCell(double amount) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(
+        'Bs ${amount.toStringAsFixed(2)}',
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+          color: Colors.green,
+        ),
+        textAlign: TextAlign.right,
+      ),
+    );
+  }
+
+  /// Construye una celda de método de pago con icono y color
+  Widget _buildMethodCell(String method, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              method,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Construye una celda de estado con color e ícono
+  Widget _buildStatusCell(String? status, Color color) {
+    final statusText = ReportFormatters.translateCreditStatus(status);
+    final statusIcon = _getStatusIcon(status);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(statusIcon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              statusText,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Construye el label del encabezado con estilo
+  Widget _buildHeaderLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 13,
+      ),
+    );
+  }
+
+  /// Obtiene el icono para un estado de pago
+  IconData _getStatusIcon(String? status) {
+    switch ((status ?? '').toLowerCase()) {
+      case 'completed':
+        return Icons.check_circle;
+      case 'pending':
+        return Icons.schedule;
+      case 'overdue':
+        return Icons.error;
+      case 'cancelled':
+        return Icons.cancel;
+      default:
+        return Icons.info_outline;
+    }
   }
 
   @override
@@ -211,14 +397,14 @@ class PaymentsReportView extends BaseReportView {
               summaryKey: 'total_amount',
               icon: Icons.attach_money,
               color: Colors.blue,
-              formatter: ReportFormatters.formatCurrency,
+              formatter: (value) => 'Bs ${ReportFormatters.toDouble(value).toStringAsFixed(2)}',
             ),
             SummaryCardConfig(
               title: 'Promedio',
               summaryKey: 'average_payment',
               icon: Icons.trending_up,
               color: Colors.orange,
-              formatter: ReportFormatters.formatCurrency,
+              formatter: (value) => 'Bs ${ReportFormatters.toDouble(value).toStringAsFixed(2)}',
             ),
             SummaryCardConfig(
               title: 'Métodos',

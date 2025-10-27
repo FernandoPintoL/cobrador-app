@@ -96,12 +96,16 @@ class CreditCardBody extends StatelessWidget {
         const SizedBox(height: 8),
         Column(
           children: [
-            Row(
-              children: [
-                Expanded(child: OverduePaymentsIndicator(credit: credit)),
-                const SizedBox(width: 8),
-                OverdueAmountChip(credit: credit),
-              ],
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(child: OverduePaymentsIndicator(credit: credit)),
+                  const SizedBox(width: 6),
+                  OverdueAmountChip(credit: credit),
+                ],
+              ),
             ),
             // Mostrar barra de progreso de pagos para créditos con datos del backend
             if (credit.expectedInstallments != null &&
@@ -129,9 +133,9 @@ class CreditCardBody extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.amberAccent.withOpacity(0.25),
+            color: Colors.amberAccent.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.orangeAccent.withOpacity(0.77)),
+            border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.77)),
           ),
           child: const Row(
             children: [
@@ -160,9 +164,9 @@ class CreditCardBody extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
+            color: Colors.blue.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue.withOpacity(0.5)),
+            border: Border.all(color: Colors.blue.withValues(alpha: 0.5)),
           ),
           child: Row(
             children: [
@@ -198,19 +202,19 @@ class CreditCardBody extends StatelessWidget {
       String message;
 
       if (isOverdue) {
-        bgColor = Colors.red.withOpacity(0.15);
+        bgColor = Colors.red.withValues(alpha: 0.15);
         borderColor = Colors.red;
         textColor = Colors.red;
         icon = Icons.warning;
         message = 'ENTREGA ATRASADA (${credit.daysOverdueForDelivery} días)';
       } else if (isImmediate) {
-        bgColor = Colors.orange.withOpacity(0.15);
+        bgColor = Colors.orange.withValues(alpha: 0.15);
         borderColor = Colors.orange;
         textColor = Colors.orange;
         icon = Icons.flash_on;
         message = 'ENTREGA INMEDIATA - HOY';
       } else {
-        bgColor = Colors.green.withOpacity(0.15);
+        bgColor = Colors.green.withValues(alpha: 0.15);
         borderColor = Colors.green;
         textColor = Colors.green;
         icon = Icons.check_circle;
@@ -252,9 +256,9 @@ class CreditCardBody extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.25),
+            color: Colors.red.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.red.withOpacity(0.77)),
+            border: Border.all(color: Colors.red.withValues(alpha: 0.77)),
           ),
           child: Row(
             children: [
@@ -284,14 +288,14 @@ class CreditCardBody extends StatelessWidget {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.red.withOpacity(0.1),
-                Colors.orange.withOpacity(0.1),
+                Colors.red.withValues(alpha: 0.1),
+                Colors.orange.withValues(alpha: 0.1),
               ],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.red.withOpacity(0.4)),
+            border: Border.all(color: Colors.red.withValues(alpha: 0.4)),
           ),
           child: Column(
             children: [

@@ -84,4 +84,25 @@ class MapApiService extends BaseApiService {
       throw Exception('Error al obtener rutas de cobradores: $e');
     }
   }
+
+  /// GET /api/map/location-clusters
+  /// Endpoint unificado que trae clusters de ubicaciones con toda la información de clientes
+  Future<Map<String, dynamic>> getLocationClusters({
+    String? search,
+    String? status,
+    int? cobradorId,
+  }) async {
+    try {
+      final query = <String, dynamic>{};
+      if (search != null && search.isNotEmpty) query['search'] = search;
+      if (status != null) query['status'] = status;
+      if (cobradorId != null) query['cobrador_id'] = cobradorId;
+      final resp = await get('/map/location-clusters', queryParameters: query);
+      return Map<String, dynamic>.from(resp.data as Map);
+    } on DioException catch (e) {
+      throw Exception(handleDioError(e));
+    } catch (e) {
+      throw Exception('Error al obtener clusters de ubicaciones: $e');
+    }
+  }
 }

@@ -26,7 +26,7 @@ Widget buildBalancesList(
     totalFinal += ReportFormatters.pickAmount(
         b, ['final', 'final_amount', 'closing', 'end']);
   }
-  final totalFinalStr = ReportFormatters.formatCurrency(totalFinal);
+  final totalFinalStr = 'Bs ${totalFinal.toStringAsFixed(2)}';
 
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,13 +36,13 @@ Widget buildBalancesList(
         total: totalFinalStr,
       ),
       const SizedBox(height: 8),
-      Expanded(
-        child: ListView.separated(
-          itemCount: balances.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (ctx, i) => _BalanceCard(
-            balance: balances[i],
-          ),
+      ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: balances.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (ctx, i) => _BalanceCard(
+          balance: balances[i],
         ),
       ),
     ],
@@ -103,6 +103,7 @@ class _BalanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cobrador = ReportFormatters.extractBalanceCobradorName(balance);
     final dateStr = ReportFormatters.extractBalanceDate(balance);
+    final status = (balance['status'] ?? 'unknown').toString().toLowerCase();
     final initial = ReportFormatters.pickAmount(
       balance,
       ['initial', 'initial_amount', 'opening'],
@@ -122,98 +123,322 @@ class _BalanceCard extends StatelessWidget {
     final diff = ReportFormatters.computeBalanceDifference(balance);
     final diffClr = ReportFormatters.colorForDifference(diff);
 
+    // Créditos asociados
+    final credits = (balance['credits'] as List<dynamic>?) ?? [];
+
     return Card(
       elevation: 1,
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: diffClr.withValues(alpha: 0.12),
-          foregroundColor: diffClr,
-          child: const Icon(Icons.calculate),
-        ),
-        title: Text(
-          dateStr.isNotEmpty ? dateStr : 'Balance',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6.0),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Chip(
-                avatar: const Icon(Icons.start, size: 16),
-                label: Text(ReportFormatters.formatCurrency(initial)),
-                backgroundColor: Colors.blueGrey.withValues(alpha: 0.08),
-                side:
-                    BorderSide(color: Colors.blueGrey.withValues(alpha: 0.2)),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              Chip(
-                avatar: const Icon(Icons.call_received, size: 16),
-                label: Text(
-                    'Recaudado ${ReportFormatters.formatCurrency(collected)}'),
-                backgroundColor: Colors.green.withValues(alpha: 0.08),
-                side: BorderSide(color: Colors.green.withValues(alpha: 0.2)),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              Chip(
-                avatar: const Icon(Icons.call_made, size: 16),
-                label: Text('Prestado ${ReportFormatters.formatCurrency(lent)}'),
-                backgroundColor: Colors.orange.withValues(alpha: 0.08),
-                side: BorderSide(color: Colors.orange.withValues(alpha: 0.2)),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              if (cobrador.isNotEmpty)
-                Chip(
-                  avatar: const Icon(Icons.person, size: 16),
-                  label: Text(cobrador),
-                  backgroundColor: Colors.grey.withValues(alpha: 0.08),
-                  side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-            ],
-          ),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              ReportFormatters.formatCurrency(finalVal),
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.indigo,
+            // Header con fecha y estado
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: diffClr.withValues(alpha: 0.12),
+                        foregroundColor: diffClr,
+                        radius: 20,
+                        child: const Icon(Icons.calculate),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              dateStr.isNotEmpty ? dateStr : 'Balance',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                            if (cobrador.isNotEmpty)
+                              Text(
+                                cobrador,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _buildStatusBadge(status),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Valores principales
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildValueItem('Inicial', 'Bs ${initial.toStringAsFixed(2)}', Colors.blueGrey),
+                      _buildValueItem('Recaudado', 'Bs ${collected.toStringAsFixed(2)}', Colors.green),
+                      _buildValueItem('Prestado', 'Bs ${lent.toStringAsFixed(2)}', Colors.orange),
+                    ],
+                  ),
+                  const Divider(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildValueItem('Final', 'Bs ${finalVal.toStringAsFixed(2)}', Colors.indigo),
+                      _buildDifferenceItem(diff, diffClr),
+                    ],
+                  ),
+                ],
               ),
             ),
-            const SizedBox(
-              width: 140,
-              child: Text(
-                'Final',
-                textAlign: TextAlign.right,
-                style: TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            ),
-            const SizedBox(height: 4),
-            SizedBox(
-              width: 140,
-              child: Text(
-                'Dif: ${ReportFormatters.formatCurrency(diff)}',
-                textAlign: TextAlign.right,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: diffClr),
-              ),
-            ),
+
+            // Créditos asociados
+            if (credits.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildAssociatedCredits(credits),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  /// Construye el badge de estado
+  Widget _buildStatusBadge(String status) {
+    Color bgColor;
+    Color textColor;
+    IconData icon;
+    String label;
+
+    switch (status) {
+      case 'open':
+        bgColor = Colors.amber.withValues(alpha: 0.1);
+        textColor = Colors.amber[700]!;
+        icon = Icons.lock_open;
+        label = 'ABIERTO';
+        break;
+      case 'closed':
+        bgColor = Colors.blue.withValues(alpha: 0.1);
+        textColor = Colors.blue[700]!;
+        icon = Icons.lock;
+        label = 'CERRADO';
+        break;
+      case 'reconciled':
+        bgColor = Colors.green.withValues(alpha: 0.1);
+        textColor = Colors.green[700]!;
+        icon = Icons.verified;
+        label = 'CONCILIADO';
+        break;
+      default:
+        bgColor = Colors.grey.withValues(alpha: 0.1);
+        textColor = Colors.grey[700]!;
+        icon = Icons.help_outline;
+        label = 'DESCONOCIDO';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: textColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: textColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Construye un item de valor
+  Widget _buildValueItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Construye el item de diferencia
+  Widget _buildDifferenceItem(double diff, Color color) {
+    final isOk = diff.abs() < 0.01;
+
+    return Column(
+      children: [
+        Text(
+          'Diferencia',
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Bs ${diff.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 4),
+            if (isOk)
+              const Icon(Icons.check_circle, size: 14, color: Colors.green)
+            else
+              Icon(Icons.warning, size: 14, color: color),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Construye la sección de créditos asociados
+  Widget _buildAssociatedCredits(List<dynamic> credits) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.credit_card, size: 16, color: Colors.blue[700]),
+              const SizedBox(width: 6),
+              Text(
+                '${credits.length} Crédito${credits.length > 1 ? 's' : ''} Asociado${credits.length > 1 ? 's' : ''}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue[700],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...credits.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final credit = Map<String, dynamic>.from(entry.value as Map);
+
+            final clientName = credit['client']['name'] ?? 'Cliente desconocido';
+            final amount = ReportFormatters.toDouble(credit['amount'] ?? 0);
+            final totalInstallments = credit['total_installments'] as int? ?? 0;
+            final paidInstallments = credit['paid_installments'] as int? ?? 0;
+            final percentage = totalInstallments > 0
+                ? ((paidInstallments / totalInstallments) * 100).toInt()
+                : 0;
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: idx < credits.length - 1 ? 8 : 0),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.15)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            clientName,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Chip(
+                          label: Text('$percentage%'),
+                          backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                          side: BorderSide(
+                            color: Colors.blue.withValues(alpha: 0.3),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Bs ${amount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green,
+                          ),
+                        ),
+                        Text(
+                          'Cuotas: $paidInstallments/$totalInstallments',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -245,7 +470,7 @@ class _EmptyBalancesWidget extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              '\$0.00',
+              'Bs 0.00',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Colors.green,

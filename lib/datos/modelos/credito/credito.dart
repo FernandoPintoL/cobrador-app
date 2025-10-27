@@ -1,5 +1,6 @@
 import '../../modelos/usuario.dart';
 import 'pago.dart';
+import 'package:flutter/material.dart';
 
 class Credito {
   final int id;
@@ -368,6 +369,32 @@ class Credito {
       default:
         return status;
     }
+  }
+
+  /// Calcula cuántos días de retraso tiene el crédito basado en la fecha de vencimiento
+  /// Retorna 0 si no está vencido o si ya está completado
+  int get daysOverdue {
+    if (isCompleted || !isOverdue) return 0;
+    return DateTime.now().difference(endDate).inDays;
+  }
+
+  /// Retorna el color de alerta basado en los días de retraso:
+  /// - Verde: Sin retraso (0 días)
+  /// - Amarillo: Retraso de 1-3 días (alerta leve)
+  /// - Rojo: Retraso mayor a 3 días (alerta crítica)
+  Color get overdueColor {
+    final daysOverdueValue = daysOverdue;
+    if (daysOverdueValue == 0) return Colors.green;
+    if (daysOverdueValue <= 3) return Colors.amber;
+    return Colors.red;
+  }
+
+  /// Retorna una descripción del estado de retraso
+  String get overdueStatusLabel {
+    final daysOverdueValue = daysOverdue;
+    if (daysOverdueValue == 0) return 'Al día';
+    if (daysOverdueValue == 1) return '$daysOverdueValue día de retraso';
+    return '$daysOverdueValue días de retraso';
   }
 
   Credito copyWith({

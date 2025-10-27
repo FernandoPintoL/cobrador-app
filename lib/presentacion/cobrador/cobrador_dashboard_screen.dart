@@ -622,18 +622,18 @@ class _CobradorDashboardScreenState
               // Lista de acciones con mejor espaciado
               Column(
                 children: [
-                  _buildCobradorActionCard(
+                  /*_buildCobradorActionCard(
                     context,
                     'Ruta del Día',
                     'Ver mis clientes a visitar hoy',
                     Icons.route,
                     Colors.teal,
                     () => _navigateToDailyRoute(context),
-                  ),
+                  ),*/
                   const SizedBox(height: 12),
                   _buildCobradorActionCard(
                     context,
-                    'Registro Rápido',
+                    'Pago Rápido',
                     'Registrar cobros de forma rápida',
                     Icons.flash_on,
                     Colors.amber,

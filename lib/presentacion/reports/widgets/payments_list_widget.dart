@@ -26,7 +26,7 @@ Widget buildTodayPaymentsList(
   for (final pm in payments) {
     total += ReportFormatters.toDouble(pm['amount']);
   }
-  final totalStr = ReportFormatters.formatCurrency(total);
+  final totalStr = 'Bs ${total.toStringAsFixed(2)}';
 
   // Precalcular colores comunes para métodos de pago
   final methodColors = _precalculatePaymentMethodColors(payments);
@@ -39,14 +39,14 @@ Widget buildTodayPaymentsList(
         total: totalStr,
       ),
       const SizedBox(height: 8),
-      Expanded(
-        child: ListView.separated(
-          itemCount: payments.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (ctx, i) => _PaymentCard(
-            payment: payments[i],
-            precalculatedColor: methodColors[payments[i]['payment_method']?.toString()],
-          ),
+      ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: payments.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (ctx, i) => _PaymentCard(
+          payment: payments[i],
+          precalculatedColor: methodColors[payments[i]['payment_method']?.toString()],
         ),
       ),
     ],
@@ -127,7 +127,8 @@ class _PaymentCard extends StatelessWidget {
     final method = payment['payment_method']?.toString();
     final status = payment['status']?.toString();
     final cuota = payment['installment_number']?.toString();
-    final amountStr = ReportFormatters.formatCurrency(payment['amount']);
+    final amount = ReportFormatters.toDouble(payment['amount']);
+    final amountStr = 'Bs ${amount.toStringAsFixed(2)}';
     final timeStr = ReportFormatters.formatTime(payment['payment_date']);
     final colorMethod = precalculatedColor ??
         ReportFormatters.colorForPaymentMethod(method);
@@ -156,7 +157,7 @@ class _PaymentCard extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Chip(
-                label: Text((method ?? '').toUpperCase()),
+                label: Text(ReportFormatters.translatePaymentMethod(method)),
                 backgroundColor: colorMethod.withValues(alpha: 0.08),
                 side: BorderSide(color: colorMethod.withValues(alpha: 0.2)),
                 visualDensity: VisualDensity.compact,
@@ -184,7 +185,7 @@ class _PaymentCard extends StatelessWidget {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               Chip(
-                label: Text((status ?? '').toUpperCase()),
+                label: Text(ReportFormatters.translateCreditStatus(status)),
                 backgroundColor: statusColor.withValues(alpha: 0.08),
                 side: BorderSide(color: statusColor.withValues(alpha: 0.2)),
                 visualDensity: VisualDensity.compact,
@@ -252,7 +253,7 @@ class _EmptyPaymentsWidget extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              '\$0.00',
+              'Bs 0.00',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Colors.green,

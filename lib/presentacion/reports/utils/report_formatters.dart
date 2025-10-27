@@ -162,6 +162,140 @@ class ReportFormatters {
     return diff >= 0 ? Colors.green : Colors.red;
   }
 
+  // =========== TRADUCTORES AL ESPAÑOL ===========
+
+  /// Traduce el estado del crédito al español
+  static String translateCreditStatus(String? status) {
+    switch ((status ?? '').toLowerCase()) {
+      case 'pending_approval':
+        return 'Pendiente de Aprobación';
+      case 'waiting_delivery':
+        return 'Esperando Entrega';
+      case 'active':
+        return 'Activo';
+      case 'completed':
+        return 'Completado';
+      case 'rejected':
+        return 'Rechazado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return status ?? 'Desconocido';
+    }
+  }
+
+  /// Traduce la frecuencia de pago al español
+  static String translateFrequency(String? frequency) {
+    switch ((frequency ?? '').toLowerCase()) {
+      case 'daily':
+        return 'Diario';
+      case 'weekly':
+        return 'Semanal';
+      case 'biweekly':
+        return 'Quincenal';
+      case 'monthly':
+        return 'Mensual';
+      case 'yearly':
+        return 'Anual';
+      default:
+        return frequency ?? 'N/A';
+    }
+  }
+
+  /// Traduce el método de pago al español
+  static String translatePaymentMethod(String? method) {
+    switch ((method ?? '').toLowerCase()) {
+      case 'cash':
+        return 'Efectivo';
+      case 'transfer':
+        return 'Transferencia';
+      case 'card':
+        return 'Tarjeta';
+      case 'mobile_payment':
+        return 'Pago Móvil';
+      case 'check':
+        return 'Cheque';
+      default:
+        return method ?? 'N/A';
+    }
+  }
+
+  // =========== INDICADORES DE PAGO DE CUOTAS ===========
+
+  /// Calcula el número de cuotas pendientes (no pagadas)
+  /// Retorna la diferencia: total - pagadas
+  static int calculatePendingInstallments(int? totalInstallments, int? paidInstallments) {
+    if (totalInstallments == null || paidInstallments == null) return 0;
+    return (totalInstallments - paidInstallments).clamp(0, totalInstallments);
+  }
+
+  /// Obtiene el estado del crédito basado en cuotas pagadas/pendientes
+  /// Prioriza el pago de cuotas sobre las fechas
+  static String getCreditPaymentStatus(int? totalInstallments, int? paidInstallments) {
+    if (totalInstallments == null || paidInstallments == null) {
+      return 'desconocido';
+    }
+
+    final pendingInstallments = calculatePendingInstallments(totalInstallments, paidInstallments);
+
+    if (pendingInstallments == 0) {
+      return 'completado'; // Todas las cuotas pagadas
+    } else if (pendingInstallments <= 3) {
+      return 'alerta_leve'; // 1-3 cuotas sin pagar
+    } else {
+      return 'alerta_critica'; // Más de 3 cuotas sin pagar
+    }
+  }
+
+  /// Obtiene el color basado en el estado de pago de cuotas
+  static Color colorForPaymentStatus(int? totalInstallments, int? paidInstallments) {
+    final status = getCreditPaymentStatus(totalInstallments, paidInstallments);
+
+    switch (status) {
+      case 'completado':
+        return Colors.green;
+      case 'alerta_leve':
+        return Colors.amber;
+      case 'alerta_critica':
+        return Colors.red;
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
+  /// Obtiene el ícono diferencial basado en estado de pago
+  static IconData getPaymentStatusIcon(int? totalInstallments, int? paidInstallments) {
+    final status = getCreditPaymentStatus(totalInstallments, paidInstallments);
+
+    switch (status) {
+      case 'completado':
+        return Icons.check_circle;
+      case 'alerta_leve':
+        return Icons.warning;
+      case 'alerta_critica':
+        return Icons.error;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  /// Obtiene la etiqueta de estado de pago
+  static String getPaymentStatusLabel(int? totalInstallments, int? paidInstallments) {
+    final status = getCreditPaymentStatus(totalInstallments, paidInstallments);
+    final pending = calculatePendingInstallments(totalInstallments, paidInstallments);
+
+    switch (status) {
+      case 'completado':
+        return 'Todas pagadas';
+      case 'alerta_leve':
+        return '$pending cuota${pending > 1 ? 's' : ''} pendiente${pending > 1 ? 's' : ''}';
+      case 'alerta_critica':
+        return '$pending cuota${pending > 1 ? 's' : ''} atrasada${pending > 1 ? 's' : ''}';
+      default:
+        return 'N/A';
+    }
+  }
+
   /// Obtiene un valor numérico desde cualquier tipo dinámico
   static double toNumericValue(dynamic v) {
     if (v == null) return 0.0;
@@ -249,9 +383,15 @@ class ReportFormatters {
   }
 
   /// Extrae el nombre del cobrador de un mapa de crédito
-  /// Busca en: credit['cobrador']['name'], credit['cobrador_name']
+  /// Busca en: credit['created_by']['name'], credit['delivered_by']['name'],
+  /// credit['cobrador']['name'], credit['cobrador_name']
   static String extractCreditCobradorName(Map<String, dynamic> credit) {
-    return _getNestedValue(credit, ['cobrador.name', 'cobrador_name']);
+    return _getNestedValue(credit, [
+      'created_by.name',
+      'delivered_by.name',
+      'cobrador.name',
+      'cobrador_name',
+    ]);
   }
 
   /// Extrae el nombre del cobrador de un mapa de balance

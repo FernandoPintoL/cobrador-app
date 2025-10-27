@@ -17,7 +17,9 @@
       "Bash(done)",
       "Bash(findstr:*)",
       "Bash(powershell -Command:*)",
-      "Bash(flutter pub get:*)"
+      "Bash(flutter pub get:*)",
+      "Bash(flutter build:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []

@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 
 /// Construye una tabla a partir de una lista de Maps con datos JSON.
 /// Soporta orden de columnas personalizado y ancho automático según tipo.
+/// Permite personalizar decoración de filas basada en datos.
+///
+/// **Parámetros:**
+/// - rows: Lista de Maps con datos
+/// - columnOrder: Orden preferido de columnas
+/// - rowDecorationBuilder: Función opcional para aplicar decoración a cada fila basada en sus datos
 ///
 /// **Optimizaciones aplicadas:**
 /// - Reusa columnas calculadas (sin recalcular por fila)
@@ -16,6 +22,7 @@ import 'package:flutter/material.dart';
 Widget buildTableFromJson(
   List<Map<String, dynamic>> rows, {
   List<String>? columnOrder,
+  BoxDecoration? Function(Map<String, dynamic>)? rowDecorationBuilder,
 }) {
   if (rows.isEmpty) {
     return const Center(
@@ -29,13 +36,14 @@ Widget buildTableFromJson(
   // Determinar conjunto de columnas (union de claves) y respetar orden preferido
   final keys = <String>{};
   for (final r in rows) {
-    keys.addAll(r.keys.map((k) => k.toString()));
+    keys.addAll(r.keys.map((k) => k.toString()).where((k) => !k.startsWith('_'))); // Filtrar campos internos
   }
 
   List<String> columns;
   if (columnOrder != null && columnOrder.isNotEmpty) {
     // Mantener sólo las columnas que existen en los datos, en el orden pedido
-    columns = columnOrder.where((c) => keys.contains(c)).toList();
+    // Filtrar campos internos (que empiezan con _)
+    columns = columnOrder.where((c) => keys.contains(c) && !c.startsWith('_')).toList();
     // Añadir columnas extra (no solicitadas) al final, ordenadas alfabeticamente
     final extras = keys.difference(columns.toSet());
     columns.addAll(extras.toList()..sort());
@@ -52,10 +60,11 @@ Widget buildTableFromJson(
     (i) => _buildHeaderCell(columns[i]),
   );
 
-  // Construir filas de datos
+  // Construir filas de datos con decoración opcional
   final dataCells = rows
       .map(
         (row) => TableRow(
+          decoration: rowDecorationBuilder?.call(row),
           children: List<TableCell>.generate(
             columns.length,
             (i) => _buildDataCell(row, columns[i]),

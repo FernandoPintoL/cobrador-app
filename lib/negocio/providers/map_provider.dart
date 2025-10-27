@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../datos/api_services/map_api_service.dart';
+import '../../datos/modelos/map/location_cluster.dart';
 
 // Servicio API
 final mapApiProvider = Provider<MapApiService>((ref) => MapApiService());
@@ -100,3 +101,52 @@ final cobradorRoutesProvider = FutureProvider<Map<String, dynamic>>((ref) async 
   final api = ref.read(mapApiProvider);
   return await api.getCobradorRoutes();
 });
+
+// ===== NUEVO: Provider unificado de clusters =====
+
+/// Parámetros para la búsqueda de clusters
+class MapClusterQuery {
+  final String? search; // Buscar por nombre, teléfono, CI, categoría
+  final String? status; // 'overdue' | 'pending' | 'paid'
+  final int? cobradorId; // filtro por cobrador (admin/manager)
+
+  const MapClusterQuery({
+    this.search,
+    this.status,
+    this.cobradorId,
+  });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is MapClusterQuery &&
+        other.search == search &&
+        other.status == status &&
+        other.cobradorId == cobradorId;
+  }
+
+  @override
+  int get hashCode => Object.hash(search, status, cobradorId);
+}
+
+/// Provider unificado que retorna lista de clusters de ubicaciones
+/// Reemplaza a los 3 providers anteriores (coordinates, clients, stats)
+final mapLocationClustersProvider =
+    FutureProvider.family<List<LocationCluster>, MapClusterQuery>(
+  (ref, params) async {
+    final api = ref.read(mapApiProvider);
+    final resp = await api.getLocationClusters(
+      search: params.search,
+      status: params.status,
+      cobradorId: params.cobradorId,
+    );
+
+    if (resp['success'] == true && resp['data'] is List) {
+      final data = resp['data'] as List;
+      return data
+          .map((item) => LocationCluster.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  },
+);

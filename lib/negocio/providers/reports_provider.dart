@@ -11,7 +11,17 @@ final reportTypesProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final resp = await service.getReportTypes();
 
   if (resp['success'] == true && resp['data'] != null) {
-    return Map<String, dynamic>.from(resp['data'] as Map);
+    // resp['data'] es una List, convertir a Map donde la clave es el 'name' de cada tipo
+    final List<dynamic> dataList = resp['data'] as List<dynamic>;
+    final Map<String, dynamic> result = {};
+
+    for (final item in dataList) {
+      if (item is Map<String, dynamic> && item.containsKey('name')) {
+        result[item['name'] as String] = item;
+      }
+    }
+
+    return result;
   }
 
   return {};

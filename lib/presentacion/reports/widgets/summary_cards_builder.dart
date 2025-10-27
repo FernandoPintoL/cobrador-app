@@ -84,23 +84,56 @@ class SummaryCardsBuilder extends StatelessWidget {
     // Si no hay summary, mostrar un contenedor vacío
     if (summary == null) return const SizedBox.shrink();
 
-    return Wrap(
-      spacing: spacing,
-      runSpacing: runSpacing,
-      children: cards.map((config) {
-        // Extraer el valor del summary usando la clave
-        final value = summary[config.summaryKey] ?? 0;
+    // Construir lista de tarjetas
+    final cardWidgets = cards.map((config) {
+      // Extraer el valor del summary usando la clave
+      final value = summary[config.summaryKey] ?? 0;
 
-        // Formatear el valor usando el formateador proporcionado
-        final displayValue = config.formatter?.call(value) ?? value.toString();
+      // Formatear el valor usando el formateador proporcionado
+      final displayValue = config.formatter?.call(value) ?? value.toString();
 
-        return MiniStatCard(
-          title: config.title,
-          value: displayValue,
-          icon: config.icon,
-          color: config.color,
-        );
-      }).toList(),
+      return MiniStatCard(
+        title: config.title,
+        value: displayValue,
+        icon: config.icon,
+        color: config.color,
+      );
+    }).toList();
+
+    // Obtener ancho de pantalla para responsividad
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Determinar número de columnas y aspect ratio basado en ancho de pantalla
+    int crossAxisCount = 2;
+    double childAspectRatio = 2.8;
+
+    if (screenWidth > 1200) {
+      // Desktop grande
+      crossAxisCount = 4;
+      childAspectRatio = 2.5;
+    } else if (screenWidth > 900) {
+      // Tablet/Desktop pequeño
+      crossAxisCount = 3;
+      childAspectRatio = 2.6;
+    } else if (screenWidth > 600) {
+      // Tablet
+      crossAxisCount = 2;
+      childAspectRatio = 2.8;
+    } else {
+      // Móvil
+      crossAxisCount = 1;
+      childAspectRatio = 3.5;
+    }
+
+    // Usar GridView para mostrar en columnas responsivas
+    return GridView.count(
+      crossAxisCount: crossAxisCount,
+      childAspectRatio: childAspectRatio,
+      mainAxisSpacing: runSpacing,
+      crossAxisSpacing: spacing,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: cardWidgets,
     );
   }
 }
