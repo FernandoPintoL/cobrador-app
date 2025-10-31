@@ -258,7 +258,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       }
     });
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: isDark ? Colors.grey[900] : Colors.grey[50],
       appBar: AppBar(
         title: const Text(
           'Créditos',
@@ -274,46 +277,71 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
             tooltip: 'Actualizar',
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          isScrollable: true,
-          tabAlignment: MediaQuery.of(context).size.width > 600
-              ? TabAlignment.center
-              : TabAlignment.start,
-          tabs: [
-            Tab(
-              text:
-                  'Activos ('
-                  '${creditState.credits.where((c) => c.status == 'active').length}'
-                  '${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).isNotEmpty ? ' • ${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).length} ⚠' : ''}'
-                  ')',
-              icon: const Icon(Icons.playlist_add_check_circle),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(50),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  RoleColors.getPrimaryColor(currentUserRole),
+                  RoleColors.getPrimaryColor(currentUserRole).withValues(alpha: 0.85),
+                ],
+              ),
             ),
-            Tab(
-              text:
-                  'Pendientes ('
-                  '${creditState.credits.where((c) => c.status == 'pending_approval').length}'
-                  ')',
-              icon: const Icon(Icons.hourglass_empty),
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: Colors.white,
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white60,
+              isScrollable: true,
+              tabAlignment: MediaQuery.of(context).size.width > 600
+                  ? TabAlignment.center
+                  : TabAlignment.start,
+              labelStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.3,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+              ),
+              tabs: [
+                Tab(
+                  text:
+                      'Activos ('
+                      '${creditState.credits.where((c) => c.status == 'active').length}'
+                      '${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).isNotEmpty ? ' • ${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).length} ⚠' : ''}'
+                      ')',
+                  icon: const Icon(Icons.playlist_add_check_circle, size: 22),
+                ),
+                Tab(
+                  text:
+                      'Pendientes ('
+                      '${creditState.credits.where((c) => c.status == 'pending_approval').length}'
+                      ')',
+                  icon: const Icon(Icons.hourglass_empty, size: 22),
+                ),
+                Tab(
+                  text:
+                      'En Espera ('
+                      '${creditState.credits.where((c) => c.status == 'waiting_delivery' && !c.isReadyForDelivery && !c.isOverdueForDelivery).length}'
+                      ')',
+                  icon: const Icon(Icons.schedule, size: 22),
+                ),
+                Tab(
+                  text:
+                      'Para Entregar ('
+                      '${creditState.credits.where((c) => c.isReadyForDelivery || c.isOverdueForDelivery).length}'
+                      ')',
+                  icon: const Icon(Icons.local_shipping, size: 22),
+                ),
+              ],
             ),
-            Tab(
-              text:
-                  'En Espera ('
-                  '${creditState.credits.where((c) => c.status == 'waiting_delivery' && !c.isReadyForDelivery && !c.isOverdueForDelivery).length}'
-                  ')',
-              icon: const Icon(Icons.schedule),
-            ),
-            Tab(
-              text:
-                  'Para Entregar ('
-                  '${creditState.credits.where((c) => c.isReadyForDelivery || c.isOverdueForDelivery).length}'
-                  ')',
-              icon: const Icon(Icons.local_shipping),
-            ),
-          ],
+          ),
         ),
       ),
       // drawer: AppDrawer(role: currentUserRole),
@@ -331,7 +359,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   child: Column(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.all(8.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
                         child: SearchHeader(
                           searchController: _searchController,
                           currentSearch: _filterState.search,
@@ -350,7 +378,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                               )
                             : const SizedBox.shrink(),
                       ),
-                      if (_showQuickFilters)
+                      /*if (_showQuickFilters)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           child: QuickFiltersWidget(
@@ -358,7 +386,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                             onClearFilters: _clearAllFilters,
                             onApplyQuickFilter: _handleApplyQuickFilter,
                           ),
-                        ),
+                        ),*/
                     ],
                   ),
                 ),
@@ -481,13 +509,39 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
-        onPressed: _checkCashBalanceAndNavigateToForm,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Nuevo Crédito',
-          style: TextStyle(color: Colors.white),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              RoleColors.getPrimaryColor(currentUserRole),
+              RoleColors.getPrimaryColor(currentUserRole).withValues(alpha: 0.8),
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: RoleColors.getPrimaryColor(currentUserRole).withValues(alpha: 0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          onPressed: _checkCashBalanceAndNavigateToForm,
+          icon: const Icon(Icons.add, color: Colors.white, size: 24),
+          label: const Text(
+            'Nuevo Crédito',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
         ),
       ),
     );

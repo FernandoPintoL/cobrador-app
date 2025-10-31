@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../../negocio/providers/credit_provider.dart';
+import '../../../../negocio/providers/filter_options_provider.dart';
 import 'credit_filter_state.dart';
 
 /// Widget que muestra el input específico según el tipo de filtro seleccionado
@@ -110,53 +110,52 @@ class _SpecificFilterInputState extends ConsumerState<SpecificFilterInput> {
   }
 
   Widget _buildStatusInput() {
+    final statuses = ref.watch(creditStatusesProvider);
+
+    if (statuses.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Wrap(
       spacing: 8,
-      children: [
-        ChoiceChip(
-          label: const Text('Activos'),
-          selected: widget.filterState.statusFilter == 'active',
-          onSelected: (_) => _updateStatus('active'),
-        ),
-        ChoiceChip(
-          label: const Text('Pendientes'),
-          selected: widget.filterState.statusFilter == 'pending_approval',
-          onSelected: (_) => _updateStatus('pending_approval'),
-        ),
-        ChoiceChip(
-          label: const Text('En espera'),
-          selected: widget.filterState.statusFilter == 'waiting_delivery',
-          onSelected: (_) => _updateStatus('waiting_delivery'),
-        ),
-      ],
+      runSpacing: 8,
+      children: statuses.map((status) {
+        return ChoiceChip(
+          label: Text(status.label),
+          selected: widget.filterState.statusFilter == status.value,
+          onSelected: (_) => _updateStatus(status.value),
+        );
+      }).toList(),
     );
   }
 
   Widget _buildFrequencyInput() {
+    final frequencies = ref.watch(frequenciesProvider);
+
+    if (frequencies.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Wrap(
       spacing: 8,
-      children: [
-        FilterChip(
-          label: const Text('Diaria'),
-          selected: widget.filterState.frequencies.contains('daily'),
-          onSelected: (v) => _toggleFrequency('daily', v),
-        ),
-        FilterChip(
-          label: const Text('Semanal'),
-          selected: widget.filterState.frequencies.contains('weekly'),
-          onSelected: (v) => _toggleFrequency('weekly', v),
-        ),
-        FilterChip(
-          label: const Text('Quincenal'),
-          selected: widget.filterState.frequencies.contains('biweekly'),
-          onSelected: (v) => _toggleFrequency('biweekly', v),
-        ),
-        FilterChip(
-          label: const Text('Mensual'),
-          selected: widget.filterState.frequencies.contains('monthly'),
-          onSelected: (v) => _toggleFrequency('monthly', v),
-        ),
-      ],
+      runSpacing: 8,
+      children: frequencies.map((frequency) {
+        return FilterChip(
+          label: Text(frequency.label),
+          selected: widget.filterState.frequencies.contains(frequency.value),
+          onSelected: (v) => _toggleFrequency(frequency.value, v),
+        );
+      }).toList(),
     );
   }
 
@@ -289,26 +288,42 @@ class _SpecificFilterInputState extends ConsumerState<SpecificFilterInput> {
   }
 
   Widget _buildClientCategoryInput() {
-    final allCredits = ref.watch(creditProvider).credits;
-    final available = allCredits
-        .map((c) => c.client?.clientCategory)
-        .where((e) => e != null && (e as String).isNotEmpty)
-        .cast<String>()
-        .toSet()
-        .toList()
-      ..sort();
-    final categories = available.isNotEmpty ? available : ['A', 'B', 'C'];
+    final categories = ref.watch(clientCategoriesProvider);
+
+    if (categories.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Wrap(
       spacing: 8,
-      children: [
-        for (final cat in categories)
-          FilterChip(
-            label: Text(cat),
-            selected: widget.filterState.clientCategories.contains(cat),
-            onSelected: (v) => _toggleCategory(cat, v),
+      runSpacing: 8,
+      children: categories.map((category) {
+        return FilterChip(
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(category.category),
+              if (category.totalClients > 0) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '(${category.totalClients})',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ],
           ),
-      ],
+          selected: widget.filterState.clientCategories.contains(category.category),
+          onSelected: (v) => _toggleCategory(category.category, v),
+        );
+      }).toList(),
     );
   }
 

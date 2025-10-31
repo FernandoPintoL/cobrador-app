@@ -39,114 +39,320 @@ class _AdvancedFiltersPanelState extends State<AdvancedFiltersPanel> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark
-            ? theme.colorScheme.surface
-            : theme.colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  Colors.grey[850]!,
+                  Colors.grey[900]!,
+                ]
+              : [
+                  Colors.white,
+                  Colors.grey[50]!,
+                ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.3)
+                : Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(theme),
-            const SizedBox(height: 12),
-            _buildFilterTypeChips(),
-            const SizedBox(height: 16),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: SpecificFilterInput(
-                key: ValueKey(_specificFilter),
-                filterType: _specificFilter,
-                filterState: _tempFilterState,
-                onFilterChange: (newState) {
-                  setState(() {
-                    _tempFilterState = newState;
-                  });
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(theme, isDark),
+              const SizedBox(height: 16),
+              _buildFilterTypeChips(isDark),
+              const SizedBox(height: 20),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.0, 0.1),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
                 },
+                child: SpecificFilterInput(
+                  key: ValueKey(_specificFilter),
+                  filterType: _specificFilter,
+                  filterState: _tempFilterState,
+                  onFilterChange: (newState) {
+                    setState(() {
+                      _tempFilterState = newState;
+                    });
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            _buildActionButtons(),
-          ],
+              const SizedBox(height: 20),
+              _buildActionButtons(isDark),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
+  Widget _buildHeader(ThemeData theme, bool isDark) {
     return Row(
       children: [
-        Icon(
-          Icons.filter_alt,
-          color: theme.colorScheme.primary,
-          size: 20,
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                theme.colorScheme.primary.withValues(alpha: 0.2),
+                theme.colorScheme.primary.withValues(alpha: 0.1),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(
+            Icons.filter_alt,
+            color: theme.colorScheme.primary,
+            size: 22,
+          ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Text(
           'Filtros Específicos',
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            letterSpacing: -0.3,
+            fontSize: 18,
           ),
         ),
         const Spacer(),
-        IconButton(
-          icon: const Icon(Icons.close, size: 18),
-          onPressed: _handleClose,
-          tooltip: 'Cerrar filtros',
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[800] : Colors.grey[100],
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            onPressed: _handleClose,
+            tooltip: 'Cerrar filtros',
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildFilterTypeChips() {
+  Widget _buildFilterTypeChips(bool isDark) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: [
-        _buildChip('estado', 'Estado', Icons.verified),
-        _buildChip('frecuencia', 'Frecuencia', Icons.event_repeat),
-        _buildChip('montos', 'Montos', Icons.attach_money),
-        _buildChip('fechas', 'Fechas', Icons.date_range),
-        _buildChip('cuotas_atrasadas', 'Cuotas Atrasadas', Icons.money_off),
-        _buildChip('categoria_cliente', 'Categoría', Icons.category),
+        _buildChip('estado', 'Estado', Icons.verified, isDark),
+        _buildChip('frecuencia', 'Frecuencia', Icons.event_repeat, isDark),
+        _buildChip('montos', 'Montos', Icons.attach_money, isDark),
+        _buildChip('fechas', 'Fechas', Icons.date_range, isDark),
+        _buildChip('cuotas_atrasadas', 'Cuotas Atrasadas', Icons.money_off, isDark),
+        _buildChip('categoria_cliente', 'Categoría', Icons.category, isDark),
       ],
     );
   }
 
-  Widget _buildChip(String key, String label, IconData icon) {
+  Widget _buildChip(String key, String label, IconData icon, bool isDark) {
     final selected = _specificFilter == key;
-    return ChoiceChip(
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 6),
-          Text(label),
-        ],
+    final theme = Theme.of(context);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        gradient: selected
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  theme.colorScheme.primary.withValues(alpha: 0.3),
+                  theme.colorScheme.primary.withValues(alpha: 0.2),
+                ],
+              )
+            : null,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: selected
+              ? theme.colorScheme.primary.withValues(alpha: 0.5)
+              : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
+          width: selected ? 2 : 1,
+        ),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
-      selected: selected,
-      onSelected: (_) => setState(() {
-        _specificFilter = key;
-      }),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() {
+            _specificFilter = key;
+          }),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected
+                      ? theme.colorScheme.primary
+                      : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                    color: selected
+                        ? theme.colorScheme.primary
+                        : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons(bool isDark) {
+    final theme = Theme.of(context);
+
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton(
-            onPressed: _handleClear,
-            child: const Text('Limpiar'),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                width: 2,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _handleClear,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.clear_all,
+                        size: 20,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Limpiar',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: ElevatedButton(
-            onPressed: _handleApply,
-            child: const Text('Aplicar'),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  theme.colorScheme.primary,
+                  theme.colorScheme.primary.withValues(alpha: 0.8),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _handleApply,
+                borderRadius: BorderRadius.circular(12),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Aplicar',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],

@@ -45,5 +45,17 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Permisos de ubicación para iOS -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Esta aplicación necesita acceso a tu ubicación para mostrar tu posición en el mapa y los clientes cercanos.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Esta aplicación necesita acceso a tu ubicación para rastrear tu ruta y optimizar tus visitas a clientes.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Esta aplicación necesita acceso continuo a tu ubicación para optimizar rutas de cobro.</string>
+	<!-- Descripción de privacidad para Camera (para la foto de perfil) -->
+	<key>NSCameraUsageDescription</key>
+	<string>Necesitamos acceso a la cámara para que puedas tomar fotos de perfil.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Necesitamos acceso a tus fotos para que puedas seleccionar una imagen de perfil.</string>
 </dict>
 </plist>

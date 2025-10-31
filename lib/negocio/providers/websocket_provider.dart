@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import '../../datos/api_services/websocket_service.dart';
 import '../../datos/api_services/notification_service.dart';
+import '../../datos/modelos/websocket_stats.dart';
 
 // Modelo para notificaciones
 class AppNotification {
@@ -54,6 +55,11 @@ class WebSocketState {
   final Map<String, dynamic>? lastPaymentUpdate;
   final Map<String, dynamic>? lastLocationUpdate;
 
+  // Estadísticas en tiempo real
+  final GlobalStats? globalStats;
+  final CobradorStats? cobradorStats;
+  final ManagerStats? managerStats;
+
   const WebSocketState({
     this.isConnected = false,
     this.isConnecting = false,
@@ -61,6 +67,9 @@ class WebSocketState {
     this.notifications = const [],
     this.lastPaymentUpdate,
     this.lastLocationUpdate,
+    this.globalStats,
+    this.cobradorStats,
+    this.managerStats,
   });
 
   WebSocketState copyWith({
@@ -70,6 +79,9 @@ class WebSocketState {
     List<AppNotification>? notifications,
     Map<String, dynamic>? lastPaymentUpdate,
     Map<String, dynamic>? lastLocationUpdate,
+    GlobalStats? globalStats,
+    CobradorStats? cobradorStats,
+    ManagerStats? managerStats,
   }) {
     return WebSocketState(
       isConnected: isConnected ?? this.isConnected,
@@ -78,6 +90,9 @@ class WebSocketState {
       notifications: notifications ?? this.notifications,
       lastPaymentUpdate: lastPaymentUpdate ?? this.lastPaymentUpdate,
       lastLocationUpdate: lastLocationUpdate ?? this.lastLocationUpdate,
+      globalStats: globalStats ?? this.globalStats,
+      cobradorStats: cobradorStats ?? this.cobradorStats,
+      managerStats: managerStats ?? this.managerStats,
     );
   }
 }
@@ -94,6 +109,11 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
   StreamSubscription<Map<String, dynamic>>? _messageSub;
   StreamSubscription<Map<String, dynamic>>? _locationSub;
   StreamSubscription<Map<String, dynamic>>? _routeSub;
+
+  // Subscriptions para estadísticas
+  StreamSubscription<Map<String, dynamic>>? _globalStatsSub;
+  StreamSubscription<Map<String, dynamic>>? _cobradorStatsSub;
+  StreamSubscription<Map<String, dynamic>>? _managerStatsSub;
 
   WebSocketNotifier() : super(const WebSocketState()) {
     _initializeNotifications();
@@ -376,6 +396,56 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
         ),
       );
     });
+
+    // --- ESTADÍSTICAS EN TIEMPO REAL ---
+
+    // Estadísticas globales
+    _globalStatsSub = _wsService.globalStatsStream.listen((data) {
+      try {
+        final stats = GlobalStats.fromJson(data);
+        state = state.copyWith(globalStats: stats);
+
+        if (kDebugMode) {
+          print('📊 Estadísticas globales actualizadas: ${stats.totalClients} clientes, ${stats.todayCollections} Bs hoy');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('❌ Error parseando estadísticas globales: $e');
+        }
+      }
+    });
+
+    // Estadísticas del cobrador
+    _cobradorStatsSub = _wsService.cobradorStatsStream.listen((data) {
+      try {
+        final stats = CobradorStats.fromJson(data);
+        state = state.copyWith(cobradorStats: stats);
+
+        if (kDebugMode) {
+          print('📊 Estadísticas del cobrador actualizadas: ${stats.totalClients} clientes, ${stats.todayCollections} Bs hoy');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('❌ Error parseando estadísticas del cobrador: $e');
+        }
+      }
+    });
+
+    // Estadísticas del manager
+    _managerStatsSub = _wsService.managerStatsStream.listen((data) {
+      try {
+        final stats = ManagerStats.fromJson(data);
+        state = state.copyWith(managerStats: stats);
+
+        if (kDebugMode) {
+          print('📊 Estadísticas del manager actualizadas: ${stats.totalCobradores} cobradores, ${stats.todayCollections} Bs hoy');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('❌ Error parseando estadísticas del manager: $e');
+        }
+      }
+    });
   }
 
   /// Agregar notificación
@@ -560,6 +630,9 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
     _messageSub?.cancel();
     _locationSub?.cancel();
     _routeSub?.cancel();
+    _globalStatsSub?.cancel();
+    _cobradorStatsSub?.cancel();
+    _managerStatsSub?.cancel();
 
     _wsService.disconnect();
     super.dispose();
@@ -591,4 +664,17 @@ final lastPaymentUpdateProvider = Provider<Map<String, dynamic>?>((ref) {
 
 final lastLocationUpdateProvider = Provider<Map<String, dynamic>?>((ref) {
   return ref.watch(webSocketProvider).lastLocationUpdate;
+});
+
+// Providers para estadísticas en tiempo real
+final globalStatsProvider = Provider<GlobalStats?>((ref) {
+  return ref.watch(webSocketProvider).globalStats;
+});
+
+final cobradorStatsProvider = Provider<CobradorStats?>((ref) {
+  return ref.watch(webSocketProvider).cobradorStats;
+});
+
+final managerStatsProvider = Provider<ManagerStats?>((ref) {
+  return ref.watch(webSocketProvider).managerStats;
 });

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -34,6 +35,11 @@ class WebSocketService {
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _locationController =
       StreamController<Map<String, dynamic>>.broadcast();
+
+  // Streams para estadísticas en tiempo real
+  final _globalStatsController = StreamController<Map<String, dynamic>>.broadcast();
+  final _cobradorStatsController = StreamController<Map<String, dynamic>>.broadcast();
+  final _managerStatsController = StreamController<Map<String, dynamic>>.broadcast();
 
   // Deduplicación simple de eventos para evitar múltiples notificaciones por la misma acción
   final Map<String, DateTime> _recentEventCache = {};
@@ -85,6 +91,11 @@ class WebSocketService {
   Stream<Map<String, dynamic>> get routeStream => _routeController.stream;
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<Map<String, dynamic>> get locationStream => _locationController.stream;
+
+  // Getters para streams de estadísticas
+  Stream<Map<String, dynamic>> get globalStatsStream => _globalStatsController.stream;
+  Stream<Map<String, dynamic>> get cobradorStatsStream => _cobradorStatsController.stream;
+  Stream<Map<String, dynamic>> get managerStatsStream => _managerStatsController.stream;
 
   bool get isConnected => _isConnected;
   bool get isConnecting => _isConnecting;
@@ -344,6 +355,40 @@ class WebSocketService {
   /// Configurar listeners para eventos de negocio
   /// Optimizado: sin duplicados. El servidor filtra por rol/sala automáticamente.
   void _setupBusinessEventListeners() {
+    // --- EVENTOS DE ESTADÍSTICAS EN TIEMPO REAL (NUEVOS) ---
+
+    // Estadísticas globales (Todos los usuarios)
+    _socket?.on('stats.global.updated', (data) {
+      print('📊 Estadísticas globales actualizadas');
+      _handleGlobalStatsUpdate(data);
+    });
+
+    // Estadísticas del cobrador (Solo el cobrador específico)
+    _socket?.on('stats.cobrador.updated', (data) {
+      print('📊 Estadísticas del cobrador actualizadas');
+      _handleCobradorStatsUpdate(data);
+    });
+
+    // Estadísticas del manager (Solo el manager específico)
+    _socket?.on('stats.manager.updated', (data) {
+      print('📊 Estadísticas del manager actualizadas');
+      _handleManagerStatsUpdate(data);
+    });
+
+    // --- EVENTOS DE NOTIFICACIONES EXISTENTES (NUEVOS SEGÚN DOC) ---
+
+    // Notificación de crédito (Unificado: created/approved/rejected/delivered)
+    _socket?.on('credit-notification', (data) {
+      print('📨 Notificación de crédito');
+      _handleNotification(data);
+    });
+
+    // Notificación de pago
+    _socket?.on('payment-notification', (data) {
+      print('📨 Notificación de pago');
+      _handlePaymentUpdate(data);
+    });
+
     // --- EVENTOS DE CRÉDITOS (MANAGERS reciben estos del servidor) ---
     _socket?.on('credit_waiting_approval', (data) {
       print('📨 [MANAGER] Crédito pendiente de aprobación');
@@ -583,6 +628,94 @@ class WebSocketService {
       _locationController.add(location);
     } catch (e) {
       print('❌ Error procesando ubicación: $e');
+    }
+  }
+
+  /// Manejo de actualizaciones de estadísticas globales
+  void _handleGlobalStatsUpdate(dynamic data) {
+    try {
+      Map<String, dynamic> stats;
+      if (data is String) {
+        stats = jsonDecode(data);
+      } else if (data is Map) {
+        stats = Map<String, dynamic>.from(data);
+      } else {
+        print('⚠️ Formato de estadísticas globales no reconocido: $data');
+        return;
+      }
+
+      // No aplicar deduplicación a las estadísticas porque siempre queremos la última actualización
+      _globalStatsController.add(stats);
+
+      if (kDebugMode) {
+        print('📊 Estadísticas globales actualizadas: ${stats['timestamp']}');
+      }
+    } catch (e) {
+      print('❌ Error procesando estadísticas globales: $e');
+    }
+  }
+
+  /// Manejo de actualizaciones de estadísticas del cobrador
+  void _handleCobradorStatsUpdate(dynamic data) {
+    try {
+      Map<String, dynamic> stats;
+      if (data is String) {
+        stats = jsonDecode(data);
+      } else if (data is Map) {
+        stats = Map<String, dynamic>.from(data);
+      } else {
+        print('⚠️ Formato de estadísticas de cobrador no reconocido: $data');
+        return;
+      }
+
+      // Verificar que el evento es para el usuario actual
+      final userId = stats['user_id']?.toString();
+      if (userId != null && userId != _currentUserId) {
+        if (kDebugMode) {
+          print('⚠️ Estadísticas de cobrador para otro usuario: $userId');
+        }
+        return;
+      }
+
+      _cobradorStatsController.add(stats);
+
+      if (kDebugMode) {
+        print('📊 Estadísticas del cobrador actualizadas: ${stats['timestamp']}');
+      }
+    } catch (e) {
+      print('❌ Error procesando estadísticas de cobrador: $e');
+    }
+  }
+
+  /// Manejo de actualizaciones de estadísticas del manager
+  void _handleManagerStatsUpdate(dynamic data) {
+    try {
+      Map<String, dynamic> stats;
+      if (data is String) {
+        stats = jsonDecode(data);
+      } else if (data is Map) {
+        stats = Map<String, dynamic>.from(data);
+      } else {
+        print('⚠️ Formato de estadísticas de manager no reconocido: $data');
+        return;
+      }
+
+      // Verificar que el evento es para el usuario actual
+      final userId = stats['user_id']?.toString();
+      if (userId != null && userId != _currentUserId) {
+        if (kDebugMode) {
+          print('⚠️ Estadísticas de manager para otro usuario: $userId');
+        }
+        return;
+      }
+
+      _managerStatsController.add(stats);
+
+      if (kDebugMode) {
+        print('📊 Estadísticas del manager actualizadas: ${stats['timestamp']}');
+      }
+    } catch (e) {
+      print('❌ Error procesando estadísticas de manager: $e');
     }
   }
 
@@ -946,5 +1079,8 @@ class WebSocketService {
     _routeController.close();
     _messageController.close();
     _locationController.close();
+    _globalStatsController.close();
+    _cobradorStatsController.close();
+    _managerStatsController.close();
   }
 }
