@@ -6,4 +6,5 @@ export 'performance_report_view.dart';
 export 'portfolio_report_view.dart';
 export 'commission_report_view.dart';
 export 'statistical_report_view.dart';
+export 'daily_activity_report_view.dart';
 export 'report_view_factory.dart';

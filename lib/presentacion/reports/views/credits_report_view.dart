@@ -86,30 +86,33 @@ class CreditsReportView extends BaseReportView {
 
   /// Construye una fila de datos de crédito con colores e iconos
   DataRow _buildCreditDataRow(Map<String, dynamic> credit) {
-    final clientName = ReportFormatters.extractCreditClientName(credit);
+    // Extraer datos del formato simplificado del endpoint de reportes
+    final clientName = credit['client_name']?.toString() ?? 'N/A';
     final cobradorName = credit['created_by_name']?.toString() ??
         credit['delivered_by_name']?.toString() ??
-        ReportFormatters.extractCreditCobradorName(credit);
+        'N/A';
 
-    final model = credit['_model'] as Map<String, dynamic>?;
     final statusRaw = credit['status']?.toString();
-    final frequencyRaw = (model?['frequency']?.toString()) ?? (credit['frequency']?.toString());
+    // El endpoint no incluye 'frequency', usar N/A
+    final frequencyRaw = credit['frequency']?.toString() ?? 'N/A';
 
     // Valores numéricos
     final amountValue = ReportFormatters.toDouble(credit['amount'] ?? 0);
     final balanceValue = ReportFormatters.toDouble(credit['balance'] ?? 0);
-    final totalPaidValue = ReportFormatters.toDouble(model?['total_paid'] ?? credit['total_paid'] ?? 0);
+
+    // En el endpoint simplificado, calcular total pagado: amount - balance
+    final totalPaidValue = amountValue - balanceValue;
 
     // Información de cuotas
     final totalInstallments = credit['total_installments'] as int?;
-    final paidInstallments = (model?['paid_installments'] as int?) ?? (credit['paid_installments'] as int?);
+    final completedInstallments = credit['completed_installments'] as int?;
     final installmentsOverdue = credit['installments_overdue'] as int? ?? 0;
 
     // Colores e iconos
     final statusColor = ReportFormatters.colorForCreditStatus(statusRaw);
     final frequencyColor = ReportFormatters.colorForFrequency(frequencyRaw);
-    final paymentStatusColor = ReportFormatters.colorForPaymentStatus(totalInstallments, paidInstallments);
-    final paymentStatusIcon = ReportFormatters.getPaymentStatusIcon(totalInstallments, paidInstallments);
+    final paymentStatusColor = ReportFormatters.colorForPaymentStatus(totalInstallments, completedInstallments);
+    final paymentStatusIcon = ReportFormatters.getPaymentStatusIcon(totalInstallments, completedInstallments);
 
     return DataRow(
       color: MaterialStateProperty.resolveWith<Color>((Set<MaterialState> states) {
@@ -126,10 +129,10 @@ class CreditsReportView extends BaseReportView {
         DataCell(_buildFrequencyCell(frequencyRaw, frequencyColor)),
         DataCell(_buildMoneyCell(amountValue)),
         DataCell(_buildMoneyCell(balanceValue)),
-        DataCell(_buildInstallmentsCell(paidInstallments ?? 0, totalInstallments ?? 0)),
+        DataCell(_buildInstallmentsCell(completedInstallments ?? 0, totalInstallments ?? 0)),
         DataCell(_buildOverdueCell(installmentsOverdue)),
         DataCell(_buildMoneyCell(totalPaidValue)),
-        DataCell(_buildPaymentStatusCell(totalInstallments, paidInstallments, paymentStatusColor, paymentStatusIcon)),
+        DataCell(_buildPaymentStatusCell(totalInstallments, completedInstallments, paymentStatusColor, paymentStatusIcon)),
       ],
     );
   }
@@ -240,23 +243,24 @@ class CreditsReportView extends BaseReportView {
     final color = _getProgressColor(percentage);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             '$paid/$total',
             style: const TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 13,
+              fontSize: 12,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           ClipRRect(
             borderRadius: BorderRadius.circular(2),
             child: SizedBox(
-              width: 80,
-              height: 4,
+              width: 70,
+              height: 3,
               child: LinearProgressIndicator(
                 value: percentage / 100,
                 backgroundColor: Colors.grey.shade300,
@@ -264,11 +268,11 @@ class CreditsReportView extends BaseReportView {
               ),
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 1),
           Text(
             '$percentage%',
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 9,
               color: color,
               fontWeight: FontWeight.w600,
             ),

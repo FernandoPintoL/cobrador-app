@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/reports_provider.dart' as rp;
-import 'utils/filter_builder.dart';
+import '../../negocio/providers/auth_provider.dart';
+import '../../negocio/services/report_authorization_service.dart';
 import 'utils/report_state_helper.dart';
 import 'views/report_view_factory.dart';
+import 'widgets/role_aware_filter_builder.dart';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -28,6 +30,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final usuario = authState.usuario;
     final reportTypesAsync = ref.watch(rp.reportTypesProvider);
 
     return Scaffold(
@@ -54,7 +58,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ),
       body: reportTypesAsync.when(
         data: (types) {
-          final entries = types.entries.toList();
+          // Filtrar reportes según el rol del usuario
+          List<MapEntry<String, dynamic>> entries = types.entries.toList();
+
+          if (usuario != null) {
+            entries = entries
+                .where((e) {
+                  // Usar el nombre del reporte tal como viene del backend
+                  // (puede ser 'balances', 'daily-activity', etc.)
+                  return ReportAuthorizationService.hasReportAccess(e.key, usuario);
+                })
+                .toList();
+          }
+
           final theme = Theme.of(context);
           final cs = theme.colorScheme;
           return Column(
@@ -234,30 +250,33 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                               ),
                                             ),
                                           ),
-                                        // Filtros dinámicos
-                                        Flexible(
-                                          child: SingleChildScrollView(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: FilterBuilder
-                                                  .buildFiltersForReportType(
-                                                reportTypeDefinition:
-                                                    types[_selectedReport!],
-                                                currentFilters: _filters,
-                                                isManualDateRange:
-                                                    ReportStateHelper
-                                                        .isManualDateRange(
-                                                      _quickRangeIndex,
-                                                    ),
-                                                onFilterChanged:
-                                                    (key, value) {
-                                                  setState(() {});
-                                                },
+                                        // Filtros dinámicos con soporte para roles
+                                        if (usuario != null)
+                                          Flexible(
+                                            child: SingleChildScrollView(
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(8),
+                                                child: RoleAwareFilterBuilder(
+                                                  reportType: _selectedReport ?? '',
+                                                  currentFilters: _filters,
+                                                  onFilterChanged: (key, value) {
+                                                    setState(() {
+                                                      if (value == null) {
+                                                        _filters.remove(key);
+                                                      } else {
+                                                        _filters[key] = value;
+                                                      }
+                                                    });
+                                                  },
+                                                ),
                                               ),
                                             ),
+                                          )
+                                        else
+                                          const Padding(
+                                            padding: EdgeInsets.all(16),
+                                            child: Text('Usuario no autenticado'),
                                           ),
-                                        ),
                                       ],
                                     ],
                                   ),
@@ -363,6 +382,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
 
     setState(() {
+      // Usar el nombre del reporte tal como viene del backend
+      // El backend usa 'balances' (plural), 'daily-activity', etc.
       _currentRequest = ReportStateHelper.createReportRequest(
         reportType: _selectedReport ?? '',
         filters: _filters,
@@ -370,6 +391,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       );
     });
   }
+
 }
 
 class _ReportResultView extends ConsumerWidget {

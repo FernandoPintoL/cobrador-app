@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'base_api_service.dart';
+import '../modelos/reporte/daily_activity_report.dart';
 
 class ReportsApiService extends BaseApiService {
   /// Obtiene tipos de reportes disponibles
@@ -65,5 +66,52 @@ class ReportsApiService extends BaseApiService {
     }
 
     throw Exception('Respuesta no contiene bytes para descargar');
+  }
+
+  /// Obtiene el reporte de actividad diaria con datos tipados
+  /// Parámetros opcionales:
+  /// - startDate: DateTime para filtrar desde esta fecha
+  /// - endDate: DateTime para filtrar hasta esta fecha
+  /// - cobradorId: int para filtrar por cobrador específico
+  /// - paymentMethod: String para filtrar por método de pago ('cash', 'card', etc.)
+  Future<DailyActivityReport> getDailyActivityReport({
+    DateTime? startDate,
+    DateTime? endDate,
+    int? cobradorId,
+    String? paymentMethod,
+  }) async {
+    try {
+      final Map<String, dynamic> filters = {};
+
+      if (startDate != null) {
+        filters['start_date'] = startDate.toIso8601String().split('T')[0];
+      }
+      if (endDate != null) {
+        filters['end_date'] = endDate.toIso8601String().split('T')[0];
+      }
+      if (cobradorId != null) {
+        filters['cobrador_id'] = cobradorId;
+      }
+      if (paymentMethod != null) {
+        filters['payment_method'] = paymentMethod;
+      }
+
+      final resp = await get(
+        '/reports/daily-activity',
+        queryParameters: {...filters, 'format': 'json'},
+      );
+
+      final data = resp.data as Map<String, dynamic>;
+
+      if (data['success'] == true && data['data'] is Map<String, dynamic>) {
+        return DailyActivityReport.fromJson(data['data']);
+      }
+
+      throw Exception('Respuesta inesperada del servidor');
+    } on DioException catch (e) {
+      throw Exception(handleDioError(e));
+    } catch (e) {
+      throw Exception('Error al obtener reporte de actividad diaria: $e');
+    }
   }
 }

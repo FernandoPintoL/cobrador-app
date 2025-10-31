@@ -47,12 +47,13 @@ Widget buildCreditsList(
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (ctx, i) {
           final credit = credits[i];
-          final daysOverdue = _calculateDaysOverdue(credit);
-          final overdueColor = _getOverdueColor(daysOverdue);
+          // El endpoint ya proporciona installments_overdue
+          final installmentsOverdue = (credit['installments_overdue'] as int?) ?? 0;
+          final overdueColor = _getOverdueColorFromOverdueInstallments(installmentsOverdue);
           return _CreditCard(
             credit: credit,
             precalculatedStatusColor: statusColors[credit['status']?.toString()],
-            daysOverdue: daysOverdue,
+            daysOverdue: installmentsOverdue,
             overdueColor: overdueColor,
           );
         },
@@ -61,32 +62,13 @@ Widget buildCreditsList(
   );
 }
 
-/// Calcula los días de retraso basado en la fecha de vencimiento
-int _calculateDaysOverdue(Map<String, dynamic> credit) {
-  final endDate = credit['end_date'];
-  if (endDate == null) return 0;
-
-  try {
-    final endDateTime = DateTime.tryParse(endDate.toString());
-    if (endDateTime == null) return 0;
-
-    final now = DateTime.now();
-    if (now.isAfter(endDateTime)) {
-      return now.difference(endDateTime).inDays;
-    }
-    return 0;
-  } catch (_) {
-    return 0;
-  }
-}
-
-/// Retorna el color de alerta basado en los días de retraso:
-/// - Verde: Sin retraso (0 días)
-/// - Amarillo: Retraso de 1-3 días (alerta leve)
-/// - Rojo: Retraso mayor a 3 días (alerta crítica)
-Color _getOverdueColor(int daysOverdue) {
-  if (daysOverdue == 0) return Colors.green;
-  if (daysOverdue <= 3) return Colors.amber;
+/// Retorna el color de alerta basado en las cuotas atrasadas:
+/// - Verde: Sin retraso (0 cuotas)
+/// - Amarillo: Retraso leve (1-2 cuotas)
+/// - Rojo: Retraso crítico (3+ cuotas)
+Color _getOverdueColorFromOverdueInstallments(int installmentsOverdue) {
+  if (installmentsOverdue == 0) return Colors.green;
+  if (installmentsOverdue <= 2) return Colors.amber;
   return Colors.red;
 }
 
@@ -163,33 +145,33 @@ class _CreditCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final clientName = ReportFormatters.extractCreditClientName(credit);
-    // Intentar obtener nombre del cobrador del nivel superior primero
+    // Usar la estructura simplificada del endpoint de reportes
+    final clientName = credit['client_name']?.toString() ?? 'N/A';
     final cobradorName = credit['created_by_name']?.toString() ??
         credit['delivered_by_name']?.toString() ??
-        ReportFormatters.extractCreditCobradorName(credit);
+        'N/A';
     final status = credit['status']?.toString();
-    // Obtener frecuencia del _model si está disponible
-    final model = credit['_model'] as Map<String, dynamic>?;
-    final freq = (model?['frequency']?.toString()) ?? (credit['frequency']?.toString());
-    final totalAmount = ReportFormatters.toDouble(credit['total_amount']);
+
+    // El endpoint no incluye frequency, usar N/A
+    final freq = credit['frequency']?.toString() ?? 'N/A';
+
+    final totalAmount = ReportFormatters.toDouble(credit['amount']);
     final balance = ReportFormatters.toDouble(credit['balance']);
-    // Obtener total pagado desde el _model o campo directo del endpoint
-    final paid = ReportFormatters.toDouble(model?['total_paid'] ?? credit['total_paid'] ?? 0);
+    // Calcular total pagado: amount - balance
+    final paid = totalAmount - balance;
     final pct = totalAmount > 0 ? (paid / totalAmount) : 0.0;
 
-    // Información adicional del crédito
-    // Extraer del _model cuando sea necesario (model ya fue definido arriba)
+    // Información de cuotas desde el endpoint
     final interestRate = credit['interest_rate'];
-    final clientCategory = (model?['client'] as Map?)?['client_category']?.toString();
-    final paidInstallments = (model?['paid_installments'] as int?) ?? (credit['paid_installments'] as int?);
+    final completedInstallments = credit['completed_installments'] as int?;
     final totalInstallments = credit['total_installments'] as int?;
-    final pendingInstallments = ReportFormatters.calculatePendingInstallments(totalInstallments, paidInstallments);
+    final pendingInstallments = (totalInstallments ?? 0) - (completedInstallments ?? 0);
 
-    // Color basado en el estado de pago de cuotas (prioridad sobre fechas)
-    final paymentStatusColor = ReportFormatters.colorForPaymentStatus(totalInstallments, paidInstallments);
-    final paymentStatusIcon = ReportFormatters.getPaymentStatusIcon(totalInstallments, paidInstallments);
-    final paymentStatusLabel = ReportFormatters.getPaymentStatusLabel(totalInstallments, paidInstallments);
+    // Usar el estado de pago que el backend ya calculó
+    final paymentStatus = credit['payment_status'] as String? ?? 'info';
+    final paymentStatusLabel = credit['payment_status_label'] as String? ?? 'Desconocido';
+    final paymentStatusIcon = _iconForPaymentStatus(paymentStatus);
+    final paymentStatusColor = _colorForPaymentStatus(paymentStatus);
 
     final statusColor =
         precalculatedStatusColor ?? ReportFormatters.colorForCreditStatus(status);
@@ -200,20 +182,15 @@ class _CreditCard extends StatelessWidget {
     final totalAmountFormatted = credit['amount_formatted'] as String? ?? 'Bs 0.00';
     // Formatear el total pagado correctamente
     final paidFormatted = 'Bs ${paid.toStringAsFixed(2)}';
-    final createdAt = credit['created_at'];
-    final createdAtFormatted = credit['created_at_formatted'] as String?;
-    final endDate = (model?['end_date'] as String?) ?? (credit['end_date'] as String?);
-    final endDateFormatted = model != null
-        ? ReportFormatters.formatDate(model['end_date'] ?? '')
-        : (credit['end_date_formatted'] as String? ?? '');
+    final createdAtFormatted = credit['created_at_formatted'] as String? ?? 'N/A';
 
     // Calcular porcentaje de cuotas
     final installmentPct = totalInstallments != null && totalInstallments > 0
-        ? (paidInstallments ?? 0) / totalInstallments
+        ? (completedInstallments ?? 0) / totalInstallments
         : null;
 
-    // Determinar si hay estado crítico de pago (más de 3 cuotas pendientes)
-    final isCriticalPayment = pendingInstallments > 3;
+    // Determinar si hay estado crítico de pago
+    final isCriticalPayment = daysOverdue >= 3;
     final isCompletedPayment = pendingInstallments == 0;
 
     return Card(
@@ -256,26 +233,6 @@ class _CreditCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (clientCategory != null && clientCategory.isNotEmpty)
-                            Container(
-                              margin: const EdgeInsets.only(left: 6),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: _getClientCategoryColor(clientCategory).withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(3),
-                                border: Border.all(
-                                  color: _getClientCategoryColor(clientCategory).withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: Text(
-                                clientCategory.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  color: _getClientCategoryColor(clientCategory),
-                                ),
-                              ),
-                            ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -368,7 +325,7 @@ class _CreditCard extends StatelessWidget {
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   const SizedBox(width: 6),
-                  if (freq != null && freq.isNotEmpty)
+                  if (freq.isNotEmpty)
                     Chip(
                       label: Text(ReportFormatters.translateFrequency(freq)),
                       backgroundColor: freqColor.withValues(alpha: 0.08),
@@ -376,7 +333,7 @@ class _CreditCard extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                  if (freq != null && freq.isNotEmpty) const SizedBox(width: 6),
+                  if (freq.isNotEmpty) const SizedBox(width: 6),
                   if (interestRate != null)
                     Chip(
                       avatar: const Icon(Icons.percent, size: 14),
@@ -412,35 +369,23 @@ class _CreditCard extends StatelessWidget {
             const SizedBox(height: 8),
 
             // Segunda fila: Fechas (scrolleable)
-            if (createdAt != null || endDate != null)
+            if (createdAtFormatted.isNotEmpty)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    if (createdAtFormatted != null && createdAtFormatted!.isNotEmpty)
-                      Chip(
-                        avatar: const Icon(Icons.calendar_today, size: 12),
-                        label: Text('Desde: $createdAtFormatted'),
-                        backgroundColor: Colors.blue.withValues(alpha: 0.08),
-                        side: BorderSide(color: Colors.blue.withValues(alpha: 0.2)),
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    if (createdAtFormatted != null && createdAtFormatted!.isNotEmpty)
-                      const SizedBox(width: 6),
-                    if (endDateFormatted != null && endDateFormatted!.isNotEmpty)
-                      Chip(
-                        avatar: const Icon(Icons.event_available, size: 12),
-                        label: Text('Hasta: $endDateFormatted'),
-                        backgroundColor: Colors.teal.withValues(alpha: 0.08),
-                        side: BorderSide(color: Colors.teal.withValues(alpha: 0.2)),
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
+                    Chip(
+                      avatar: const Icon(Icons.calendar_today, size: 12),
+                      label: Text('Desde: $createdAtFormatted'),
+                      backgroundColor: Colors.blue.withValues(alpha: 0.08),
+                      side: BorderSide(color: Colors.blue.withValues(alpha: 0.2)),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ],
                 ),
               ),
-            if (createdAt != null || endDate != null) const SizedBox(height: 8),
+            if (createdAtFormatted.isNotEmpty) const SizedBox(height: 8),
 
             // Barras de progreso
             Column(
@@ -453,7 +398,7 @@ class _CreditCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Cuotas: $paidInstallments/$totalInstallments',
+                          'Cuotas: $completedInstallments/$totalInstallments',
                           style: const TextStyle(fontSize: 9, color: Colors.grey),
                         ),
                         const SizedBox(height: 4),
@@ -473,7 +418,7 @@ class _CreditCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Pago: ${paidFormatted ?? 'Bs 0.00'}',
+                      'Pago: $paidFormatted',
                       style: const TextStyle(fontSize: 9, color: Colors.grey),
                     ),
                     const SizedBox(height: 4),
@@ -496,14 +441,32 @@ class _CreditCard extends StatelessWidget {
     );
   }
 
-  /// Obtiene el color para la categoría del cliente (A, B, C)
-  Color _getClientCategoryColor(String? category) {
-    switch ((category ?? '').toUpperCase()) {
-      case 'A':
+  /// Obtiene el ícono para el estado de pago del backend
+  IconData _iconForPaymentStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return Icons.check_circle;
+      case 'ahead':
+        return Icons.trending_up;
+      case 'warning':
+        return Icons.warning;
+      case 'danger':
+        return Icons.error;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
+  /// Obtiene el color para el estado de pago del backend
+  Color _colorForPaymentStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'completed':
         return Colors.green;
-      case 'B':
+      case 'ahead':
+        return Colors.blue;
+      case 'warning':
         return Colors.orange;
-      case 'C':
+      case 'danger':
         return Colors.red;
       default:
         return Colors.grey;

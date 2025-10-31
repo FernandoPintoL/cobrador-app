@@ -2,6 +2,8 @@ import 'package:cobrador_app/presentacion/cliente/cliente_form_screen.dart';
 import 'package:cobrador_app/presentacion/pantallas/notifications_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/app_bootstrap.dart';
 import 'negocio/providers/auth_provider.dart';
@@ -200,6 +202,16 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       theme: _buildLightTheme(),
       darkTheme: _buildDarkTheme(),
       themeMode: ThemeMode.system, // Respeta la configuración del sistema
+      locale: const Locale('es', 'ES'),
+      supportedLocales: const [
+        Locale('es', 'ES'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: _buildInitialScreen(authState),
       navigatorKey: MyApp.navigatorKey,
       navigatorObservers: _navigatorObserver != null

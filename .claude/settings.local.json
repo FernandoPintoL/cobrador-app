@@ -19,7 +19,8 @@
       "Bash(powershell -Command:*)",
       "Bash(flutter pub get:*)",
       "Bash(flutter build:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []
