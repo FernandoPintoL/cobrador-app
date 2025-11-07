@@ -183,7 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           }
                         },
                         child: const Text(
-                          'facebook',
+                          'CeF Pro',
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             color: const Color(0xFF1877F2),
@@ -195,7 +195,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      Text(
+                      /*Text(
                         'Iniciar sesión Facebook',
                         style: TextStyle(
                           fontSize: 20,
@@ -205,7 +205,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               : const Color(0xFF1C1E21),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 16),*/
 
                       Form(
                         key: _formKey,
