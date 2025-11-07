@@ -34,7 +34,12 @@
       "Bash(cat:*)",
       "Bash(pod install)",
       "Bash(xcrun xctrace:*)",
-      "Bash(flutter devices:*)"
+      "Bash(flutter devices:*)",
+      "Bash(git rm:*)",
+      "Bash(git add:*)",
+      "Bash(git log:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
