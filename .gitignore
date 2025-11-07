@@ -44,6 +44,14 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# iOS build artifacts
+/ios/build/
+/ios/build.xcarchive/
+*.xcarchive
+*.dSYM
+*.app
+*.ipa
+
 # Variables de entorno
 .env
 .env.local

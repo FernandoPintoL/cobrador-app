@@ -32,7 +32,9 @@
       "Bash(cp:*)",
       "Bash(security find-identity:*)",
       "Bash(cat:*)",
-      "Bash(pod install)"
+      "Bash(pod install)",
+      "Bash(xcrun xctrace:*)",
+      "Bash(flutter devices:*)"
     ],
     "deny": [],
     "ask": []
