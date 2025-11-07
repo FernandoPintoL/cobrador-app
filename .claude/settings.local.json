@@ -20,7 +20,15 @@
       "Bash(flutter pub get:*)",
       "Bash(flutter build:*)",
       "Bash(cd:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(open:*)",
+      "Bash(flutter run:*)",
+      "Bash(flutter clean:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(plutil:*)",
+      "Bash(flutter doctor:*)",
+      "Bash(killall:*)"
     ],
     "deny": [],
     "ask": []

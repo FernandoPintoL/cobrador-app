@@ -10,6 +10,7 @@ import '../../negocio/providers/user_management_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/profile_image_widget.dart';
 import '../widgets/modern_action_card.dart';
+import 'change_password_screen.dart';
 
 class ProfileSettingsScreen extends ConsumerStatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -296,9 +297,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen>
                     const SizedBox(height: 24),
 
                     // Security Section
-                    _buildSectionTitle(context, 'Seguridad', Icons.security),
-                    const SizedBox(height: 12),
-                    _buildSecurityActions(context, ref, roleColor),
+                    // _buildSectionTitle(context, 'Seguridad', Icons.security),
+                    // const SizedBox(height: 12),
+                    // _buildSecurityActions(context, ref, roleColor),
 
                     const SizedBox(height: 24),
 
@@ -534,21 +535,14 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen>
   Widget _buildSecurityActions(BuildContext context, WidgetRef ref, Color roleColor) {
     return Column(
       children: [
-        ModernActionCard(
+        /*ModernActionCard(
           title: 'Cambiar Contraseña',
           description: 'Actualiza tu contraseña de acceso',
           icon: Icons.lock_outline,
           color: Colors.orange,
           onTap: () => _showChangePasswordDialog(context, ref),
-        ),
-        const SizedBox(height: 12),
-        ModernActionCard(
-          title: 'Eliminar Imagen de Perfil',
-          description: 'Quitar tu foto de perfil actual',
-          icon: Icons.delete_outline,
-          color: Colors.red,
-          onTap: () => _deleteProfileImage(ref),
-        ),
+        ),*/
+
       ],
     );
   }
@@ -572,8 +566,26 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen>
           icon: Icons.vpn_key_outlined,
           color: Colors.purple,
           onTap: () {
-            Navigator.pushNamed(context, '/change-password');
+            final usuario = ref.read(authProvider).usuario;
+            if (usuario != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChangePasswordScreen(
+                    targetUser: usuario,
+                  ),
+                ),
+              );
+            }
           },
+        ),
+        const SizedBox(height: 12),
+        ModernActionCard(
+          title: 'Eliminar Imagen de Perfil',
+          description: 'Quitar tu foto de perfil actual',
+          icon: Icons.delete_outline,
+          color: Colors.red,
+          onTap: () => _deleteProfileImage(ref),
         ),
       ],
     );

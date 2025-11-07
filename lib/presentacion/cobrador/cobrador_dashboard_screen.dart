@@ -12,6 +12,9 @@ import '../widgets/profile_image_widget.dart';
 import '../pantallas/profile_settings_screen.dart';
 import '../pantallas/notifications_screen.dart';
 import '../widgets/logout_dialog.dart';
+import '../widgets/modern_stat_card.dart';
+import '../widgets/modern_action_card.dart';
+import '../widgets/section_header.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import '../creditos/credit_type_screen.dart';
 import '../reports/reports_screen.dart';
@@ -240,11 +243,12 @@ class _CobradorDashboardScreenState
     });
 
     return Scaffold(
+      backgroundColor: isDark ? Colors.grey[900] : Colors.grey[50],
       appBar: AppBar(
         title: const Text('Paneles de Cobrador'),
         backgroundColor: RoleColors.cobradorPrimary,
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: 0,
         actions: [
           // Botón de notificaciones
           Consumer(
@@ -292,27 +296,66 @@ class _CobradorDashboardScreenState
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header con información del usuario
-              Card(
+              // Modern Header with glassmorphism
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [
+                            RoleColors.cobradorPrimary.withValues(alpha: 0.15),
+                            RoleColors.cobradorPrimary.withValues(alpha: 0.05),
+                          ]
+                        : [
+                            RoleColors.cobradorPrimary.withValues(alpha: 0.1),
+                            RoleColors.cobradorPrimary.withValues(alpha: 0.05),
+                          ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: RoleColors.cobradorPrimary.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: RoleColors.cobradorPrimary.withValues(alpha: 0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(20.0),
                   child: Row(
                     children: [
-                      // Widget de imagen de perfil con funcionalidad de subida
-                      ProfileImageWithUpload(
-                        profileImage: usuario?.profileImage,
-                        size: 60,
-                        isUploading: profileImageState.isUploading,
-                        uploadError: profileImageState.error,
-                        onImageSelected: (File imageFile) {
-                          ref
-                              .read(profileImageProvider.notifier)
-                              .uploadProfileImage(imageFile);
-                        },
+                      // Profile Image with glow effect
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: RoleColors.cobradorPrimary.withValues(alpha: 0.3),
+                              blurRadius: 20,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: ProfileImageWithUpload(
+                          profileImage: usuario?.profileImage,
+                          size: 70,
+                          isUploading: profileImageState.isUploading,
+                          uploadError: profileImageState.error,
+                          onImageSelected: (File imageFile) {
+                            ref
+                                .read(profileImageProvider.notifier)
+                                .uploadProfileImage(imageFile);
+                          },
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -321,11 +364,16 @@ class _CobradorDashboardScreenState
                           children: [
                             Text(
                               usuario?.nombre ?? 'Cobrador',
-                              style: const TextStyle(
-                                fontSize: 20,
+                              style: TextStyle(
+                                fontSize: 22,
                                 fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black87,
+                                letterSpacing: -0.5,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(height: 4),
                             Text(
                               usuario?.email ?? '',
                               style: TextStyle(
@@ -334,28 +382,47 @@ class _CobradorDashboardScreenState
                                     : Colors.grey[600],
                                 fontSize: 14,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 12),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
+                                horizontal: 12,
+                                vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.green[800]
-                                    : Colors.green[100],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                'Cobrador',
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.green[100]
-                                      : Colors.green,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    RoleColors.cobradorPrimary.withValues(alpha: 0.3),
+                                    RoleColors.cobradorPrimary.withValues(alpha: 0.2),
+                                  ],
                                 ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: RoleColors.cobradorPrimary.withValues(alpha: 0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.person_pin,
+                                    color: RoleColors.cobradorPrimary,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Cobrador',
+                                    style: TextStyle(
+                                      color: RoleColors.cobradorPrimary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -365,446 +432,144 @@ class _CobradorDashboardScreenState
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              // Estadísticas del cobrador
-              const Text(
-                'Mis estadísticas',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              const SizedBox(height: 32),
+
+              // Section Header for Statistics
+              SectionHeader(
+                title: 'Mis estadísticas',
+                subtitle: 'Resumen de tu cartera',
+                icon: Icons.bar_chart_rounded,
+                color: RoleColors.cobradorPrimary,
               ),
+
               const SizedBox(height: 16),
-              Builder(
-                builder: (context) {
+              // Modern Statistics Grid
+              LayoutBuilder(
+                builder: (context, constraints) {
                   final creditState = ref.watch(creditProvider);
                   final authState = ref.watch(authProvider);
-                  final dash =
-                      authState.statistics; // preferir datos de /api/me o login
+                  final dash = authState.statistics;
 
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      final spacing = 12.0;
-                      final itemWidth = (constraints.maxWidth - spacing) / 2;
+                  final spacing = 16.0;
+                  final itemWidth = (constraints.maxWidth - spacing) / 2;
+                  final isLoading = dash == null && creditState.stats == null;
 
-                      // Helpers para valores con fallback
-                      String fmtAmount(double? v) =>
-                          'Bs ${(v ?? 0).toStringAsFixed(2)}';
-                      String fmtInt(int? v) => '${v ?? 0}';
-                      String fmtPct(double? v) =>
-                          '${((v ?? 0)).toStringAsFixed(1)}%';
+                  if (isLoading) {
+                    return Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: List.generate(
+                        2,
+                        (_) => SizedBox(
+                          width: itemWidth,
+                          height: 160,
+                          child: const ModernStatCardSkeleton(),
+                        ),
+                      ),
+                    );
+                  }
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Sección Resumen
-                          const Text(
-                            'Resumen',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: spacing,
-                            runSpacing: spacing,
-                            children: [
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Clientes',
-                                  fmtInt(
-                                    dash?.totalClientes ??
-                                        creditState.stats?.totalCredits,
-                                  ),
-                                  Icons.people_alt,
-                                  Colors.blue,
-                                ),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Créditos activos',
-                                  fmtInt(
-                                    dash?.creditosActivos ??
-                                        creditState.stats?.activeCredits,
-                                  ),
-                                  Icons.play_circle,
-                                  Colors.green,
-                                ),
-                              ),
-                              /* SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Saldo total cartera',
-                                  fmtAmount(
-                                    dash?.saldoTotalCartera ??
-                                        creditState.stats?.totalAmount,
-                                  ),
-                                  Icons.account_balance_wallet,
-                                  Colors.purple,
-                                ),
-                              ), */
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Sección Hoy
-                          /* const Text(
-                            'Hoy',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: spacing,
-                            runSpacing: spacing,
-                            children: [
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Cobros realizados',
-                                  fmtInt(dash?.cobrosRealizadosHoy),
-                                  Icons.check_circle,
-                                  Colors.teal,
-                                ),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Monto cobrado',
-                                  fmtAmount(dash?.totalCobradoHoy),
-                                  Icons.attach_money,
-                                  Colors.orange,
-                                ),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Pendientes hoy',
-                                  fmtInt(dash?.pendientesHoy),
-                                  Icons.timelapse,
-                                  Colors.indigo,
-                                ),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Efectivo en caja',
-                                  fmtAmount(dash?.efectivoEnCaja),
-                                  Icons.savings,
-                                  Colors.brown,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16), */
-
-                          // Sección Alertas
-                          /* const Text(
-                            'Alertas',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: spacing,
-                            runSpacing: spacing,
-                            children: [
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Pagos atrasados',
-                                  fmtInt(dash?.pagosAtrasados),
-                                  Icons.warning_amber_rounded,
-                                  Colors.red,
-                                ),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Clientes sin ubicación',
-                                  fmtInt(dash?.clientesSinUbicacion),
-                                  Icons.location_off,
-                                  Colors.deepOrange,
-                                ),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Créditos por vencer (7 días)',
-                                  fmtInt(dash?.creditosPorVencer7Dias),
-                                  Icons.hourglass_top,
-                                  Colors.amber,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16), */
-
-                          // Sección Metas
-                          /* const Text(
-                            'Metas',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8), */
-                          /* Wrap(
-                            spacing: spacing,
-                            runSpacing: spacing,
-                            children: [
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Cobros mes actual',
-                                  fmtAmount(dash?.cobrosMesActual),
-                                  Icons.stacked_line_chart,
-                                  Colors.blueGrey,
-                                ),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Meta del mes',
-                                  fmtAmount(dash?.metaMes),
-                                  Icons.flag,
-                                  Colors.green,
-                                ),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: _buildStatCard(
-                                  context,
-                                  'Cumplimiento',
-                                  fmtPct(dash?.porcentajeCumplimiento),
-                                  Icons.percent,
-                                  Colors.purple,
-                                ),
-                              ),
-                            ],
-                          ), */
-                        ],
-                      );
-                    },
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: [
+                      SizedBox(
+                        width: itemWidth,
+                        height: 160,
+                        child: ModernStatCard(
+                          title: 'Clientes',
+                          value: '${dash?.totalClientes ?? creditState.stats?.totalCredits ?? 0}',
+                          icon: Icons.people_alt,
+                          color: Colors.blue,
+                          onTap: () => _navigateToClientManagement(context),
+                        ),
+                      ),
+                      SizedBox(
+                        width: itemWidth,
+                        height: 160,
+                        child: ModernStatCard(
+                          title: 'Créditos Activos',
+                          value: '${dash?.creditosActivos ?? creditState.stats?.activeCredits ?? 0}',
+                          icon: Icons.account_balance_wallet,
+                          color: Colors.green,
+                          onTap: () => _navigateToCreditManagement(context),
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
 
-              // Acciones rápidas
-              Text(
-                'Funciones de Gestión',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
+              // Section Header for Actions
+              SectionHeader(
+                title: 'Funciones de Gestión',
+                subtitle: 'Administra tu cartera',
+                icon: Icons.dashboard_customize,
+                color: RoleColors.cobradorPrimary,
               ),
+
               const SizedBox(height: 16),
 
-              // Lista de acciones con mejor espaciado
-              Column(
-                children: [
-                  /*_buildCobradorActionCard(
-                    context,
-                    'Ruta del Día',
-                    'Ver mis clientes a visitar hoy',
-                    Icons.route,
-                    Colors.teal,
-                    () => _navigateToDailyRoute(context),
-                  ),*/
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Pago Rápido',
-                    'Registrar cobros de forma rápida',
-                    Icons.flash_on,
-                    Colors.amber,
-                    () => _navigateToQuickPayment(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Gestionar Créditos',
-                    'Ver y gestionar créditos de clientes',
-                    Icons.credit_card,
-                    Colors.green,
-                    () => _navigateToCreditManagement(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Gestionar Clientes',
-                    'Ver y gestionar mis clientes asignados',
-                    Icons.people_alt,
-                    Colors.blue,
-                    () => _navigateToClientManagement(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Mapa de Clientes',
-                    'Ver mis clientes en el mapa',
-                    Icons.map,
-                    Colors.indigo,
-                    () => _navigateToMap(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Cajas',
-                    'Abrir, ver y cerrar mi caja del día',
-                    Icons.point_of_sale,
-                    Colors.orange,
-                    () => _navigateToCashBalances(context),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCobradorActionCard(
-                    context,
-                    'Mis Reportes',
-                    'Ver estadísticas y reportes de mi desempeño',
-                    Icons.analytics,
-                    Colors.purple,
-                    () => _navigateToReports(context),
-                  ),
-                ],
+              // Modern Action Cards
+              ModernActionCard(
+                title: 'Gestión de Créditos',
+                description: 'Ver y gestionar créditos de clientes',
+                icon: Icons.credit_card,
+                color: Colors.green,
+                onTap: () => _navigateToCreditManagement(context),
+              ),
+              const SizedBox(height: 12),
+              ModernActionCard(
+                title: 'Gestión de Clientes',
+                description: 'Ver y gestionar mis clientes asignados',
+                icon: Icons.business_center,
+                color: Colors.blue,
+                onTap: () => _navigateToClientManagement(context),
+              ),
+              const SizedBox(height: 12),
+              ModernActionCard(
+                title: 'Mapa de Clientes',
+                description: 'Ver mis clientes en el mapa',
+                icon: Icons.map,
+                color: Colors.indigo,
+                onTap: () => _navigateToMap(context),
+              ),
+              const SizedBox(height: 12),
+              ModernActionCard(
+                title: 'Cajas',
+                description: 'Abrir, ver y cerrar mi caja del día',
+                icon: Icons.point_of_sale,
+                color: Colors.orange,
+                onTap: () => _navigateToCashBalances(context),
+              ),
+              const SizedBox(height: 12),
+              ModernActionCard(
+                title: 'Mis Reportes',
+                description: 'Ver estadísticas y reportes de mi desempeño',
+                icon: Icons.analytics,
+                color: Colors.purple,
+                onTap: () => _navigateToReports(context),
               ),
               const SizedBox(height: 20), // Espacio adicional al final
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildStatCard(
-    BuildContext context,
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(10.0), // Reducido de 12 a 10
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 28, color: color), // Reducido de 32 a 28
-            const SizedBox(height: 6), // Reducido de 8 a 6
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18, // Reducido de 20 a 18
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 10, // Reducido de 11 a 10
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCobradorActionCard(
-    BuildContext context,
-    String title,
-    String description,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Card(
-      elevation: 2,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0), // Reducido de 16 a 12
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10), // Reducido de 12 a 10
-                decoration: BoxDecoration(
-                  color: color.withOpacity(isDark ? 0.2 : 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 20,
-                ), // Reducido de 24 a 20
-              ),
-              const SizedBox(width: 12), // Reducido de 16 a 12
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14, // Reducido de 16 a 14
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2), // Reducido de 4 a 2
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 11, // Reducido de 12 a 11
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: isDark ? Colors.grey[500] : Colors.grey[400],
-                size: 14, // Reducido de 16 a 14
-              ),
-            ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _navigateToQuickPayment(context),
+        backgroundColor: RoleColors.cobradorPrimary,
+        icon: const Icon(Icons.flash_on, color: Colors.white),
+        label: const Text(
+          'Pago Rápido',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
           ),
         ),
+        elevation: 6,
       ),
     );
   }

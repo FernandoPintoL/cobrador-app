@@ -45,7 +45,10 @@ class CreditFullDetails {
     }
 
     List<Pago>? history;
-    final rawHistory = (data is Map<String, dynamic>) ? data['payments_history'] : null;
+    // Intentar primero con 'payments_history', luego con 'payments'
+    final rawHistory = (data is Map<String, dynamic>)
+        ? (data['payments_history'] ?? data['payments'])
+        : null;
     if (rawHistory is List) {
       history = rawHistory
           .whereType<Map<String, dynamic>>()
@@ -69,6 +72,14 @@ class CreditFullDetails {
           'balance': data['balance'],
           'total_amount': data['total_amount'],
           'amount': data['amount'],
+          'original_amount': data['amount'], // Monto del préstamo original
+          'interest_rate': data['interest_rate'],
+          'total_paid': data['total_paid'],
+          'paid_installments': data['paid_installments'],
+          // Calcular si está en mora basado en el balance y la fecha
+          'is_overdue': (data['balance'] != null &&
+                         (double.tryParse(data['balance'].toString()) ?? 0) > 0),
+          'overdue_amount': 0, // El API no provee este campo directamente
         };
       }
     }

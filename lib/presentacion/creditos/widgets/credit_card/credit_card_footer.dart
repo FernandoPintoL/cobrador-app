@@ -43,30 +43,24 @@ class CreditCardFooter extends StatelessWidget {
     if (listType == 'pending_approval' && canApprove) {
       buttons.addAll([
         Expanded(
-          child: ElevatedButton.icon(
+          child: _ModernActionButton(
             onPressed: onApprove,
-            icon: const Icon(Icons.check, size: 16),
-            label: const Text('Aprobar', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              minimumSize: const Size(0, 32),
-            ),
+            icon: Icons.check_circle_rounded,
+            label: 'Aprobar',
+            gradientColors: const [
+              Color(0xFF4CAF50),
+              Color(0xFF45A049),
+            ],
+            shadowColor: Colors.green,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
-          child: OutlinedButton.icon(
+          child: _ModernOutlinedButton(
             onPressed: onReject,
-            icon: const Icon(Icons.cancel, size: 16),
-            label: const Text('Rechazar', style: TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              minimumSize: const Size(0, 32),
-            ),
+            icon: Icons.cancel_rounded,
+            label: 'Rechazar',
+            color: Colors.red,
           ),
         ),
       ]);
@@ -75,16 +69,15 @@ class CreditCardFooter extends StatelessWidget {
     else if (listType == 'ready_for_delivery' && canDeliver) {
       buttons.add(
         Expanded(
-          child: ElevatedButton.icon(
+          child: _ModernActionButton(
             onPressed: onDeliver,
-            icon: const Icon(Icons.local_shipping, size: 16),
-            label: const Text('Confirmar Entrega', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              minimumSize: const Size(0, 32),
-            ),
+            icon: Icons.local_shipping_rounded,
+            label: 'Confirmar Entrega',
+            gradientColors: const [
+              Color(0xFF4CAF50),
+              Color(0xFF45A049),
+            ],
+            shadowColor: Colors.green,
           ),
         ),
       );
@@ -98,21 +91,156 @@ class CreditCardFooter extends StatelessWidget {
     else if (listType == 'active' && credit.isActive) {
       buttons.add(
         Expanded(
-          child: ElevatedButton.icon(
+          child: _ModernActionButton(
             onPressed: onPayment,
-            icon: const Icon(Icons.payment, size: 16),
-            label: const Text('Pagar', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.teal,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              minimumSize: const Size(0, 32),
-            ),
+            icon: Icons.payment_rounded,
+            label: 'Registrar Pago',
+            gradientColors: const [
+              Color(0xFF00897B),
+              Color(0xFF00796B),
+            ],
+            shadowColor: Colors.teal,
           ),
         ),
       );
     }
 
     return buttons;
+  }
+}
+
+/// Botón moderno con gradiente para acciones principales
+class _ModernActionButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final IconData icon;
+  final String label;
+  final List<Color> gradientColors;
+  final Color shadowColor;
+
+  const _ModernActionButton({
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+    required this.gradientColors,
+    required this.shadowColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradientColors,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Botón moderno outlined para acciones secundarias
+class _ModernOutlinedButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _ModernOutlinedButton({
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withValues(alpha: 0.5),
+          width: 2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          splashColor: color.withValues(alpha: 0.1),
+          highlightColor: color.withValues(alpha: 0.05),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: color,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      letterSpacing: 0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

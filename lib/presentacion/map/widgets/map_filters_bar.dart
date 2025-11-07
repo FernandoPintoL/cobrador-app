@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../datos/modelos/map/location_cluster.dart';
 import '../utils/client_data_extractor.dart';
 
-/// Barra de filtros por estado de pago
+/// Barra de filtros por estado de pago con diseño moderno
 class MapStatusFiltersBar extends StatelessWidget {
   final String? selectedStatus;
   final ValueChanged<String?> onStatusChanged;
@@ -15,31 +15,183 @@ class MapStatusFiltersBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = const [
-      {'key': null, 'label': 'Todos'},
-      {'key': 'overdue', 'label': 'Vencidos'},
-      {'key': 'pending', 'label': 'Pendientes'},
-      {'key': 'paid', 'label': 'Al día'},
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final items = [
+      {'key': null, 'label': 'Todos', 'icon': Icons.apps_rounded, 'color': Colors.blue},
+      {'key': 'overdue', 'label': 'Vencidos', 'icon': Icons.warning_rounded, 'color': Colors.red},
+      {'key': 'pending', 'label': 'Pendientes', 'icon': Icons.schedule_rounded, 'color': Colors.orange},
+      {'key': 'paid', 'label': 'Al día', 'icon': Icons.check_circle_rounded, 'color': Colors.green},
     ];
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: items.map((it) {
-            final key = it['key'] as String?;
-            final selected =
-                key == selectedStatus || (key == null && selectedStatus == null);
-            return Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: ChoiceChip(
-                label: Text(it['label'] as String),
-                selected: selected,
-                onSelected: (_) => onStatusChanged(key),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: isDark
+              ? [
+                  Theme.of(context).colorScheme.surface,
+                  Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                ]
+              : [
+                  Theme.of(context).colorScheme.surface,
+                  Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                ],
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: items.map((it) {
+              final key = it['key'] as String?;
+              final selected = key == selectedStatus || (key == null && selectedStatus == null);
+              final color = it['color'] as Color;
+              final icon = it['icon'] as IconData;
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 10.0),
+                child: _ModernFilterChip(
+                  label: it['label'] as String,
+                  icon: icon,
+                  color: color,
+                  selected: selected,
+                  onTap: () => onStatusChanged(key),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Chip moderno con animaciones y gradientes
+class _ModernFilterChip extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModernFilterChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  State<_ModernFilterChip> createState() => _ModernFilterChipState();
+}
+
+class _ModernFilterChipState extends State<_ModernFilterChip>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _controller.reverse(),
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: widget.selected
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      widget.color.withValues(alpha: isDark ? 0.4 : 0.25),
+                      widget.color.withValues(alpha: isDark ? 0.3 : 0.15),
+                    ],
+                  )
+                : null,
+            color: widget.selected
+                ? null
+                : (isDark
+                    ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
+                    : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6)),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: widget.selected
+                  ? widget.color.withValues(alpha: 0.6)
+                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              width: widget.selected ? 2 : 1,
+            ),
+            boxShadow: widget.selected
+                ? [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: (isDark ? Colors.black : Colors.grey).withValues(alpha: 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.icon,
+                size: 18,
+                color: widget.selected
+                    ? widget.color
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-            );
-          }).toList(),
+              const SizedBox(width: 8),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: widget.selected ? FontWeight.bold : FontWeight.w600,
+                  color: widget.selected
+                      ? widget.color
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -102,10 +254,10 @@ class ClusterStatsBar extends StatelessWidget {
           margin: const EdgeInsets.only(right: 8),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: (color ?? scheme.primary).withOpacity(0.12),
+            color: (color ?? scheme.primary).withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: (color ?? scheme.primary).withOpacity(0.3),
+              color: (color ?? scheme.primary).withValues(alpha: 0.3),
             ),
           ),
           child: Row(
@@ -264,7 +416,7 @@ class ClusterCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(statusIcon, color: statusColor, size: 20),

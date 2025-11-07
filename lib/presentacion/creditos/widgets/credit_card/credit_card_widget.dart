@@ -42,133 +42,205 @@ class CreditCardWidget extends StatelessWidget {
     final paidInstallments = credit.paidInstallmentsCount;
     final paymentStatusColor = ReportFormatters.colorForPaymentStatus(totalInstallments, paidInstallments);
     final paymentStatusIcon = ReportFormatters.getPaymentStatusIcon(totalInstallments, paidInstallments);
-    final paymentStatusLabel = ReportFormatters.getPaymentStatusLabel(totalInstallments, paidInstallments);
 
     // Determinar severidad basada en estado de pago
     final pendingInstallments = ReportFormatters.calculatePendingInstallments(totalInstallments, paidInstallments);
     final isCriticalPayment = pendingInstallments > 3;
 
-    // Colores para fondo y borde - Adaptables a modo oscuro/claro
-    late Color backgroundColor;
+    // Colores para fondo y borde - Diseño modernizado con gradientes
     late Color borderColor;
+    late List<Color> gradientColors;
 
     if (pendingInstallments > 0) {
-      // Con cuotas pendientes: usar color semi-transparente basado en estado de pago
-      // Opacidad aumentada para mejor visibilidad del color
-      final alpha = 0.25; // 25% - Balance entre visibilidad y legibilidad
-      backgroundColor = paymentStatusColor.withValues(alpha: alpha);
-      borderColor = paymentStatusColor.withValues(alpha: 0.6);
+      // Con cuotas pendientes: usar gradiente basado en estado de pago
+      borderColor = paymentStatusColor.withValues(alpha: 0.3);
+      gradientColors = [
+        paymentStatusColor.withValues(alpha: 0.12),
+        paymentStatusColor.withValues(alpha: 0.04),
+      ];
     } else {
-      // Todas las cuotas pagadas: blanco en claro, superficie oscura en oscuro
-      backgroundColor = isDarkMode
-          ? colorScheme.surface
-          : Colors.white;
+      // Todas las cuotas pagadas: gradiente neutro elegante
       borderColor = isDarkMode
-          ? colorScheme.outline.withValues(alpha: 0.2)
-          : Colors.grey.withValues(alpha: 0.2);
+          ? colorScheme.outline.withValues(alpha: 0.15)
+          : Colors.grey.withValues(alpha: 0.15);
+      gradientColors = isDarkMode
+          ? [
+              colorScheme.surface,
+              colorScheme.surface.withValues(alpha: 0.95),
+            ]
+          : [
+              Colors.white,
+              Colors.grey.withValues(alpha: 0.02),
+            ];
     }
 
     // Icono diferencial para el estado de pago
     final statusBadgeIcon = paymentStatusIcon;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: isCriticalPayment ? 4 : 2,
-      color: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: borderColor,
-          width: pendingInstallments > 0 ? 2.5 : 1,
-        ),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: backgroundColor,
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Stack(
-            children: [
-              // Contenido principal
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header con cliente y estado
-                    CreditCardHeader(credit: credit),
-
-                    const SizedBox(height: 12),
-
-                    // Body con información del crédito
-                    CreditCardBody(
-                      credit: credit,
-                      listType: listType,
-                    ),
-
-                    // Footer con botones de acción
-                    const SizedBox(height: 12),
-                    CreditCardFooter(
-                      credit: credit,
-                      listType: listType,
-                      canApprove: canApprove,
-                      canDeliver: canDeliver,
-                      onApprove: onApprove,
-                      onReject: onReject,
-                      onDeliver: onDeliver,
-                      onPayment: onPayment,
-                    ),
-                  ],
-                ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Material(
+        elevation: 0,
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: gradientColors,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: borderColor,
+              width: pendingInstallments > 0 ? 2 : 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: pendingInstallments > 0
+                    ? paymentStatusColor.withValues(alpha: 0.15)
+                    : (isDarkMode ? Colors.black.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.08)),
+                blurRadius: isCriticalPayment ? 20 : 12,
+                offset: const Offset(0, 6),
+                spreadRadius: isCriticalPayment ? 2 : 0,
               ),
-              // Badge de estado de pago en la esquina superior derecha - Adaptable a tema
-              if (pendingInstallments > 0)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: paymentStatusColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: paymentStatusColor.withValues(
-                            alpha: isDarkMode ? 0.6 : 0.4,
-                          ),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+              if (!isDarkMode)
+                BoxShadow(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  blurRadius: 1,
+                  offset: const Offset(-1, -1),
+                ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              children: [
+                // Patrón de fondo sutil
+                if (pendingInstallments > 0)
+                  Positioned(
+                    right: -30,
+                    bottom: -30,
+                    child: Opacity(
+                      opacity: 0.03,
+                      child: Icon(
+                        statusBadgeIcon,
+                        size: 120,
+                        color: paymentStatusColor,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          statusBadgeIcon,
-                          size: 16,
-                          color: isDarkMode ? Colors.black : Colors.white,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$pendingInstallments',
-                          style: TextStyle(
-                            color: isDarkMode ? Colors.black : Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                  ),
+
+                // Contenido principal con InkWell para ripple effect
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(20),
+                    splashColor: paymentStatusColor.withValues(alpha: 0.1),
+                    highlightColor: paymentStatusColor.withValues(alpha: 0.05),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header con cliente y estado
+                          CreditCardHeader(credit: credit),
+
+                          const SizedBox(height: 16),
+
+                          // Divider sutil
+                          Container(
+                            height: 1,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.1),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+
+                          const SizedBox(height: 16),
+
+                          // Body con información del crédito
+                          CreditCardBody(
+                            credit: credit,
+                            listType: listType,
+                          ),
+
+                          // Footer con botones de acción
+                          const SizedBox(height: 16),
+                          CreditCardFooter(
+                            credit: credit,
+                            listType: listType,
+                            canApprove: canApprove,
+                            canDeliver: canDeliver,
+                            onApprove: onApprove,
+                            onReject: onReject,
+                            onDeliver: onDeliver,
+                            onPayment: onPayment,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-            ],
+
+                // Badge de estado de pago en la esquina superior derecha - Diseño modernizado
+                if (pendingInstallments > 0)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            paymentStatusColor,
+                            paymentStatusColor.withValues(alpha: 0.85),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: paymentStatusColor.withValues(alpha: 0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            statusBadgeIcon,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$pendingInstallments',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

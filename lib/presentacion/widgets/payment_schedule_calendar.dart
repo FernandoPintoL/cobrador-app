@@ -16,18 +16,40 @@ class PaymentScheduleCalendar extends StatelessWidget {
   });
 
   bool _isInstallmentPaid(PaymentSchedule installment) {
-    if (installment.isPaid) return true;
+    // Debug: Imprimir info de la cuota
+    print('🔍 Evaluando cuota #${installment.installmentNumber}:');
+    print('   - Status del schedule: ${installment.status}');
+    print('   - isPaid del schedule: ${installment.isPaid}');
+
+    if (installment.isPaid) {
+      print('   ✅ Marcada como pagada por schedule.isPaid');
+      return true;
+    }
+
     final paidCount = credit.paidInstallments;
-    if (paidCount >= installment.installmentNumber) return true;
+    print('   - paidInstallments del crédito: $paidCount');
+
+    if (paidCount >= installment.installmentNumber) {
+      print('   ✅ Marcada como pagada por paidCount ($paidCount >= ${installment.installmentNumber})');
+      return true;
+    }
+
     final pagos = credit.payments;
+    print('   - Pagos en crédito: ${pagos?.length ?? 0}');
+
     if (pagos != null && pagos.isNotEmpty) {
       for (final p in pagos) {
-        final diff = p.paymentDate.difference(installment.dueDate).inDays.abs();
-        if (diff <= 1 && (p.status == 'completed' || p.status == 'paid')) {
+        print('   - Pago con installment_number=${p.installmentNumber}: fecha=${p.paymentDate}, status=${p.status}');
+        // Verificar si el installmentNumber del pago coincide con el de esta cuota
+        if (p.installmentNumber == installment.installmentNumber &&
+            (p.status == 'completed' || p.status == 'paid')) {
+          print('   ✅ Marcada como pagada por installment_number coincidente (${p.installmentNumber})');
           return true;
         }
       }
     }
+
+    print('   ❌ No pagada');
     return false;
   }
 
