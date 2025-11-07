@@ -17,14 +17,19 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailOrPhoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  bool _rememberMe = false;
+  final bool _rememberMe = false;
   String? _lastShownError;
   String? _savedIdentifier;
+
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   // Devuelve el widget destino (dashboard) según los roles del usuario.
   // Asume que el primer rol relevante determina la pantalla.
@@ -45,6 +50,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
+    _fadeController.dispose();
+    _slideController.dispose();
     _emailOrPhoneController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -53,6 +60,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Inicializar animaciones
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    // Iniciar animaciones
+    _fadeController.forward();
+    _slideController.forward();
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final storage = StorageService();
       final saved = await storage.getSavedIdentifier();
@@ -69,6 +103,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Capturar referencias antes del async gap
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     // Escuchar cambios en AuthState para actualizar errores y el estado de savedIdentifier
     ref.listen<AuthState>(authProvider, (previous, next) async {
       // Si el usuario se autenticó, navegar al dashboard correspondiente según su rol
@@ -79,7 +117,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         final roles = next.usuario!.roles;
         final destination = _getDestinationForRoles(roles);
         // Reemplazar la pila para evitar volver al login
-        Navigator.of(context).pushAndRemoveUntil(
+        navigator.pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => destination),
           (route) => false,
         );
@@ -105,7 +143,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (next.error != null && next.error != _lastShownError && mounted) {
         _lastShownError = next.error;
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
               next.error!,
@@ -117,7 +155,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               label: 'Cerrar',
               textColor: Colors.white,
               onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                scaffoldMessenger.hideCurrentSnackBar();
                 ref.read(authProvider.notifier).clearError();
                 _lastShownError = null;
               },
@@ -136,237 +174,323 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     });
 
+    final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    // ignore: unused_local_variable
-    final borderColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
 
     return Scaffold(
       body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [
+                    colorScheme.surface,
+                    colorScheme.surface.withValues(alpha: 0.95),
+                  ]
+                : [
+                    colorScheme.primary.withValues(alpha: 0.05),
+                    colorScheme.surface,
+                  ],
+          ),
+        ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
-              child: Card(
-                elevation: 0,
-                margin: const EdgeInsets.symmetric(horizontal: 0),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 24.0,
-                    horizontal: 16.0,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      /*Text(
-                        'facebook',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: const Color(0xFF1877F2),
-                          fontSize: 44,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -1,
-                        ),
-                      ),*/
-                      TextButton(
-                        onPressed: () async {
-                          final storage = StorageService();
-                          await storage.clearSavedIdentifier();
-                          if (mounted) {
-                            setState(() {
-                              _savedIdentifier = null;
-                              _emailOrPhoneController.clear();
-                            });
-                          }
-                        },
-                        child: const Text(
-                          'CeF Pro',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: const Color(0xFF1877F2),
-                            fontSize: 44,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -1,
-                          ),
-                        ),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: Card(
+                      elevation: isDark ? 2 : 1,
+                      shadowColor: colorScheme.primary.withValues(alpha: 0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
                       ),
-                      const SizedBox(height: 12),
-
-                      /*Text(
-                        'Iniciar sesión Facebook',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? onSurface.withValues(alpha: 0.9)
-                              : const Color(0xFF1C1E21),
-                        ),
-                      ),
-                      const SizedBox(height: 16),*/
-
-                      Form(
-                        key: _formKey,
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (_savedIdentifier == null) ...[
-                              TextFormField(
-                                controller: _emailOrPhoneController,
-                                decoration: const InputDecoration(
-                                  hintText: 'Email or phone number',
-                                  border: OutlineInputBorder(),
-                                ),
-                                keyboardType: TextInputType.emailAddress,
-                                validator: (value) {
-                                  if (_savedIdentifier != null) return null;
-                                  if (value == null || value.isEmpty) {
-                                    return 'Por favor ingresa tu email o teléfono';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-
-                            /*if (_savedIdentifier != null) ...[
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                            // Logo animado
+                            Hero(
+                              tag: 'app_logo',
+                              child: Container(
+                                width: 80,
+                                height: 80,
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: borderColor),
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: isDark ? const Color(0xFF1E1E1E) : Colors.grey.shade50,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      colorScheme.primary,
+                                      colorScheme.secondary,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colorScheme.primary.withValues(alpha: 0.3),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
                                 ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.person, color: isDark ? Colors.grey.shade400 : Colors.grey),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                child: Icon(
+                                  Icons.account_balance_wallet_rounded,
+                                  size: 40,
+                                  color: colorScheme.onPrimary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Título
+                            Text(
+                              'CeF Pro',
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.primary,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Bienvenido de nuevo',
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+
+                            Form(
+                              key: _formKey,
+                              child: Column(
+                                children: [
+                                  if (_savedIdentifier == null) ...[
+                                    _buildTextField(
+                                      controller: _emailOrPhoneController,
+                                      label: 'Email o teléfono',
+                                      icon: Icons.person_outline_rounded,
+                                      keyboardType: TextInputType.emailAddress,
+                                      validator: (value) {
+                                        if (_savedIdentifier != null) return null;
+                                        if (value == null || value.isEmpty) {
+                                          return 'Por favor ingresa tu email o teléfono';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 16),
+                                  ] else ...[
+                                    // Usuario guardado
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.secondaryContainer,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Row(
                                         children: [
-                                          Text(
-                                            'Continuar como:',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                          CircleAvatar(
+                                            backgroundColor: colorScheme.secondary,
+                                            child: Icon(
+                                              Icons.person,
+                                              color: colorScheme.onSecondary,
                                             ),
                                           ),
-                                          Text(
-                                            _savedIdentifier ?? 'Usuario',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: onSurface,
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Continuar como',
+                                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                    color: colorScheme.onSecondaryContainer.withValues(alpha: 0.7),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  _savedIdentifier!,
+                                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                    color: colorScheme.onSecondaryContainer,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined),
+                                            onPressed: () async {
+                                              final storage = StorageService();
+                                              await storage.clearSavedIdentifier();
+                                              if (mounted) {
+                                                setState(() {
+                                                  _savedIdentifier = null;
+                                                  _emailOrPhoneController.clear();
+                                                });
+                                              }
+                                            },
                                           ),
                                         ],
                                       ),
                                     ),
-                                    TextButton(
-                                      onPressed: () async {
-                                        final storage = StorageService();
-                                        await storage.clearSavedIdentifier();
-                                        if (mounted) {
-                                          setState(() {
-                                            _savedIdentifier = null;
-                                            _emailOrPhoneController.clear();
-                                          });
-                                        }
-                                      },
-                                      child: const Text('Cambiar'),
-                                    ),
+                                    const SizedBox(height: 16),
                                   ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                            ],*/
-                            TextFormField(
-                              controller: _passwordController,
-                              decoration: InputDecoration(
-                                hintText: 'Password',
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                ),
-                                border: const OutlineInputBorder(),
-                              ),
-                              obscureText: _obscurePassword,
-                              autofocus: _savedIdentifier != null,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Por favor ingresa tu contraseña';
-                                }
-                                if (value.length < 6) {
-                                  return 'La contraseña debe tener al menos 6 caracteres';
-                                }
-                                return null;
-                              },
-                              onFieldSubmitted: (_) => _handleLogin(),
-                            ),
-                            const SizedBox(height: 32),
 
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: Consumer(
-                                builder: (context, ref, child) {
-                                  final authState = ref.watch(authProvider);
-                                  return ElevatedButton(
-                                    onPressed: authState.isLoading
-                                        ? null
-                                        : _handleLogin,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF1877F2),
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(6),
+                                  _buildTextField(
+                                    controller: _passwordController,
+                                    label: 'Contraseña',
+                                    icon: Icons.lock_outline_rounded,
+                                    obscureText: _obscurePassword,
+                                    autofocus: _savedIdentifier != null,
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _obscurePassword
+                                            ? Icons.visibility_outlined
+                                            : Icons.visibility_off_outlined,
                                       ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _obscurePassword = !_obscurePassword;
+                                        });
+                                      },
                                     ),
-                                    child: authState.isLoading
-                                        ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                    Colors.white,
-                                                  ),
+                                    validator: (value) {
+                                      if (value == null || value.isEmpty) {
+                                        return 'Por favor ingresa tu contraseña';
+                                      }
+                                      if (value.length < 6) {
+                                        return 'La contraseña debe tener al menos 6 caracteres';
+                                      }
+                                      return null;
+                                    },
+                                    onFieldSubmitted: (_) => _handleLogin(),
+                                  ),
+                                  const SizedBox(height: 32),
+
+                                  // Botón de login
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 56,
+                                    child: Consumer(
+                                      builder: (context, ref, child) {
+                                        final authState = ref.watch(authProvider);
+                                        return FilledButton(
+                                          onPressed: authState.isLoading ? null : _handleLogin,
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: colorScheme.primary,
+                                            foregroundColor: colorScheme.onPrimary,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(16),
                                             ),
-                                          )
-                                        : Text(
-                                            _savedIdentifier != null
-                                                ? 'Continuar'
-                                                : 'Iniciar sesión',
-                                            style: const TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                            elevation: 2,
                                           ),
-                                  );
-                                },
+                                          child: authState.isLoading
+                                              ? SizedBox(
+                                                  width: 24,
+                                                  height: 24,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2.5,
+                                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                                      colorScheme.onPrimary,
+                                                    ),
+                                                  ),
+                                                )
+                                              : Text(
+                                                  _savedIdentifier != null ? 'Continuar' : 'Iniciar sesión',
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w600,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    bool autofocus = false,
+    Widget? suffixIcon,
+    String? Function(String?)? validator,
+    void Function(String)? onFieldSubmitted,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      autofocus: autofocus,
+      onFieldSubmitted: onFieldSubmitted,
+      validator: validator,
+      style: TextStyle(
+        fontSize: 16,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 2,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.error,
+            width: 1,
+          ),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.error,
+            width: 2,
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
         ),
       ),
     );
