@@ -28,7 +28,11 @@
       "Bash(xcodebuild:*)",
       "Bash(plutil:*)",
       "Bash(flutter doctor:*)",
-      "Bash(killall:*)"
+      "Bash(killall:*)",
+      "Bash(cp:*)",
+      "Bash(security find-identity:*)",
+      "Bash(cat:*)",
+      "Bash(pod install)"
     ],
     "deny": [],
     "ask": []
