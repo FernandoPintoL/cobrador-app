@@ -9,9 +9,11 @@ import GoogleMaps
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     // Configurar Google Maps para iOS
-    // API Key desde .env: GOOGLE_MAPS_API_KEY_IOS
+    // La API Key se carga desde Info.plist
     // IMPORTANTE: Esta API key debe tener Maps SDK for iOS habilitado
-    GMSServices.provideAPIKey("AIzaSyDu3Gw25vNkS9VFu-ZItz5TrU8qvVn446s")
+    if let apiKey = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_MAPS_API_KEY") as? String {
+      GMSServices.provideAPIKey(apiKey)
+    }
 
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

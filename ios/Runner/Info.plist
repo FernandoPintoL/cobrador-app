@@ -36,6 +36,8 @@
 	<string>Esta aplicación necesita acceso a tu ubicación para mostrar tu posición en el mapa y los clientes cercanos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Necesitamos acceso a tus fotos para que puedas seleccionar una imagen de perfil.</string>
+	<key>GOOGLE_MAPS_API_KEY</key>
+	<string>$(GOOGLE_MAPS_API_KEY_IOS)</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
