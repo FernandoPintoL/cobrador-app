@@ -1,0 +1,43 @@
+name: iOS Build (Flutter)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      # 1. Checkout del repositorio
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Instalar Flutter
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+
+      # 3. Obtener dependencias
+      - name: Flutter Pub Get
+        run: flutter pub get
+
+      # 4. Compilar iOS sin firma
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      # 5. Instalar CocoaPods
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      # 6. Guardar artefactos (build)
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: build/ios/
