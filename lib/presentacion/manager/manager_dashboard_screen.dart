@@ -21,6 +21,7 @@ import '../widgets/profile_image_widget.dart';
 import '../widgets/modern_stat_card.dart';
 import '../widgets/modern_action_card.dart';
 import '../widgets/section_header.dart';
+import '../widgets/cash_balance_notification_badge.dart';
 
 class ManagerDashboardScreen extends ConsumerStatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -110,6 +111,14 @@ class _ManagerDashboardScreenState
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // Badge de notificaciones de cajas
+          GestureDetector(
+            onTap: () {
+              Navigator.pushNamed(context, '/cash-balance-notifications');
+            },
+            child: const CashBalanceNotificationBadge(),
+          ),
+
           // Botón de notificaciones WebSocket
           Consumer(
             builder: (context, ref, child) {

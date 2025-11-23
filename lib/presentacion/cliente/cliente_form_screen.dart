@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../negocio/domain_services/allowed_apps_helper.dart';
 import '../../ui/utilidades/image_utils.dart';
 import '../../ui/utilidades/phone_utils.dart';
 import '../../datos/modelos/usuario.dart';
@@ -15,6 +14,7 @@ import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../config/role_colors.dart';
 import 'location_picker_screen.dart';
+import '../widgets/camera/in_app_camera_screen.dart';
 
 class ClienteFormScreen extends ConsumerStatefulWidget {
   final Usuario? cliente; // null para crear, con datos para editar
@@ -1532,11 +1532,47 @@ class _ManagerClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
       final source = await _selectImageSource();
       if (source == null) return;
 
-      final XFile? picked = await AllowedAppsHelper.openCameraSecurely(
-        source: source,
-        imageQuality: 100,
-      );
-      if (picked == null) return;
+      File? file;
+
+      // Usar cámara in-app en lugar de la del sistema
+      if (source == ImageSource.camera) {
+        // Determinar el título y texto de ayuda según el tipo de foto
+        String title;
+        String? helpText;
+
+        if (type == 'id_front') {
+          title = 'Foto CI Anverso';
+          helpText = 'Asegúrate de que la foto sea clara y legible';
+        } else if (type == 'id_back') {
+          title = 'Foto CI Reverso';
+          helpText = 'Captura el reverso del documento de identidad';
+        } else {
+          title = 'Foto de Perfil';
+          helpText = 'Toma una foto clara del rostro del cliente';
+        }
+
+        // Abrir la cámara in-app
+        if (!mounted) return;
+        file = await Navigator.of(context).push<File>(
+          MaterialPageRoute(
+            builder: (context) => InAppCameraScreen(
+              title: title,
+              helpText: helpText,
+            ),
+          ),
+        );
+      } else {
+        // Para galería, usar el picker normal
+        final XFile? picked = await _picker.pickImage(
+          source: source,
+          imageQuality: 100,
+        );
+        if (picked != null) {
+          file = File(picked.path);
+        }
+      }
+
+      if (file == null) return;
 
       // Activar indicador de carga según el tipo de imagen
       setState(() {
@@ -1549,7 +1585,7 @@ class _ManagerClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
         }
       });
 
-      File file = File(picked.path);
+      // Comprimir imagen
       file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);
 
       setState(() {

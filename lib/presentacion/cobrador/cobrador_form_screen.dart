@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../negocio/domain_services/allowed_apps_helper.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../ui/utilidades/image_utils.dart';
@@ -17,6 +16,7 @@ import '../../negocio/providers/auth_provider.dart';
 import '../cliente/location_picker_screen.dart';
 import '../pantallas/change_password_screen.dart';
 import '../widgets/validation_error_widgets.dart';
+import '../widgets/camera/in_app_camera_screen.dart';
 
 class CobradorFormScreen extends ConsumerStatefulWidget {
   final Usuario? cobrador; // null para crear, con datos para editar
@@ -549,14 +549,14 @@ class _ManagerCobradorFormScreenState
                       Text(
                         _isEditMode
                             ? 'Puedes actualizar las fotos del CI si es necesario'
-                            : 'Anverso y Reverso del CI son obligatorios para crear',
+                            : 'Puedes subir las fotos del CI ahora o después (opcional)',
                         style: TextStyle(color: Colors.grey[700], fontSize: 12),
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
                           _buildImagePicker(
-                            label: 'CI Anverso*',
+                            label: 'CI Anverso',
                             file: _idFront,
                             existingUrl: _idFrontUrl,
                             onTap: () => _pickImage('id_front'),
@@ -564,7 +564,7 @@ class _ManagerCobradorFormScreenState
                           ),
                           const SizedBox(width: 12),
                           _buildImagePicker(
-                            label: 'CI Reverso*',
+                            label: 'CI Reverso',
                             file: _idBack,
                             existingUrl: _idBackUrl,
                             onTap: () => _pickImage('id_back'),
@@ -748,14 +748,6 @@ class _ManagerCobradorFormScreenState
     // Limpiar errores anteriores
     _limpiarErroresCampos();
 
-    // Validar fotos requeridas en creación
-    if (!_isEditMode) {
-      if (_idFront == null || _idBack == null) {
-        _mostrarError('Debes subir las fotos del CI (anverso y reverso)');
-        return;
-      }
-    }
-
     setState(() {
       _isLoading = true;
     });
@@ -844,7 +836,7 @@ class _ManagerCobradorFormScreenState
           }
         }
       } else {
-        // Crear nuevo cobrador con fotos
+        // Crear nuevo cobrador (fotos opcionales)
         final success = await ref
             .read(userManagementProvider.notifier)
             .crearUsuarioConFotos(
@@ -857,8 +849,8 @@ class _ManagerCobradorFormScreenState
               roles: ['cobrador'],
               latitud: _latitud,
               longitud: _longitud,
-              idFront: _idFront!,
-              idBack: _idBack!,
+              idFront: _idFront, // Ahora opcional
+              idBack: _idBack,   // Ahora opcional
               profileImage: _profileImage,
             );
 
@@ -1134,11 +1126,47 @@ class _ManagerCobradorFormScreenState
       final source = await _selectImageSource();
       if (source == null) return;
 
-      final XFile? picked = await AllowedAppsHelper.openCameraSecurely(
-        source: source,
-        imageQuality: 100,
-      );
-      if (picked == null) return;
+      File? file;
+
+      // Usar cámara in-app en lugar de la del sistema
+      if (source == ImageSource.camera) {
+        // Determinar el título y texto de ayuda según el tipo de foto
+        String title;
+        String? helpText;
+
+        if (type == 'id_front') {
+          title = 'Foto CI Anverso';
+          helpText = 'Asegúrate de que la foto sea clara y legible';
+        } else if (type == 'id_back') {
+          title = 'Foto CI Reverso';
+          helpText = 'Captura el reverso del documento de identidad';
+        } else {
+          title = 'Foto de Perfil';
+          helpText = 'Toma una foto clara del rostro del cobrador';
+        }
+
+        // Abrir la cámara in-app
+        if (!mounted) return;
+        file = await Navigator.of(context).push<File>(
+          MaterialPageRoute(
+            builder: (context) => InAppCameraScreen(
+              title: title,
+              helpText: helpText,
+            ),
+          ),
+        );
+      } else {
+        // Para galería, usar el picker normal
+        final XFile? picked = await _picker.pickImage(
+          source: source,
+          imageQuality: 100,
+        );
+        if (picked != null) {
+          file = File(picked.path);
+        }
+      }
+
+      if (file == null) return;
 
       // Activar indicador de carga según el tipo de imagen
       setState(() {
@@ -1151,7 +1179,7 @@ class _ManagerCobradorFormScreenState
         }
       });
 
-      File file = File(picked.path);
+      // Comprimir imagen
       file = await ImageUtils.compressToUnder(file, maxBytes: 1024 * 1024);
 
       setState(() {

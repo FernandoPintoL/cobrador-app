@@ -1,5 +1,6 @@
 import 'package:cobrador_app/presentacion/cliente/cliente_form_screen.dart';
 import 'package:cobrador_app/presentacion/pantallas/notifications_screen.dart';
+import 'package:cobrador_app/presentacion/pantallas/cash_balance_notifications_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -10,7 +11,7 @@ import 'negocio/providers/auth_provider.dart';
 import 'negocio/domain_services/allowed_apps_helper.dart';
 import 'negocio/domain_services/auto_logout_service.dart';
 import 'presentacion/pantallas/splash_screen.dart';
-import 'presentacion/pantallas/login_screen.dart';
+import 'presentacion/pantallas/login_screen_cef.dart';
 import 'presentacion/superadmin/admin_dashboard_screen.dart';
 import 'presentacion/manager/manager_dashboard_screen.dart';
 import 'presentacion/cobrador/cobrador_dashboard_screen.dart';
@@ -203,10 +204,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       darkTheme: _buildDarkTheme(),
       themeMode: ThemeMode.system, // Respeta la configuración del sistema
       locale: const Locale('es', 'ES'),
-      supportedLocales: const [
-        Locale('es', 'ES'),
-        Locale('en', 'US'),
-      ],
+      supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -221,6 +219,8 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         '/login': (context) => const LoginScreen(),
         '/crear-cliente': (context) => const ClienteFormScreen(),
         '/notifications': (context) => const NotificationsScreen(),
+        '/cash-balance-notifications': (context) =>
+            const CashBalanceNotificationsScreen(),
       },
     );
   }

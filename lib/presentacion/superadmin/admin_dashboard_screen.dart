@@ -7,6 +7,7 @@ import 'cobrador_assignment_screen.dart';
 import '../widgets/user_stats_widget.dart';
 import '../pantallas/profile_settings_screen.dart';
 import '../widgets/logout_dialog.dart';
+import '../widgets/cash_balance_notification_badge.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -23,6 +24,14 @@ class AdminDashboardScreen extends ConsumerWidget {
         foregroundColor: Colors.white,
         elevation: 4,
         actions: [
+          // Badge de notificaciones de cajas
+          GestureDetector(
+            onTap: () {
+              Navigator.pushNamed(context, '/cash-balance-notifications');
+            },
+            child: const CashBalanceNotificationBadge(),
+          ),
+
           IconButton(
             icon: const Icon(Icons.person),
             tooltip: 'Editar perfil',

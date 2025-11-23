@@ -15,42 +15,11 @@ class PaymentScheduleCalendar extends StatelessWidget {
     this.onTapInstallment,
   });
 
+  /// Determina si una cuota está completamente pagada.
+  /// Ahora simplificado: confía en el backend que ya calcula el estado real.
   bool _isInstallmentPaid(PaymentSchedule installment) {
-    // Debug: Imprimir info de la cuota
-    print('🔍 Evaluando cuota #${installment.installmentNumber}:');
-    print('   - Status del schedule: ${installment.status}');
-    print('   - isPaid del schedule: ${installment.isPaid}');
-
-    if (installment.isPaid) {
-      print('   ✅ Marcada como pagada por schedule.isPaid');
-      return true;
-    }
-
-    final paidCount = credit.paidInstallments;
-    print('   - paidInstallments del crédito: $paidCount');
-
-    if (paidCount >= installment.installmentNumber) {
-      print('   ✅ Marcada como pagada por paidCount ($paidCount >= ${installment.installmentNumber})');
-      return true;
-    }
-
-    final pagos = credit.payments;
-    print('   - Pagos en crédito: ${pagos?.length ?? 0}');
-
-    if (pagos != null && pagos.isNotEmpty) {
-      for (final p in pagos) {
-        print('   - Pago con installment_number=${p.installmentNumber}: fecha=${p.paymentDate}, status=${p.status}');
-        // Verificar si el installmentNumber del pago coincide con el de esta cuota
-        if (p.installmentNumber == installment.installmentNumber &&
-            (p.status == 'completed' || p.status == 'paid')) {
-          print('   ✅ Marcada como pagada por installment_number coincidente (${p.installmentNumber})');
-          return true;
-        }
-      }
-    }
-
-    print('   ❌ No pagada');
-    return false;
+    // El backend ya calcula el estado correcto basándose en payments reales
+    return installment.isPaid || installment.status == 'paid';
   }
 
   int? _currentInstallmentNumber() {
@@ -88,6 +57,7 @@ class PaymentScheduleCalendar extends StatelessWidget {
           alignment: WrapAlignment.center,
           children: [
             _legendItem(Colors.green, 'Pagado'),
+            _legendItem(Colors.yellow.shade700, 'Parcial'),
             _legendItem(Colors.grey.shade300, 'Pendiente'),
             _legendItem(Colors.lightBlueAccent, 'Actual'),
             _legendItem(Colors.red, 'Vencido'),
@@ -117,49 +87,95 @@ class PaymentScheduleCalendar extends StatelessWidget {
                 currentNumber != null &&
                 installment.installmentNumber == currentNumber;
             final isOverdueLocal = !consideredPaid && (due.isBefore(refDate));
+
+            // Determinar color basándose en el status del backend
             Color backgroundColor;
             Color textColor = Colors.white;
-            if (consideredPaid) {
+
+            if (consideredPaid || installment.status == 'paid') {
               backgroundColor = Colors.green;
+            } else if (installment.isPartial || installment.status == 'partial') {
+              // Pago parcial: amarillo/naranja
+              backgroundColor = Colors.yellow.shade700;
+              textColor = Colors.black;
             } else if (isCurrent) {
               backgroundColor = Colors.lightBlueAccent;
               textColor = Colors.black;
-            } else if (isOverdueLocal) {
+            } else if (isOverdueLocal || installment.status == 'overdue') {
               backgroundColor = Colors.red;
             } else {
+              // Pendiente
               backgroundColor = Colors.grey.shade300;
               textColor = Colors.black87;
             }
+            // Calcular monto restante (por si el backend no lo envía)
+            final double remaining = installment.remainingAmount > 0
+                ? installment.remainingAmount
+                : (installment.amount - installment.paidAmount).clamp(0.0, installment.amount);
+
+            // Verificar si la cuota puede ser pagada
+            final bool canPay = installment.status != 'paid' &&
+                                !installment.isPaidFull &&
+                                remaining > 0;
+
             return GestureDetector(
               onTap: () => onTapInstallment?.call(installment),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade400),
-                ),
-                padding: const EdgeInsets.all(2),
-                alignment: Alignment.center,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${installment.installmentNumber}',
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+              child: Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    padding: const EdgeInsets.all(2),
+                    alignment: Alignment.center,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${installment.installmentNumber}',
+                            style: TextStyle(
+                              color: textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            DateFormat('dd/MM').format(installment.dueDate),
+                            style: TextStyle(color: textColor, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Indicador de pago disponible
+                  if (canPay)
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.payment,
+                          size: 10,
+                          color: Colors.green.shade700,
                         ),
                       ),
-                      Text(
-                        DateFormat('dd/MM').format(installment.dueDate),
-                        style: TextStyle(color: textColor, fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                ],
               ),
             );
           },

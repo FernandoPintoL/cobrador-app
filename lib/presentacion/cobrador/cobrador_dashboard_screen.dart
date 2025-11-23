@@ -15,6 +15,7 @@ import '../widgets/logout_dialog.dart';
 import '../widgets/modern_stat_card.dart';
 import '../widgets/modern_action_card.dart';
 import '../widgets/section_header.dart';
+import '../widgets/cash_balance_notification_badge.dart';
 import '../cliente/clientes_screen.dart'; // Pantalla genérica reutilizable
 import '../creditos/credit_type_screen.dart';
 import '../reports/reports_screen.dart';
@@ -250,7 +251,15 @@ class _CobradorDashboardScreenState
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // Botón de notificaciones
+          // Badge de notificaciones de cajas
+          GestureDetector(
+            onTap: () {
+              Navigator.pushNamed(context, '/cash-balance-notifications');
+            },
+            child: const CashBalanceNotificationBadge(),
+          ),
+
+          // Botón de notificaciones generales
           Consumer(
             builder: (context, ref, child) {
               final wsState = ref.watch(webSocketProvider);

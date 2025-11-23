@@ -3,6 +3,7 @@ import '../../datos/api_services/payment_api_service.dart';
 import '../../datos/api_services/credit_api_service.dart';
 import '../../datos/api_services/cash_balance_api_service.dart';
 import '../../datos/modelos/credito.dart';
+import '../../datos/modelos/api_exception.dart';
 import 'auth_provider.dart';
 import 'websocket_provider.dart';
 
@@ -75,12 +76,10 @@ class PagoNotifier extends StateNotifier<PagoState> {
 
       // Intentar obtener client_id si es posible (ayuda a algunos endpoints)
       int? clientId;
-      Credito? creditoDetalles;
       try {
         final detailsResp = await _creditApiService.getCreditDetails(creditId);
         if (detailsResp['success'] == true) {
           final credito = Credito.fromJson(detailsResp['data']);
-          creditoDetalles = credito;
           clientId = credito.clientId;
         }
       } catch (e) {
@@ -104,40 +103,17 @@ class PagoNotifier extends StateNotifier<PagoState> {
       // Fecha en formato YYYY-MM-DD
       final String paymentDate = DateTime.now().toIso8601String().split('T')[0];
 
-      // Calcular installment_number (número de la última cuota cubierta por este pago)
-      int installmentNumber = 1;
-      try {
-        if (creditoDetalles != null) {
-          final totalInstallments = creditoDetalles.totalInstallments;
-          final paidInstallments = creditoDetalles.paidInstallments;
-          final perInstallment =
-              (creditoDetalles.installmentAmount ??
-              ((creditoDetalles.totalAmount ?? creditoDetalles.amount) /
-                  (totalInstallments == 0 ? 1 : totalInstallments)));
-          int installmentsCovered = 0;
-          if (perInstallment > 0) {
-            installmentsCovered = (amount / perInstallment).floor();
-          }
-          // Siempre al menos la próxima cuota (para pagos parciales)
-          final last =
-              paidInstallments +
-              (installmentsCovered > 0 ? installmentsCovered : 1);
-          installmentNumber = last > totalInstallments
-              ? totalInstallments
-              : (last <= 0 ? 1 : last);
-        }
-      } catch (e) {
-        // ignore: avoid_print
-        print('⚠️ No se pudo calcular installment_number: $e');
-        installmentNumber = 1;
-      }
+      // NOTA: Ya NO enviamos installment_number al backend
+      // El backend automáticamente encuentra la primera cuota incompleta y distribuye
+      // el pago secuencialmente, completando cuotas parciales antes de avanzar.
+      // Esto evita el problema de saltar cuotas incompletas.
 
       final paymentData = <String, dynamic>{
         'credit_id': creditId,
         'amount': amount,
         'payment_method': method,
         'payment_date': paymentDate,
-        'installment_number': installmentNumber,
+        // 'installment_number': NO SE ENVÍA - el backend lo calcula automáticamente
       };
 
       // Agregar datos opcionales
@@ -166,10 +142,19 @@ class PagoNotifier extends StateNotifier<PagoState> {
               date: paymentDate,
             );
             print('🔓 openCashBalance response: $openResp');
+
             if (openResp['success'] == false) {
               final msg = openResp['message'] ?? 'No se pudo abrir la caja';
               state = state.copyWith(isLoading: false, errorMessage: msg);
               return {'success': false, 'message': msg};
+            }
+
+            // Verificar si la caja abierta tiene cajas pendientes (advertencia)
+            final data = openResp['data'];
+            if (data != null && data['has_pending_previous_boxes'] == true) {
+              final pendingBoxes = data['pending_boxes_info'];
+              print('⚠️ Caja abierta con cajas pendientes: $pendingBoxes');
+              // Nota: Continuamos con el pago pero podrías mostrar una advertencia en la UI
             }
           } catch (e) {
             print('❌ Error abriendo caja: $e');
@@ -264,20 +249,23 @@ class PagoNotifier extends StateNotifier<PagoState> {
         state = state.copyWith(isLoading: false, errorMessage: errorMessage);
         return response;
       }
+    } on ApiException catch (e) {
+      // ignore: avoid_print
+      print('❌ Error procesando pago (ApiException): ${e.message}');
+
+      // El mensaje ya viene procesado desde BaseApiService, solo lo usamos
+      state = state.copyWith(isLoading: false, errorMessage: e.message);
+
+      return null;
     } catch (e) {
       // ignore: avoid_print
       print('❌ Error procesando pago: $e');
 
-      String errorMessage = 'Error al procesar el pago';
-      if (e.toString().contains('422')) {
-        errorMessage = 'Datos del pago inválidos';
-      } else if (e.toString().contains('404')) {
-        errorMessage = 'Crédito no encontrado';
-      } else if (e.toString().contains('403')) {
-        errorMessage = 'No tienes permisos para procesar este pago';
-      }
-
-      state = state.copyWith(isLoading: false, errorMessage: errorMessage);
+      // Error inesperado no relacionado con el API
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Error inesperado al procesar el pago',
+      );
 
       return null;
     }

@@ -2,24 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../datos/modelos/api_exception.dart';
 import '../../datos/modelos/credito.dart';
-import '../../datos/modelos/cash_balance_status.dart';
 import '../../negocio/providers/credit_provider.dart';
-import '../../negocio/providers/auth_provider.dart';
-import '../../datos/api_services/cash_balance_api_service.dart';
-import '../cajas/cash_balances_list_screen.dart';
+import '../../negocio/providers/pago_provider.dart';
+import 'error_handler.dart';
 
 class PaymentDialog extends ConsumerStatefulWidget {
   final Credito credit;
   final Map<String, dynamic>? creditSummary;
   final VoidCallback? onPaymentSuccess;
+  final PaymentSchedule? specificInstallment;
 
   const PaymentDialog({
     super.key,
     required this.credit,
     this.creditSummary,
     this.onPaymentSuccess,
+    this.specificInstallment,
   });
 
   @override
@@ -32,6 +31,7 @@ class PaymentDialog extends ConsumerStatefulWidget {
     Credito credit, {
     Map<String, dynamic>? creditSummary,
     VoidCallback? onPaymentSuccess,
+    PaymentSchedule? specificInstallment,
   }) async {
     return showDialog<Map<String, dynamic>>(
       context: context,
@@ -40,6 +40,7 @@ class PaymentDialog extends ConsumerStatefulWidget {
         credit: credit,
         creditSummary: creditSummary,
         onPaymentSuccess: onPaymentSuccess,
+        specificInstallment: specificInstallment,
       ),
     );
   }
@@ -51,6 +52,7 @@ class PaymentForm extends ConsumerStatefulWidget {
   final VoidCallback? onPaymentSuccess;
   final VoidCallback? onCancel;
   final void Function(Map<String, dynamic> result)? onFinished;
+  final PaymentSchedule? specificInstallment;
 
   const PaymentForm({
     super.key,
@@ -59,6 +61,7 @@ class PaymentForm extends ConsumerStatefulWidget {
     this.onPaymentSuccess,
     this.onCancel,
     this.onFinished,
+    this.specificInstallment,
   });
 
   @override
@@ -70,9 +73,6 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
   late TextEditingController notesController;
   bool isProcessing = false;
   String selectedPaymentType = 'cash';
-  bool isCobrador = false;
-  bool isCajaOpenChecking = false;
-  CashBalanceStatus? cashBalanceStatus;
 
   @override
   void initState() {
@@ -80,10 +80,6 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
     amountController = TextEditingController();
     notesController = TextEditingController();
     _calculateSuggestedAmount();
-    // Verificar rol de usuario y estado de caja al iniciar
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkIfCobrador();
-    });
   }
 
   @override
@@ -96,7 +92,14 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
   void _calculateSuggestedAmount() {
     double suggestedAmount = 0.0;
 
-    if (widget.creditSummary != null) {
+    // Si se especifica una cuota particular, usar su monto restante
+    if (widget.specificInstallment != null) {
+      final installment = widget.specificInstallment!;
+      // Calcular remaining si no viene del backend
+      suggestedAmount = installment.remainingAmount > 0
+          ? installment.remainingAmount
+          : (installment.amount - installment.paidAmount).clamp(0.0, installment.amount);
+    } else if (widget.creditSummary != null) {
       final installmentValue = widget.creditSummary!['installment_amount'];
       if (installmentValue != null) {
         if (installmentValue is num) {
@@ -146,25 +149,6 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
   }
 
   Future<void> _processPayment(StateSetter setDialogState) async {
-    // 🔒 Validación de seguridad: Verificar estado de caja ANTES de procesar
-    if (isCobrador) {
-      if (cashBalanceStatus == null) {
-        _showSnackBar(
-          'No se pudo verificar el estado de caja. Intenta reabrir el diálogo de pago.',
-          isError: true,
-        );
-        return;
-      }
-
-      if (!cashBalanceStatus!.isOpen) {
-        final message = cashBalanceStatus!.hasPendingClosures
-            ? 'No puedes procesar pagos. Debes cerrar las cajas pendientes de días anteriores.'
-            : 'No puedes procesar pagos. Debes abrir la caja de hoy primero.';
-        _showSnackBar(message, isError: true);
-        return;
-      }
-    }
-
     // Validación de monto
     final amount = double.tryParse(amountController.text);
     if (amount == null || amount <= 0) {
@@ -222,6 +206,15 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
             longitude: currentPosition?.longitude,
           );
       debugPrint('💰 Resultado del pagos: $result');
+
+      // Si result es null, obtener el error del estado del provider
+      if (result == null) {
+        final pagoState = ref.read(pagoProvider);
+        final errorMessage = pagoState.errorMessage ?? 'Error al procesar pago';
+        widget.onFinished?.call({'success': false, 'message': errorMessage});
+        return;
+      }
+
       // Normalizar: `result` normalmente es Map<String, dynamic>
       Map<String, dynamic>? mapResult;
       if (result is Map<String, dynamic>) {
@@ -247,7 +240,7 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
         return;
       } else {
         final errorMessage =
-            message ?? result?['message'] ?? 'Error al procesar pago';
+            message ?? result['message'] ?? 'Error al procesar pago';
         // Delegar la notificación de error a la pantalla padre
         widget.onFinished?.call({'success': false, 'message': errorMessage});
       }
@@ -263,455 +256,14 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
     }
   }
 
-  Future<void> _checkIfCobrador() async {
-    try {
-      final authState = ref.read(authProvider);
-      final usuario = authState.usuario;
-      final esC = usuario?.esCobrador() ?? false;
-      setState(() {
-        isCobrador = esC;
-      });
-      if (!esC) return;
-
-      // Verificar estado de la caja usando el nuevo endpoint
-      setState(() => isCajaOpenChecking = true);
-      try {
-        final cobradorId = usuario!.id.toInt();
-        debugPrint('🔍 Verificando estado de caja para cobrador=$cobradorId');
-
-        final cashApi = CashBalanceApiService();
-        final response = await cashApi.getCurrentStatus(cobradorId: cobradorId);
-
-        if (response['success'] == true) {
-          final data = response['data'];
-          final status = CashBalanceStatus.fromJson(data as Map<String, dynamic>);
-          debugPrint('✅ Estado de caja obtenido: $status');
-
-          setState(() {
-            cashBalanceStatus = status;
-          });
-
-          // Mostrar diálogo según el estado
-          if (mounted) {
-            _handleCashBalanceStatus(status);
-          }
-        } else {
-          debugPrint('❌ Error al obtener estado de caja');
-          setState(() {
-            cashBalanceStatus = null;
-          });
-        }
-      } catch (e) {
-        debugPrint('❌ Error al verificar estado de caja: $e');
-        setState(() {
-          cashBalanceStatus = null;
-        });
-      } finally {
-        setState(() => isCajaOpenChecking = false);
-      }
-    } catch (e) {
-      debugPrint('❌ Error en _checkIfCobrador: $e');
-    }
-  }
-
-  /// Maneja el estado de la caja y muestra diálogos según sea necesario
-  void _handleCashBalanceStatus(CashBalanceStatus status) {
-    // Caso 1: Todo OK - caja abierta sin pendientes
-    if (status.isOpen && !status.hasPendingClosures) {
-      // Todo bien, no hacer nada
-      return;
-    }
-
-    // Caso 2: Caja NO abierta, CON cajas pendientes
-    if (!status.isOpen && status.hasPendingClosures) {
-      _showCashBalanceErrorDialog(
-        title: 'Cajas Pendientes de Cerrar',
-        message:
-            'Tienes ${status.pendingClosures.length} caja(s) pendiente(s) de cerrar:\n\n'
-            '${status.pendingClosures.map((c) => '• ${DateFormat('dd/MM/yyyy').format(DateTime.parse(c.date))}').join('\n')}\n\n'
-            'Debes cerrar estas cajas antes de poder procesar pagos.',
-        icon: Icons.warning_amber_rounded,
-        iconColor: Colors.orange,
-      );
-      return;
-    }
-
-    // Caso 3: Caja NO abierta, sin pendientes
-    if (!status.isOpen && !status.hasPendingClosures) {
-      _showCashBalanceErrorDialog(
-        title: 'Caja No Abierta',
-        message:
-            'No has abierto la caja de hoy (${DateFormat('dd/MM/yyyy').format(DateTime.parse(status.date))}).\n\n'
-            'Debes abrir la caja antes de poder procesar pagos.',
-        icon: Icons.info_outline,
-        iconColor: Colors.blue,
-      );
-      return;
-    }
-
-    // Caso 4: Caja abierta, PERO hay cajas pendientes
-    if (status.isOpen && status.hasPendingClosures) {
-      _showCashBalanceWarningDialog(
-        title: 'Advertencia: Cajas Pendientes',
-        message:
-            'Tu caja de hoy está abierta, pero tienes ${status.pendingClosures.length} caja(s) pendiente(s) de cerrar:\n\n'
-            '${status.pendingClosures.map((c) => '• ${DateFormat('dd/MM/yyyy').format(DateTime.parse(c.date))}').join('\n')}\n\n'
-            'Puedes procesar el pago, pero recuerda cerrar estas cajas pronto.',
-      );
-      return;
-    }
-  }
-
-  /// Muestra un diálogo de error con opción de ir a la pantalla de cajas
-  Future<void> _showCashBalanceErrorDialog({
-    required String title,
-    required String message,
-    required IconData icon,
-    required Color iconColor,
-  }) async {
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(icon, color: iconColor, size: 28),
-            const SizedBox(width: 12),
-            Expanded(child: Text(title)),
-          ],
-        ),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Cerrar diálogo de error
-              Navigator.pop(context); // Cerrar diálogo de pago
-            },
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context); // Cerrar diálogo de error
-              Navigator.pop(context); // Cerrar diálogo de pago
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CashBalancesListScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.account_balance_wallet),
-            label: const Text('Ir a Cajas'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: iconColor,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Muestra un diálogo de advertencia
-  Future<void> _showCashBalanceWarningDialog({
-    required String title,
-    required String message,
-  }) async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            const SizedBox(width: 12),
-            Expanded(child: Text(title)),
-          ],
-        ),
-        content: Text(message),
-        actions: [
-          TextButton.icon(
-            onPressed: () {
-              Navigator.pop(context); // Cerrar diálogo de advertencia
-              Navigator.pop(context); // Cerrar diálogo de pago
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CashBalancesListScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.account_balance_wallet),
-            label: const Text('Ir a Cajas'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context), // Solo cerrar advertencia
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Entendido'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openCajaManual() {
-    // En lugar de intentar abrir la caja, redirigimos al usuario a la pantalla de cajas
-    // para que pueda gestionar primero el cierre de la caja pendiente
-    Navigator.pop(context); // Cerrar el diálogo de pago
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CashBalancesListScreen()),
-    );
-  }
-
   void _showSnackBar(String message, {required bool isError}) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message, style: const TextStyle(color: Colors.white)),
-          backgroundColor: isError ? Colors.red : Colors.green,
-          action: isError
-              ? null
-              : SnackBarAction(
-                  label: 'OK',
-                  textColor: Colors.white,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  },
-                ),
-        ),
-      );
-    }
-  }
-
-  /// Determina si el botón de pago debe estar deshabilitado
-  /// basándose en el estado de la caja del cobrador
-  bool _shouldDisablePaymentButton() {
-    // Si no es cobrador, no aplicar restricción
-    if (!isCobrador) return false;
-
-    // Bloquear si no se pudo verificar el estado de la caja
-    if (cashBalanceStatus == null) return true;
-
-    // Bloquear si la caja no está abierta
-    if (!cashBalanceStatus!.isOpen) return true;
-
-    // Permitir el pago si la caja está abierta
-    // (incluso si hay cajas pendientes, se permite con advertencia)
-    return false;
-  }
-
-  /// Obtiene el mensaje de error para mostrar cuando el botón está deshabilitado
-  String? _getDisabledButtonMessage() {
-    if (!isCobrador) return null;
-
-    if (cashBalanceStatus == null) {
-      return 'No se pudo verificar el estado de caja';
-    }
-
-    if (!cashBalanceStatus!.isOpen) {
-      if (cashBalanceStatus!.hasPendingClosures) {
-        return 'Debes cerrar las cajas pendientes antes de procesar pagos';
+      if (isError) {
+        ErrorHandler.showError(context, message);
       } else {
-        return 'Debes abrir la caja de hoy antes de procesar pagos';
+        ErrorHandler.showSuccess(context, message);
       }
     }
-
-    return null;
-  }
-
-  /// Determina el color del estado de la caja
-  Color _getCajaStatusColor() {
-    if (cashBalanceStatus == null) return Colors.grey;
-
-    // Caso 1: Todo OK - caja abierta sin pendientes
-    if (cashBalanceStatus!.isOpen && !cashBalanceStatus!.hasPendingClosures) {
-      return Colors.green;
-    }
-
-    // Caso 2 y 3: Problemas que impiden procesar el pago
-    if (!cashBalanceStatus!.isOpen) {
-      return Colors.orange;
-    }
-
-    // Caso 4: Advertencia - caja abierta pero con pendientes
-    if (cashBalanceStatus!.isOpen && cashBalanceStatus!.hasPendingClosures) {
-      return Colors.orange;
-    }
-
-    return Colors.grey;
-  }
-
-  /// Construye el widget de estado de la caja
-  Widget _buildCajaStatusWidget() {
-    if (cashBalanceStatus == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.grey.shade700,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'No se pudo verificar el estado de caja',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _openCajaManual,
-              icon: const Icon(Icons.account_balance_wallet, size: 18),
-              label: const Text('Ir a Cajas'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.grey.shade700,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Caso 1: Todo OK - caja abierta sin pendientes
-    if (cashBalanceStatus!.isOpen && !cashBalanceStatus!.hasPendingClosures) {
-      return Row(
-        children: [
-          Icon(
-            Icons.check_circle,
-            color: Colors.green.shade700,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Caja abierta correctamente',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.green.shade700,
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Caso 2 y 3: Caja no abierta
-    if (!cashBalanceStatus!.isOpen) {
-      final hasPending = cashBalanceStatus!.hasPendingClosures;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.orange.shade700,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  hasPending ? 'Cajas pendientes de cerrar' : 'Caja no abierta',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.orange.shade700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasPending
-                ? 'Debes cerrar ${cashBalanceStatus!.pendingClosures.length} caja(s) pendiente(s) antes de procesar pagos.'
-                : 'Debes abrir la caja antes de procesar pagos.',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.orange.shade900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _openCajaManual,
-              icon: const Icon(Icons.account_balance_wallet, size: 18),
-              label: const Text('Ir a Cajas'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.orange.shade700,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Caso 4: Caja abierta pero con pendientes
-    if (cashBalanceStatus!.isOpen && cashBalanceStatus!.hasPendingClosures) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.check_circle,
-                color: Colors.green.shade700,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Caja abierta',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green.shade700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                Icons.info_outline,
-                color: Colors.orange.shade700,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Tienes ${cashBalanceStatus!.pendingClosures.length} caja(s) pendiente(s) de cerrar',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.orange.shade900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      );
-    }
-
-    return const SizedBox.shrink();
   }
 
   @override
@@ -736,11 +288,24 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Información del Crédito',
+                  widget.specificInstallment != null
+                      ? 'Pago de Cuota #${widget.specificInstallment!.installmentNumber}'
+                      : 'Registro de Pago',
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
+                if (widget.specificInstallment == null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'El sistema aplicará el pago a las cuotas en orden secuencial',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -768,26 +333,78 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Saldo pendiente:'),
-                    Text(
-                      _formatCurrency(widget.credit.balance),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange.shade700,
+                if (widget.specificInstallment != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Monto de cuota:'),
+                      Text(
+                        _formatCurrency(widget.specificInstallment!.amount),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Ya pagado:'),
+                      Text(
+                        _formatCurrency(widget.specificInstallment!.paidAmount),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Falta por pagar:'),
+                      Builder(
+                        builder: (context) {
+                          final installment = widget.specificInstallment!;
+                          final remaining = installment.remainingAmount > 0
+                              ? installment.remainingAmount
+                              : (installment.amount - installment.paidAmount).clamp(0.0, installment.amount);
+                          return Text(
+                            _formatCurrency(remaining),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade700,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Saldo pendiente:'),
+                      Text(
+                        _formatCurrency(widget.credit.balance),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 if (suggestedAmount > 0) ...[
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Cuota sugerida:'),
+                      Text(widget.specificInstallment != null
+                          ? 'Monto sugerido:'
+                          : 'Cuota sugerida:'),
                       Text(
                         _formatCurrency(suggestedAmount),
                         style: TextStyle(
@@ -802,47 +419,6 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
             ),
           ),
           const SizedBox(height: 16),
-          // Si el usuario es cobrador, mostrar estado de caja y opción para abrirla
-          if (isCobrador) ...[
-            Container(
-              decoration: BoxDecoration(
-                color: isCajaOpenChecking
-                    ? Colors.blue.shade50
-                    : (_getCajaStatusColor().withOpacity(0.1)),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isCajaOpenChecking
-                      ? Colors.blue.shade200
-                      : _getCajaStatusColor().withOpacity(0.3),
-                  width: 1,
-                ),
-              ),
-              padding: const EdgeInsets.all(12),
-              child: isCajaOpenChecking
-                  ? Row(
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.blue.shade700,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Verificando estado de caja...',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.blue.shade700,
-                          ),
-                        ),
-                      ],
-                    )
-                  : _buildCajaStatusWidget(),
-            ),
-            const SizedBox(height: 16),
-          ],
           // Monto del pago
           TextFormField(
             controller: amountController,
@@ -912,29 +488,26 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                 child: const Text('Cancelar'),
               ),
               const SizedBox(width: 8),
-              Tooltip(
-                message: _getDisabledButtonMessage() ?? '',
-                child: ElevatedButton(
-                  onPressed: (isProcessing || _shouldDisablePaymentButton())
-                      ? null
-                      : () => _processPayment(setDialogState),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: isProcessing
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        )
-                      : const Text('Procesar Pago'),
+              ElevatedButton(
+                onPressed: isProcessing
+                    ? null
+                    : () => _processPayment(setDialogState),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                 ),
+                child: isProcessing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Text('Procesar Pago'),
               ),
             ],
           ),
@@ -966,6 +539,7 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
         child: PaymentForm(
           credit: widget.credit,
           creditSummary: widget.creditSummary,
+          specificInstallment: widget.specificInstallment,
           onPaymentSuccess: widget.onPaymentSuccess,
           onCancel: () {
             if (Navigator.of(context).canPop()) {

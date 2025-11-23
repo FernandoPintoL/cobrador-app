@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../negocio/providers/pago_provider.dart';
 import '../../datos/modelos/credito.dart';
 import '../../datos/modelos/usuario.dart';
+import '../widgets/error_handler.dart';
 
 class QuickPaymentScreen extends ConsumerStatefulWidget {
   const QuickPaymentScreen({super.key});
@@ -135,9 +137,11 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
         if (_selectedClient != null) {
           _searchCredits(_searchController.text);
         }
-      } else {
-        final errorMsg = ref.read(creditProvider).errorMessage;
-        _showError(errorMsg ?? 'Error al procesar el pago');
+      } else if (mounted) {
+        // Obtener el mensaje de error del estado del provider de pago
+        final pagoState = ref.read(pagoProvider);
+        final errorMsg = pagoState.errorMessage ?? 'Error al procesar el pago';
+        _showError(errorMsg);
       }
     } catch (e) {
       _showError('Error al procesar el pago: $e');
@@ -163,15 +167,15 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+    if (mounted) {
+      ErrorHandler.showError(context, message);
+    }
   }
 
   void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
-    );
+    if (mounted) {
+      ErrorHandler.showSuccess(context, message);
+    }
   }
 
   Future<bool> _showConfirmDialog(String title, String message) async {

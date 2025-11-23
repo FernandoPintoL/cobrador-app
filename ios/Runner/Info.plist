@@ -27,7 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Necesitamos acceso a la cámara para que puedas tomar fotos de perfil.</string>
+	<string>Necesitamos acceso a la cámara para tomar fotos de documentos de identidad y fotos de perfil de clientes.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Esta aplicación necesita acceso a tu ubicación para rastrear tu ruta y optimizar tus visitas a clientes.</string>
 	<key>NSLocationAlwaysUsageDescription</key>

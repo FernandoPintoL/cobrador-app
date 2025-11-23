@@ -6,7 +6,7 @@ import '../credit_card_indicators.dart';
 
 /// Body de la tarjeta de crédito que muestra la información principal
 /// Incluye información específica según el tipo de lista
-class CreditCardBody extends StatelessWidget {
+class CreditCardBody extends StatefulWidget {
   final Credito credit;
   final String listType;
 
@@ -15,6 +15,13 @@ class CreditCardBody extends StatelessWidget {
     required this.credit,
     required this.listType,
   });
+
+  @override
+  State<CreditCardBody> createState() => _CreditCardBodyState();
+}
+
+class _CreditCardBodyState extends State<CreditCardBody> {
+  bool _showDetails = false;
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +63,7 @@ class CreditCardBody extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
+                          'Bs. ${NumberFormat('#,##0.00').format(widget.credit.amount)}',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -67,7 +74,7 @@ class CreditCardBody extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (credit.creator != null) ...[
+                  if (widget.credit.creator != null) ...[
                     const SizedBox(height: 6),
                     Row(
                       children: [
@@ -79,7 +86,7 @@ class CreditCardBody extends StatelessWidget {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            credit.creator!.nombre,
+                            widget.credit.creator!.nombre,
                             style: TextStyle(
                               fontSize: 11,
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -106,77 +113,145 @@ class CreditCardBody extends StatelessWidget {
         // Información específica según el tipo de lista
         _buildListTypeSpecificInfo(context),
 
-        // Datos adicionales del crédito en chips
+        // Información esencial visible siempre (solo 3 chips principales compactos)
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
+        Row(
           children: [
-            CreditInfoChip(
-              label: 'Saldo',
-              value: 'Bs. ${NumberFormat('#,##0.00').format(credit.balance)}',
+            Expanded(
+              child: _CompactInfoChip(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Saldo',
+                value: 'Bs. ${NumberFormat('#,##0').format(widget.credit.balance)}',
+                color: widget.credit.balance > 0
+                    ? Colors.orange.shade50
+                    : Colors.green.shade50,
+                textColor: widget.credit.balance > 0
+                    ? Colors.orange.shade700
+                    : Colors.green.shade700,
+              ),
             ),
-            CreditInfoChip(
-              label: 'Pagado',
-              value:
-                  'Bs. ${NumberFormat('#,##0.00').format(credit.totalPaid ?? ((credit.totalAmount ?? credit.amount) - credit.balance))}',
+            const SizedBox(width: 6),
+            Expanded(
+              child: _CompactInfoChip(
+                icon: Icons.payments_outlined,
+                label: 'Cuotas',
+                value: '${widget.credit.completedPaymentsCount ?? widget.credit.paidInstallments}/${widget.credit.backendTotalInstallments ?? widget.credit.totalInstallments}',
+                color: Colors.blue.shade50,
+                textColor: Colors.blue.shade700,
+              ),
             ),
-            if (credit.installmentAmount != null)
+            const SizedBox(width: 6),
+            Expanded(
+              child: _CompactInfoChip(
+                icon: Icons.calendar_today_outlined,
+                label: 'Frecuencia',
+                value: widget.credit.frequencyLabel,
+                color: Colors.purple.shade50,
+                textColor: Colors.purple.shade700,
+              ),
+            ),
+          ],
+        ),
+
+        // Botón para expandir/colapsar detalles
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () {
+            setState(() {
+              _showDetails = !_showDetails;
+            });
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _showDetails ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _showDetails ? 'Ocultar detalles' : 'Ver más detalles',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Detalles expandibles
+        if (_showDetails) ...[
+          const SizedBox(height: 8),
+          // Chips adicionales
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
               CreditInfoChip(
-                label: 'Cuota',
-                value:
-                    'Bs. ${NumberFormat('#,##0.00').format(credit.installmentAmount)}',
+                label: 'Pagado',
+                value: 'Bs. ${NumberFormat('#,##0.00').format(widget.credit.totalPaid ?? ((widget.credit.totalAmount ?? widget.credit.amount) - widget.credit.balance))}',
               ),
-            CreditInfoChip(
-              label: 'Pagadas',
-              value:
-                  '${credit.completedPaymentsCount ?? credit.paidInstallments}',
-            ),
-            CreditInfoChip(
-              label: 'Por pagar',
-              value:
-                  '${credit.backendPendingInstallments ?? credit.pendingInstallments}',
-            ),
-            CreditInfoChip(label: 'Frecuencia', value: credit.frequencyLabel),
-          ],
-        ),
+              if (widget.credit.installmentAmount != null)
+                CreditInfoChip(
+                  label: 'Cuota',
+                  value: 'Bs. ${NumberFormat('#,##0.00').format(widget.credit.installmentAmount)}',
+                ),
+              CreditInfoChip(
+                label: 'Por pagar',
+                value: '${widget.credit.backendPendingInstallments ?? widget.credit.pendingInstallments}',
+              ),
+            ],
+          ),
 
-        // Indicadores de cuotas atrasadas desde el backend
-        const SizedBox(height: 8),
-        Column(
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(child: OverduePaymentsIndicator(credit: credit)),
-                  const SizedBox(width: 6),
-                  OverdueAmountChip(credit: credit),
-                ],
-              ),
+          // Indicadores de cuotas atrasadas
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(child: OverduePaymentsIndicator(credit: widget.credit)),
+                const SizedBox(width: 6),
+                OverdueAmountChip(credit: widget.credit),
+              ],
             ),
-            // Mostrar barra de progreso de pagos para créditos con datos del backend
-            if (credit.expectedInstallments != null &&
-                credit.completedPaymentsCount != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: PaymentProgressBar(credit: credit),
-              ),
-          ],
-        ),
+          ),
 
-        // Información detallada de pagos (solo en créditos con datos del backend)
-        if (credit.expectedInstallments != null &&
-            credit.completedPaymentsCount != null)
-          DetailedPaymentInfo(credit: credit),
+          // Barra de progreso
+          if (widget.credit.expectedInstallments != null &&
+              widget.credit.completedPaymentsCount != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: PaymentProgressBar(credit: widget.credit),
+            ),
+
+          // Información detallada de pagos
+          if (widget.credit.expectedInstallments != null &&
+              widget.credit.completedPaymentsCount != null)
+            DetailedPaymentInfo(credit: widget.credit),
+        ],
       ],
     );
   }
 
   /// Información específica según el tipo de lista
   Widget _buildListTypeSpecificInfo(BuildContext context) {
-    if (listType == 'pending_approval') {
+    if (widget.listType == 'pending_approval') {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Container(
@@ -206,7 +281,7 @@ class CreditCardBody extends StatelessWidget {
       );
     }
 
-    if (listType == 'waiting_delivery') {
+    if (widget.listType == 'waiting_delivery') {
       // Mostrar información de entrega programada futura
       return Padding(
         padding: const EdgeInsets.only(top: 8),
@@ -223,8 +298,8 @@ class CreditCardBody extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  credit.scheduledDeliveryDate != null
-                      ? 'Programado para ${DateFormat('dd/MM/yyyy').format(credit.scheduledDeliveryDate!)}'
+                  widget.credit.scheduledDeliveryDate != null
+                      ? 'Programado para ${DateFormat('dd/MM/yyyy').format(widget.credit.scheduledDeliveryDate!)}'
                       : 'Entrega programada pendiente',
                   style: const TextStyle(
                     color: Colors.blue,
@@ -239,10 +314,10 @@ class CreditCardBody extends StatelessWidget {
       );
     }
 
-    if (listType == 'ready_for_delivery') {
+    if (widget.listType == 'ready_for_delivery') {
       // Determinar si es urgente (hoy) o atrasada
-      final isImmediate = credit.immediateDeliveryRequested == true;
-      final isOverdue = credit.isOverdueForDelivery;
+      final isImmediate = widget.credit.immediateDeliveryRequested == true;
+      final isOverdue = widget.credit.isOverdueForDelivery;
 
       Color bgColor;
       Color borderColor;
@@ -255,7 +330,7 @@ class CreditCardBody extends StatelessWidget {
         borderColor = Colors.red;
         textColor = Colors.red;
         icon = Icons.warning;
-        message = 'ENTREGA ATRASADA (${credit.daysOverdueForDelivery} días)';
+        message = 'ENTREGA ATRASADA (${widget.credit.daysOverdueForDelivery} días)';
       } else if (isImmediate) {
         bgColor = Colors.orange.withValues(alpha: 0.15);
         borderColor = Colors.orange;
@@ -299,7 +374,7 @@ class CreditCardBody extends StatelessWidget {
       );
     }
 
-    if (listType == 'overdue_delivery') {
+    if (widget.listType == 'overdue_delivery') {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Container(
@@ -315,7 +390,7 @@ class CreditCardBody extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Entrega atrasada (${credit.daysOverdueForDelivery} días)',
+                  'Entrega atrasada (${widget.credit.daysOverdueForDelivery} días)',
                   style: const TextStyle(
                     color: Colors.red,
                     fontSize: 12,
@@ -329,7 +404,7 @@ class CreditCardBody extends StatelessWidget {
       );
     }
 
-    if (listType == 'overdue_payments') {
+    if (widget.listType == 'overdue_payments') {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Container(
@@ -368,14 +443,14 @@ class CreditCardBody extends StatelessWidget {
                   ),
                 ],
               ),
-              if (credit.expectedInstallments != null &&
-                  credit.completedPaymentsCount != null) ...[
+              if (widget.credit.expectedInstallments != null &&
+                  widget.credit.completedPaymentsCount != null) ...[
                 const SizedBox(height: 6),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        'Cuotas esperadas: ${credit.expectedInstallments}',
+                        'Cuotas esperadas: ${widget.credit.expectedInstallments}',
                         style: TextStyle(
                           color: Colors.orange.shade700,
                           fontSize: 11,
@@ -384,7 +459,7 @@ class CreditCardBody extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Pagadas: ${credit.completedPaymentsCount}',
+                      'Pagadas: ${widget.credit.completedPaymentsCount}',
                       style: TextStyle(
                         color: Colors.orange.shade700,
                         fontSize: 11,
@@ -393,8 +468,8 @@ class CreditCardBody extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (credit.overdueAmount != null &&
-                    credit.overdueAmount! > 0) ...[
+                if (widget.credit.overdueAmount != null &&
+                    widget.credit.overdueAmount! > 0) ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -404,7 +479,7 @@ class CreditCardBody extends StatelessWidget {
                         color: Colors.red,
                       ),
                       Text(
-                        'Monto vencido: Bs. ${NumberFormat('#,##0.00').format(credit.overdueAmount)}',
+                        'Monto vencido: Bs. ${NumberFormat('#,##0.00').format(widget.credit.overdueAmount)}',
                         style: const TextStyle(
                           color: Colors.red,
                           fontSize: 12,
@@ -435,13 +510,13 @@ class CreditCardBody extends StatelessWidget {
       fontWeight: FontWeight.bold,
     );
 
-    switch (credit.status) {
+    switch (widget.credit.status) {
       case 'pending_approval':
         // Muestra cuándo se solicitó
         return [
           Text('Solicitado:', style: dateStyle.copyWith(fontSize: 10)),
           Text(
-            DateFormat('dd/MM/yyyy').format(credit.createdAt),
+            DateFormat('dd/MM/yyyy').format(widget.credit.createdAt),
             style: highlightStyle.copyWith(color: Colors.orange),
           ),
         ];
@@ -450,22 +525,22 @@ class CreditCardBody extends StatelessWidget {
         // Muestra cuándo fue aprobado y cuándo debe entregarse
         final widgets = <Widget>[];
 
-        if (credit.approvedAt != null) {
+        if (widget.credit.approvedAt != null) {
           widgets.addAll([
             Text('Aprobado:', style: dateStyle.copyWith(fontSize: 10)),
             Text(
-              DateFormat('dd/MM').format(credit.approvedAt!),
+              DateFormat('dd/MM').format(widget.credit.approvedAt!),
               style: highlightStyle.copyWith(color: Colors.green),
             ),
           ]);
         }
 
-        if (credit.scheduledDeliveryDate != null) {
+        if (widget.credit.scheduledDeliveryDate != null) {
           if (widgets.isNotEmpty) widgets.add(const SizedBox(height: 4));
 
-          final isImmediate = credit.immediateDeliveryRequested == true;
-          final isOverdue = credit.isOverdueForDelivery;
-          final isToday = credit.isReadyForDelivery;
+          final isImmediate = widget.credit.immediateDeliveryRequested == true;
+          final isOverdue = widget.credit.isOverdueForDelivery;
+          final isToday = widget.credit.isReadyForDelivery;
 
           Color deliveryColor;
           String deliveryLabel;
@@ -483,7 +558,7 @@ class CreditCardBody extends StatelessWidget {
             deliveryColor = Colors.blue;
             deliveryLabel = DateFormat(
               'dd/MM',
-            ).format(credit.scheduledDeliveryDate!);
+            ).format(widget.credit.scheduledDeliveryDate!);
           }
 
           widgets.addAll([
@@ -503,11 +578,11 @@ class CreditCardBody extends StatelessWidget {
         // Muestra cuándo fue entregado y el plazo del crédito
         final widgets = <Widget>[];
 
-        if (credit.deliveredAt != null) {
+        if (widget.credit.deliveredAt != null) {
           widgets.addAll([
             Text('Entregado:', style: dateStyle.copyWith(fontSize: 10)),
             Text(
-              DateFormat('dd/MM/yyyy').format(credit.deliveredAt!),
+              DateFormat('dd/MM/yyyy').format(widget.credit.deliveredAt!),
               style: highlightStyle.copyWith(color: Colors.green),
             ),
           ]);
@@ -517,9 +592,9 @@ class CreditCardBody extends StatelessWidget {
           if (widgets.isNotEmpty) const SizedBox(height: 4),
           Text('Plazo:', style: dateStyle.copyWith(fontSize: 10)),
           Text(
-            '${DateFormat('dd/MM').format(credit.startDate)} - ${DateFormat('dd/MM').format(credit.endDate)}',
+            '${DateFormat('dd/MM').format(widget.credit.startDate)} - ${DateFormat('dd/MM').format(widget.credit.endDate)}',
             style: highlightStyle.copyWith(
-              color: credit.isOverdue ? Colors.red : Colors.blue,
+              color: widget.credit.isOverdue ? Colors.red : Colors.blue,
             ),
           ),
         ]);
@@ -531,7 +606,7 @@ class CreditCardBody extends StatelessWidget {
         return [
           Text('Completado:', style: dateStyle.copyWith(fontSize: 10)),
           Text(
-            DateFormat('dd/MM/yyyy').format(credit.updatedAt),
+            DateFormat('dd/MM/yyyy').format(widget.credit.updatedAt),
             style: highlightStyle.copyWith(color: Colors.green),
           ),
         ];
@@ -543,13 +618,13 @@ class CreditCardBody extends StatelessWidget {
           Text(
             DateFormat(
               'dd/MM/yyyy',
-            ).format(credit.approvedAt ?? credit.updatedAt),
+            ).format(widget.credit.approvedAt ?? widget.credit.updatedAt),
             style: highlightStyle.copyWith(color: Colors.red),
           ),
-          if (credit.rejectionReason != null) ...[
+          if (widget.credit.rejectionReason != null) ...[
             const SizedBox(height: 2),
             Text(
-              credit.rejectionReason!,
+              widget.credit.rejectionReason!,
               style: dateStyle.copyWith(
                 fontSize: 10,
                 color: Colors.red.shade700,
@@ -567,7 +642,7 @@ class CreditCardBody extends StatelessWidget {
         return [
           Text('Cancelado:', style: dateStyle.copyWith(fontSize: 10)),
           Text(
-            DateFormat('dd/MM/yyyy').format(credit.updatedAt),
+            DateFormat('dd/MM/yyyy').format(widget.credit.updatedAt),
             style: highlightStyle.copyWith(color: Colors.grey),
           ),
         ];
@@ -577,7 +652,7 @@ class CreditCardBody extends StatelessWidget {
         return [
           Text('En mora:', style: dateStyle.copyWith(fontSize: 10)),
           Text(
-            '${DateFormat('dd/MM').format(credit.startDate)} - ${DateFormat('dd/MM').format(credit.endDate)}',
+            '${DateFormat('dd/MM').format(widget.credit.startDate)} - ${DateFormat('dd/MM').format(widget.credit.endDate)}',
             style: highlightStyle.copyWith(color: Colors.red),
           ),
         ];
@@ -586,10 +661,77 @@ class CreditCardBody extends StatelessWidget {
         // Por defecto muestra la fecha de creación
         return [
           Text(
-            DateFormat('dd/MM/yyyy').format(credit.createdAt),
+            DateFormat('dd/MM/yyyy').format(widget.credit.createdAt),
             style: dateStyle,
           ),
         ];
     }
+  }
+}
+
+/// Widget compacto para mostrar información con icono y valores
+/// Diseñado para ocupar menos espacio que CreditInfoChip tradicional
+class _CompactInfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final Color textColor;
+
+  const _CompactInfoChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: textColor.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: textColor,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              color: textColor.withValues(alpha: 0.7),
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.3,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              color: textColor,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.2,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
   }
 }

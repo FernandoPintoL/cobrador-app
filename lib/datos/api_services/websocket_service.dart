@@ -41,6 +41,9 @@ class WebSocketService {
   final _cobradorStatsController = StreamController<Map<String, dynamic>>.broadcast();
   final _managerStatsController = StreamController<Map<String, dynamic>>.broadcast();
 
+  // Stream para notificaciones de cajas (Cash Balance)
+  final _cashBalanceController = StreamController<Map<String, dynamic>>.broadcast();
+
   // Deduplicación simple de eventos para evitar múltiples notificaciones por la misma acción
   final Map<String, DateTime> _recentEventCache = {};
   static const Duration _dedupeWindow = Duration(seconds: 3);
@@ -96,6 +99,9 @@ class WebSocketService {
   Stream<Map<String, dynamic>> get globalStatsStream => _globalStatsController.stream;
   Stream<Map<String, dynamic>> get cobradorStatsStream => _cobradorStatsController.stream;
   Stream<Map<String, dynamic>> get managerStatsStream => _managerStatsController.stream;
+
+  // Getter para stream de cajas (Cash Balance)
+  Stream<Map<String, dynamic>> get cashBalanceStream => _cashBalanceController.stream;
 
   bool get isConnected => _isConnected;
   bool get isConnecting => _isConnecting;
@@ -475,6 +481,22 @@ class WebSocketService {
       print('📨 Nuevo mensaje');
       _handleMessage(data);
     });
+
+    // --- EVENTOS DE CAJAS (CASH BALANCE) ---
+    _socket?.on('cash_balance_auto_closed', (data) {
+      print('📦 Caja auto-cerrada');
+      _handleCashBalanceEvent(data, 'auto_closed');
+    });
+
+    _socket?.on('cash_balance_auto_created', (data) {
+      print('📦 Caja auto-creada');
+      _handleCashBalanceEvent(data, 'auto_created');
+    });
+
+    _socket?.on('cash_balance_requires_reconciliation', (data) {
+      print('⚠️  Caja requiere conciliación');
+      _handleCashBalanceEvent(data, 'requires_reconciliation');
+    });
   }
 
   /// Manejo de notificaciones recibidas
@@ -719,6 +741,63 @@ class WebSocketService {
     }
   }
 
+  /// Manejo de eventos de cajas (Cash Balance)
+  void _handleCashBalanceEvent(dynamic data, String action) {
+    try {
+      Map<String, dynamic> cashBalanceData;
+      if (data is String) {
+        cashBalanceData = jsonDecode(data);
+      } else if (data is Map) {
+        cashBalanceData = Map<String, dynamic>.from(data);
+      } else {
+        print('⚠️ Formato de evento de caja no reconocido: $data');
+        return;
+      }
+
+      // Agregar el tipo de acción al mapa
+      cashBalanceData['type'] = action;
+      cashBalanceData['action'] = action;
+
+      // Verificar si debemos ignorar duplicados
+      if (_shouldDropDuplicate('cash_balance', cashBalanceData)) {
+        print('🔄 Ignorando evento de caja duplicado');
+        return;
+      }
+
+      // Enviar al stream
+      _cashBalanceController.add(cashBalanceData);
+
+      // Mostrar notificación local
+      final message = cashBalanceData['message'] as String? ?? '';
+      String title;
+      switch (action) {
+        case 'auto_closed':
+          title = '📦 Caja Auto-Cerrada';
+          break;
+        case 'auto_created':
+          title = '📦 Caja Virtual Creada';
+          break;
+        case 'requires_reconciliation':
+          title = '⚠️ Conciliación Requerida';
+          break;
+        default:
+          title = '📦 Notificación de Caja';
+      }
+
+      _showLocalNotification(
+        title,
+        message,
+        'cash_balance',
+      );
+
+      if (kDebugMode) {
+        print('📦 Evento de caja procesado: $action');
+      }
+    } catch (e) {
+      print('❌ Error procesando evento de caja: $e');
+    }
+  }
+
   /// Mostrar notificación local
   Future<void> _showLocalNotification(
     String title,
@@ -748,6 +827,11 @@ class WebSocketService {
           channelId = 'message_channel';
           channelName = 'Message Notifications';
           channelDescription = 'Notifications for messages';
+          break;
+        case 'cash_balance':
+          channelId = 'cash_balance_channel';
+          channelName = 'Cash Balance Notifications';
+          channelDescription = 'Notifications for cash balance operations';
           break;
       }
 
@@ -1082,5 +1166,6 @@ class WebSocketService {
     _globalStatsController.close();
     _cobradorStatsController.close();
     _managerStatsController.close();
+    _cashBalanceController.close();
   }
 }

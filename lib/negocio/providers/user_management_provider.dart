@@ -217,8 +217,8 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
     double? latitud,
     double? longitud,
     String? clientCategory,
-    required File idFront,
-    required File idBack,
+    File? idFront, // Ahora opcional
+    File? idBack,  // Ahora opcional
     File? profileImage,
   }) async {
     state = state.copyWith(isLoading: true, error: null, fieldErrors: null);
@@ -274,19 +274,33 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
         createdId = state.usuarios.last.id;
       }
 
-      // Subir fotos de CI (anverso y reverso)
-      try {
-        await _userApiService.uploadUserPhotos(
-          createdId,
-          photos: [idFront, idBack],
-          types: ['id_front', 'id_back'],
-        );
-      } catch (photoError) {
-        // Si hay error subiendo fotos, loguearlo pero no fallar completamente
-        debugPrint('⚠️ Advertencia: No se pudieron subir las fotos de CI: $photoError');
-        state = state.copyWith(
-          successMessage: 'Usuario creado exitosamente, pero no se pudieron subir las fotos de CI. ${photoError.toString().replaceAll('Exception: ', '')}',
-        );
+      // Subir fotos de CI solo si se proporcionaron (ahora opcional)
+      if (idFront != null || idBack != null) {
+        try {
+          final photos = <File>[];
+          final types = <String>[];
+
+          if (idFront != null) {
+            photos.add(idFront);
+            types.add('id_front');
+          }
+          if (idBack != null) {
+            photos.add(idBack);
+            types.add('id_back');
+          }
+
+          await _userApiService.uploadUserPhotos(
+            createdId,
+            photos: photos,
+            types: types,
+          );
+        } catch (photoError) {
+          // Si hay error subiendo fotos, loguearlo pero no fallar completamente
+          debugPrint('⚠️ Advertencia: No se pudieron subir las fotos de CI: $photoError');
+          state = state.copyWith(
+            successMessage: 'Usuario creado exitosamente, pero no se pudieron subir las fotos de CI. ${photoError.toString().replaceAll('Exception: ', '')}',
+          );
+        }
       }
 
       // Subir foto de perfil si se proporcionó

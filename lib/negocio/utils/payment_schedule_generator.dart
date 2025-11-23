@@ -99,7 +99,6 @@ class PaymentScheduleGenerator {
     final installmentAmount = double.parse(
       creditData['installment_amount'].toString(),
     );
-    final paidInstallments = creditData['paid_installments'] ?? 0;
 
     // Organizar pagos por número de cuota
     final Map<int, Map<String, dynamic>> paidByInstallment = {};
@@ -136,22 +135,40 @@ class PaymentScheduleGenerator {
         currentDueDate = currentDueDate.add(const Duration(days: 1));
       }
 
+      // Calcular la fecha de vencimiento para esta cuota
+      // IMPORTANTE: La fecha de vencimiento es independiente de cuándo se pagó
+      final dueDate = currentDueDate;
+
       // Verificar si hay un pago para esta cuota
       final payment = paidByInstallment[i];
       String status;
-      DateTime dueDate;
+      double paidAmount = 0.0;
+      double remainingAmount = installmentAmount;
+      DateTime? lastPaymentDate;
+      String? paymentMethod;
+      int paymentCount = 0;
 
       if (payment != null) {
-        // Si existe un pago, usar su fecha como fecha de vencimiento
-        dueDate = DateTime.parse(payment['payment_date']);
-        status = 'paid';
-      } else {
-        // Si no hay pago, usar la fecha calculada
-        dueDate = currentDueDate;
-        if (i <= paidInstallments) {
-          // Considerar pagada si el número de cuotas pagadas indica que debería estarlo
+        // Existe un pago para esta cuota
+        final paymentAmount = double.tryParse(payment['amount']?.toString() ?? '0') ?? 0.0;
+        paidAmount = paymentAmount;
+        remainingAmount = (installmentAmount - paymentAmount).clamp(0.0, installmentAmount);
+        lastPaymentDate = DateTime.tryParse(payment['payment_date'] ?? '');
+        paymentMethod = payment['payment_method']?.toString();
+        paymentCount = 1; // Contamos el pago
+
+        // Determinar status basado en el monto pagado
+        if (payment['status'] == 'completed' && remainingAmount < 0.01) {
           status = 'paid';
-        } else if (currentDueDate.isBefore(DateTime.now())) {
+        } else if (payment['status'] == 'partial' || remainingAmount > 0.01) {
+          status = 'partial';
+        } else {
+          status = 'paid';
+        }
+      } else {
+        // NO hay pago para esta cuota
+        // Determinar status basado en la fecha de vencimiento
+        if (dueDate.isBefore(DateTime.now())) {
           status = 'overdue';
         } else {
           status = 'pending';
@@ -165,6 +182,13 @@ class PaymentScheduleGenerator {
           dueDate: dueDate,
           amount: installmentAmount,
           status: status,
+          paidAmount: paidAmount,
+          remainingAmount: remainingAmount,
+          isPaidFull: status == 'paid',
+          isPartial: status == 'partial',
+          paymentCount: paymentCount,
+          lastPaymentDate: lastPaymentDate,
+          paymentMethod: paymentMethod,
         ),
       );
 

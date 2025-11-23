@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../negocio/providers/websocket_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/credit_provider.dart';
+import '../../negocio/providers/notification_provider.dart';
 import '../creditos/credit_detail_screen.dart';
 import '../widgets/websocket_widgets.dart';
 
@@ -19,6 +20,25 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    // Fetch notifications from database when screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchNotificationsFromDatabase();
+    });
+  }
+
+  /// Fetch notifications from database
+  Future<void> _fetchNotificationsFromDatabase() async {
+    final authState = ref.read(authProvider);
+    final userId = authState.usuario?.id.toInt();
+
+    if (userId != null) {
+      // Fetch both all notifications and unread count
+      await ref.read(dbNotificationProvider.notifier).fetchNotifications(
+            userId: userId,
+            limit: 100,
+          );
+      await ref.read(dbNotificationProvider.notifier).fetchUnreadCount(userId);
+    }
   }
 
   @override
@@ -103,12 +123,46 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  List<AppNotification> _getFilteredNotifications(WebSocketState wsState, String filter) {
+  /// Merge WebSocket notifications (real-time) with DB notifications (persistent)
+  List<AppNotification> _getMergedNotifications(
+    WebSocketState wsState,
+    DbNotificationState dbState,
+  ) {
+    print('🔀 Merging notifications...');
+    print('  📡 WebSocket notifications: ${wsState.notifications.length}');
+    print('  💾 DB notifications: ${dbState.notifications.length}');
+
+    // Create a map to avoid duplicates (use ID as key)
+    final Map<String, AppNotification> notificationMap = {};
+
+    // Add DB notifications first (persistent, older ones)
+    for (final notification in dbState.notifications) {
+      notificationMap[notification.id] = notification;
+    }
+
+    // Add WebSocket notifications (real-time, newer ones)
+    // These will override DB notifications if they have the same ID
+    for (final notification in wsState.notifications) {
+      notificationMap[notification.id] = notification;
+    }
+
+    // Convert map to list and sort by timestamp (newest first)
+    final mergedList = notificationMap.values.toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    print('  ✅ Merged total: ${mergedList.length} notifications');
+    return mergedList;
+  }
+
+  List<AppNotification> _getFilteredNotifications(
+    List<AppNotification> allNotifications,
+    String filter,
+  ) {
     switch (filter) {
       case 'unread':
-        return wsState.notifications.where((n) => !n.isRead).toList();
+        return allNotifications.where((n) => !n.isRead).toList();
       case 'cobrador':
-        return wsState.notifications
+        return allNotifications
             .where(
               (n) =>
                   n.type.contains('cobrador') ||
@@ -117,7 +171,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             )
             .toList();
       case 'cliente':
-        return wsState.notifications
+        return allNotifications
             .where(
               (n) =>
                   n.type.contains('client') ||
@@ -126,19 +180,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             )
             .toList();
       case 'payment':
-        return wsState.notifications
+        return allNotifications
             .where(
               (n) => n.type.contains('payment') || n.type.contains('credit') || n.type.contains('pago'),
             )
             .toList();
       case 'system':
-        return wsState.notifications
+        return allNotifications
             .where(
               (n) => n.type.contains('general') || n.type.contains('message') || n.type.contains('system') || n.type.contains('connection'),
             )
             .toList();
       default:
-        return wsState.notifications;
+        return allNotifications;
     }
   }
 
@@ -146,7 +200,18 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return Consumer(
       builder: (context, ref, child) {
         final wsState = ref.watch(webSocketProvider);
-        final notifications = _getFilteredNotifications(wsState, filter);
+        final dbState = ref.watch(dbNotificationProvider);
+
+        // Merge notifications from both sources
+        final allNotifications = _getMergedNotifications(wsState, dbState);
+        final notifications = _getFilteredNotifications(allNotifications, filter);
+
+        // Show loading indicator if DB is still loading and no notifications yet
+        if (dbState.isLoading && allNotifications.isEmpty) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
 
         if (notifications.isEmpty) {
           return _buildEmptyState(filter);
@@ -154,10 +219,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
         return RefreshIndicator(
           onRefresh: () async {
-            // Intentar reconexión si está desconectado
+            // Refresh both WebSocket connection and DB notifications
             if (!wsState.isConnected) {
               await ref.read(authProvider.notifier).initialize();
             }
+            await _fetchNotificationsFromDatabase();
           },
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -489,15 +555,26 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
-  void _handleMenuAction(String action) {
+  Future<void> _handleMenuAction(String action) async {
     switch (action) {
       case 'mark_all_read':
+        // Mark all as read in WebSocket
         ref.read(webSocketProvider.notifier).markAllAsRead();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Todas las notificaciones marcadas como leídas'),
-          ),
-        );
+
+        // Mark all as read in database
+        final authState = ref.read(authProvider);
+        final userId = authState.usuario?.id.toInt();
+        if (userId != null) {
+          await ref.read(dbNotificationProvider.notifier).markAllAsRead(userId);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Todas las notificaciones marcadas como leídas'),
+            ),
+          );
+        }
         break;
       case 'clear_all':
         _showClearAllDialog();
@@ -526,7 +603,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           ),
           ElevatedButton(
             onPressed: () {
+              // Clear WebSocket notifications
               ref.read(webSocketProvider.notifier).clearNotifications();
+              // Clear DB notifications (local state only)
+              ref.read(dbNotificationProvider.notifier).clearAll();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

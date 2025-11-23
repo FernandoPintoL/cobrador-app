@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'storage_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../modelos/api_exception.dart';
 
 /// Clase base para todos los servicios de API
 /// Contiene la configuración común y métodos HTTP básicos
@@ -97,13 +98,48 @@ abstract class BaseApiService {
     debugPrint('✅ Limpieza local completada');
   }
 
-  // Métodos HTTP básicos
+  /// Convierte DioException a ApiException con extracción inteligente del mensaje
+  ApiException _convertToApiException(DioException e) {
+    final status = e.response?.statusCode;
+    final data = e.response?.data;
+    String message = 'Error al procesar solicitud';
+
+    // Intentar extraer mensaje del backend
+    if (data is Map<String, dynamic>) {
+      // Prioridad: message > error > data (si es string)
+      if (data['message'] != null) {
+        message = data['message'].toString();
+      } else if (data['error'] != null) {
+        message = data['error'].toString();
+      } else if (data['data'] != null && data['data'] is String) {
+        message = data['data'].toString();
+      }
+    }
+
+    // Si no se encontró mensaje específico, usar mensajes por defecto según código HTTP
+    if (message == 'Error al procesar solicitud') {
+      message = handleDioError(e);
+    }
+
+    return ApiException(
+      message: message,
+      statusCode: status,
+      errorData: data,
+      originalError: e,
+    );
+  }
+
+  // Métodos HTTP básicos con manejo automático de errores
   Future<Response<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
   }) async {
     await _loadToken();
-    return _dio.get<T>(path, queryParameters: queryParameters);
+    try {
+      return await _dio.get<T>(path, queryParameters: queryParameters);
+    } on DioException catch (e) {
+      throw _convertToApiException(e);
+    }
   }
 
   Future<Response<T>> post<T>(
@@ -112,7 +148,11 @@ abstract class BaseApiService {
     Map<String, dynamic>? queryParameters,
   }) async {
     await _loadToken();
-    return _dio.post<T>(path, data: data, queryParameters: queryParameters);
+    try {
+      return await _dio.post<T>(path, data: data, queryParameters: queryParameters);
+    } on DioException catch (e) {
+      throw _convertToApiException(e);
+    }
   }
 
   Future<Response<T>> put<T>(
@@ -121,7 +161,11 @@ abstract class BaseApiService {
     Map<String, dynamic>? queryParameters,
   }) async {
     await _loadToken();
-    return _dio.put<T>(path, data: data, queryParameters: queryParameters);
+    try {
+      return await _dio.put<T>(path, data: data, queryParameters: queryParameters);
+    } on DioException catch (e) {
+      throw _convertToApiException(e);
+    }
   }
 
   Future<Response<T>> patch<T>(
@@ -130,7 +174,11 @@ abstract class BaseApiService {
     Map<String, dynamic>? queryParameters,
   }) async {
     await _loadToken();
-    return _dio.patch<T>(path, data: data, queryParameters: queryParameters);
+    try {
+      return await _dio.patch<T>(path, data: data, queryParameters: queryParameters);
+    } on DioException catch (e) {
+      throw _convertToApiException(e);
+    }
   }
 
   Future<Response<T>> delete<T>(
@@ -138,7 +186,11 @@ abstract class BaseApiService {
     Map<String, dynamic>? queryParameters,
   }) async {
     await _loadToken();
-    return _dio.delete<T>(path, queryParameters: queryParameters);
+    try {
+      return await _dio.delete<T>(path, queryParameters: queryParameters);
+    } on DioException catch (e) {
+      throw _convertToApiException(e);
+    }
   }
 
   // Método para subir archivos (imágenes)
@@ -150,40 +202,48 @@ abstract class BaseApiService {
   }) async {
     await _loadToken();
 
-    // Crear FormData para subida de archivos
-    final formData = FormData.fromMap({
-      fieldName: await MultipartFile.fromFile(
-        file.path,
-        filename: file.path.split('/').last,
-      ),
-      ...?additionalData,
-    });
+    try {
+      // Crear FormData para subida de archivos
+      final formData = FormData.fromMap({
+        fieldName: await MultipartFile.fromFile(
+          file.path,
+          filename: file.path.split('/').last,
+        ),
+        ...?additionalData,
+      });
 
-    return _dio.post<T>(
-      path,
-      data: formData,
-      options: Options(
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Accept': 'application/json',
-        },
-      ),
-    );
+      return await _dio.post<T>(
+        path,
+        data: formData,
+        options: Options(
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Accept': 'application/json',
+          },
+        ),
+      );
+    } on DioException catch (e) {
+      throw _convertToApiException(e);
+    }
   }
 
   /// Método genérico para enviar multipart/form-data (múltiples archivos y campos)
   Future<Response<T>> postFormData<T>(String path, FormData formData) async {
     await _loadToken();
-    return _dio.post<T>(
-      path,
-      data: formData,
-      options: Options(
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Accept': 'application/json',
-        },
-      ),
-    );
+    try {
+      return await _dio.post<T>(
+        path,
+        data: formData,
+        options: Options(
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Accept': 'application/json',
+          },
+        ),
+      );
+    } on DioException catch (e) {
+      throw _convertToApiException(e);
+    }
   }
 
   // Getters para acceso a servicios internos
