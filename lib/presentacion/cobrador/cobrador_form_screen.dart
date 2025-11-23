@@ -17,6 +17,8 @@ import '../cliente/location_picker_screen.dart';
 import '../pantallas/change_password_screen.dart';
 import '../widgets/validation_error_widgets.dart';
 import '../widgets/camera/in_app_camera_screen.dart';
+import '../widgets/camera/camera_with_document_detection_screen.dart';
+import '../widgets/camera/camera_with_face_detection_screen.dart';
 
 class CobradorFormScreen extends ConsumerStatefulWidget {
   final Usuario? cobrador; // null para crear, con datos para editar
@@ -1128,33 +1130,29 @@ class _ManagerCobradorFormScreenState
 
       File? file;
 
-      // Usar cámara in-app en lugar de la del sistema
+      // Usar cámara in-app con detección automática según el tipo
       if (source == ImageSource.camera) {
-        // Determinar el título y texto de ayuda según el tipo de foto
-        String title;
-        String? helpText;
-
-        if (type == 'id_front') {
-          title = 'Foto CI Anverso';
-          helpText = 'Asegúrate de que la foto sea clara y legible';
-        } else if (type == 'id_back') {
-          title = 'Foto CI Reverso';
-          helpText = 'Captura el reverso del documento de identidad';
-        } else {
-          title = 'Foto de Perfil';
-          helpText = 'Toma una foto clara del rostro del cobrador';
-        }
-
-        // Abrir la cámara in-app
         if (!mounted) return;
-        file = await Navigator.of(context).push<File>(
-          MaterialPageRoute(
-            builder: (context) => InAppCameraScreen(
-              title: title,
-              helpText: helpText,
+
+        // Para CI (anverso y reverso) usar detección de documentos
+        if (type == 'id_front' || type == 'id_back') {
+          file = await Navigator.of(context).push<File>(
+            MaterialPageRoute(
+              builder: (context) => CameraWithDocumentDetectionScreen(
+                autoCapture: true,
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          // Para foto de perfil usar detección de rostros
+          file = await Navigator.of(context).push<File>(
+            MaterialPageRoute(
+              builder: (context) => CameraWithFaceDetectionScreen(
+                autoCapture: true,
+              ),
+            ),
+          );
+        }
       } else {
         // Para galería, usar el picker normal
         final XFile? picked = await _picker.pickImage(
