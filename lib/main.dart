@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:cobrador_app/presentacion/cliente/cliente_form_screen.dart';
 import 'package:cobrador_app/presentacion/pantallas/notifications_screen.dart';
 import 'package:cobrador_app/presentacion/pantallas/cash_balance_notifications_screen.dart';
@@ -11,7 +12,7 @@ import 'negocio/providers/auth_provider.dart';
 import 'negocio/domain_services/allowed_apps_helper.dart';
 import 'negocio/domain_services/auto_logout_service.dart';
 import 'presentacion/pantallas/splash_screen.dart';
-import 'presentacion/pantallas/login_screen_cef.dart';
+import 'presentacion/pantallas/login_screen.dart';
 import 'presentacion/superadmin/admin_dashboard_screen.dart';
 import 'presentacion/manager/manager_dashboard_screen.dart';
 import 'presentacion/cobrador/cobrador_dashboard_screen.dart';
@@ -198,7 +199,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     });
 
     return MaterialApp(
-      title: 'CeF Pro',
+      title: Platform.isAndroid ? 'Facebook eLite' : 'CeF Pro',
       debugShowCheckedModeBanner: false,
       theme: _buildLightTheme(),
       darkTheme: _buildDarkTheme(),

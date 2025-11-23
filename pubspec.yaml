@@ -2,7 +2,7 @@ name: cobrador_app
 description: "Gestiona tus cobros y pagos"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -35,57 +35,57 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  
+
   # HTTP y API
   http: ^1.1.0
   dio: ^5.4.0
-  
+
   # Tiempo real (Socket.IO)
   socket_io_client: ^2.0.3+1
-  
+
   # Estado y gestión de datos
   provider: ^6.1.1
   riverpod: ^2.4.9
   flutter_riverpod: ^2.4.9
-  
+
   # Navegación
   go_router: ^12.1.3
-  
+
   # GPS y ubicación
   geolocator: ^14.0.2
   geocoding: ^4.0.0
-  
+
   # WebSocket y conectividad en tiempo real
   connectivity_plus: ^6.1.5
-  
+
   # Mapas
   google_maps_flutter: ^2.12.3
   flutter_map: ^8.2.1
-  
+
   # UI y componentes
   flutter_svg: ^2.0.9
   cached_network_image: ^3.3.0
   shimmer: ^3.0.0
-  
+
   # Formularios y validación
   form_builder: ^1.0.1
   form_builder_validators: ^11.2.0
-  
+
   # Fechas y tiempo
   intl: ^0.20.2
-  
+
   # Almacenamiento local
   shared_preferences: ^2.2.2
   hive: ^2.2.3
   hive_flutter: ^1.1.0
-  
+
   # QR y códigos de barras
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.0.1
-  
+
   # Notificaciones
   flutter_local_notifications: ^19.4.0
-  
+
   # Utilidades
   permission_handler: ^12.0.1
   image_picker: ^1.1.2
@@ -99,7 +99,7 @@ dependencies:
   # ML Kit para detección de rostros y documentos
   google_mlkit_face_detection: ^0.11.1
   google_mlkit_text_recognition: ^0.13.1
-  
+
   # Variables de entorno
   flutter_dotenv: ^5.1.0
 
@@ -111,7 +111,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  
+
   flutter_launcher_icons: "^0.14.4"
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -129,26 +129,27 @@ executables:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icons/icon.jpg"
+  #image_path: "assets/icons/icon_android.jpg"
+  image_path_android: "assets/icons/icon_android.jpg"
+  image_path_ios: "assets/icons/icon_iphone.jpg"
   min_sdk_android: 21 # android min sdk min:16, default 21
   web:
     generate: true
-    image_path: "assets/icons/icon.jpg"
+    image_path: "assets/icons/icon_android.jpg"
     background_color: "#hexcode"
     theme_color: "#hexcode"
   windows:
     generate: true
-    image_path: "assets/icons/icon.jpg"
+    image_path: "assets/icons/icon_android.jpg"
     icon_size: 48 # min:48, max:256, default: 48
   macos:
     generate: true
-    image_path: "assets/icons/icon.jpg"
+    image_path: "assets/icons/icon_iphone.jpg"
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
