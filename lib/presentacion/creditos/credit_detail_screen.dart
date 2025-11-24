@@ -102,26 +102,29 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
         elevation: 0,
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.credit_card_rounded, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Credito #${currentCredit.id}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.credit_card_rounded, size: 18),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Credito #${currentCredit.id}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            //const SizedBox(width: 12),
-            //Flexible(child: _buildStatusBadge(currentCredit)),
           ],
         ),
         actions: [
@@ -407,8 +410,10 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(
+                            Flexible(
+                              flex: 2,
                               child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.summarize_rounded,
@@ -416,7 +421,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                                     color: Theme.of(context).colorScheme.primary,
                                   ),
                                   const SizedBox(width: 12),
-                                  Expanded(
+                                  Flexible(
                                     child: Text(
                                       'Resumen del Crédito',
                                       style: Theme.of(context)
@@ -429,20 +434,24 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                                 ],
                               ),
                             ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(child: _buildStatusBadge(credit)),
-                                const SizedBox(width: 8),
-                                Icon(
-                                  _showSummaryInfo
-                                      ? Icons.expand_less
-                                      : Icons.expand_more,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ],
+                            Flexible(
+                              flex: 1,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Flexible(child: _buildStatusBadge(credit)),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    _showSummaryInfo
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -612,20 +621,22 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: _buildDateInfo('F. Inicio', credit.startDate),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildDateInfo(
-                            'F. Vencimiento',
-                            credit.endDate,
+                    IntrinsicHeight(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: _buildDateInfo('F. Inicio', credit.startDate),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildDateInfo(
+                              'F. Vencimiento',
+                              credit.endDate,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 8),
                     if (credit.scheduledDeliveryDate != null)
@@ -1109,7 +1120,8 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                         children: [
                           Row(
                             children: [
-                              Expanded(
+                              Flexible(
+                                flex: 3,
                                 child: Text(
                                   credit.client?.nombre ??
                                       'Cliente #${credit.clientId}',
@@ -1122,11 +1134,13 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              if (credit.client?.clientCategory != null)
+                              if (credit.client?.clientCategory != null) ...[
+                                const SizedBox(width: 8),
                                 ClientCategoryChip(
                                   category: credit.client!.clientCategory,
                                   compact: true,
                                 ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -1827,8 +1841,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
         // Pagado
         Expanded(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.payments, size: 20, color: Colors.green),
+              const Icon(Icons.payments, size: 20, color: Colors.green),
               const SizedBox(height: 4),
               Text(
                 'Pagado',
@@ -1836,13 +1851,16 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                   fontSize: 11,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
               Text(
                 _formatCurrency(paid),
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ],
           ),
@@ -1850,8 +1868,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
         // Saldo
         Expanded(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.account_balance_wallet, size: 20, color: Colors.orange),
+              const Icon(Icons.account_balance_wallet, size: 20, color: Colors.orange),
               const SizedBox(height: 4),
               Text(
                 'Saldo',
@@ -1859,13 +1878,16 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                   fontSize: 11,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
               Text(
                 _formatCurrency(credit.balance),
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ],
           ),
@@ -1873,6 +1895,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
         // Mora o Al Día
         Expanded(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 overdue ? Icons.warning : Icons.trending_up,
@@ -1886,6 +1909,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                   fontSize: 11,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
               Text(
                 overdue
@@ -1893,8 +1917,10 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                     : '${(progress * 100).toStringAsFixed(0)}%',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ],
           ),
@@ -2119,19 +2145,23 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
 
   Widget _buildDateInfo(String label, DateTime date) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
+        Flexible(
+          flex: 2,
           child: Text(
             '$label:',
-            style: const TextStyle(fontWeight: FontWeight.w500),
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ),
         const SizedBox(width: 8),
         Flexible(
+          flex: 2,
           child: Text(
             DateFormat('dd/MM/yyyy').format(date),
+            style: const TextStyle(fontSize: 13),
             softWrap: false,
             overflow: TextOverflow.ellipsis,
           ),

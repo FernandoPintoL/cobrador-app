@@ -263,9 +263,12 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     return Scaffold(
       backgroundColor: isDark ? Colors.grey[900] : Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          'Créditos',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: const Flexible(
+          child: Text(
+            'Créditos',
+            style: TextStyle(fontWeight: FontWeight.bold),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
         foregroundColor: Colors.white,
@@ -311,33 +314,69 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               ),
               tabs: [
                 Tab(
-                  text:
-                      'Activos ('
-                      '${creditState.credits.where((c) => c.status == 'active').length}'
-                      '${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).isNotEmpty ? ' • ${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).length} ⚠' : ''}'
-                      ')',
-                  icon: const Icon(Icons.playlist_add_check_circle, size: 22),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.playlist_add_check_circle, size: 18),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Activos (${creditState.credits.where((c) => c.status == 'active').length}'
+                          '${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).isNotEmpty ? ' • ${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).length} ⚠' : ''})',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Tab(
-                  text:
-                      'Pendientes ('
-                      '${creditState.credits.where((c) => c.status == 'pending_approval').length}'
-                      ')',
-                  icon: const Icon(Icons.hourglass_empty, size: 22),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.hourglass_empty, size: 18),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Pendientes (${creditState.credits.where((c) => c.status == 'pending_approval').length})',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Tab(
-                  text:
-                      'En Espera ('
-                      '${creditState.credits.where((c) => c.status == 'waiting_delivery' && !c.isReadyForDelivery && !c.isOverdueForDelivery).length}'
-                      ')',
-                  icon: const Icon(Icons.schedule, size: 22),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.schedule, size: 18),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'En Espera (${creditState.credits.where((c) => c.status == 'waiting_delivery' && !c.isReadyForDelivery && !c.isOverdueForDelivery).length})',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Tab(
-                  text:
-                      'Para Entregar ('
-                      '${creditState.credits.where((c) => c.isReadyForDelivery || c.isOverdueForDelivery).length}'
-                      ')',
-                  icon: const Icon(Icons.local_shipping, size: 22),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.local_shipping, size: 18),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Para Entregar (${creditState.credits.where((c) => c.isReadyForDelivery || c.isOverdueForDelivery).length})',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
