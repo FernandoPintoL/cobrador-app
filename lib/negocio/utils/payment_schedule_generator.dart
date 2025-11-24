@@ -198,4 +198,108 @@ class PaymentScheduleGenerator {
 
     return schedule;
   }
+
+  /// Genera cronograma desde un objeto Credito
+  static List<PaymentSchedule> generateScheduleFromCredit(Credito credit) {
+    final schedule = <PaymentSchedule>[];
+
+    final startDate = credit.startDate;
+    final frequency = credit.frequency;
+    final totalInstallments = credit.backendTotalInstallments ?? credit.totalInstallments;
+    final installmentAmount = credit.installmentAmount ?? 0.0;
+    final payments = credit.payments ?? [];
+
+    // Determinar intervalo entre pagos basado en la frecuencia
+    int daysBetweenPayments;
+    switch (frequency) {
+      case 'daily':
+        daysBetweenPayments = 1;
+        break;
+      case 'weekly':
+        daysBetweenPayments = 7;
+        break;
+      case 'biweekly':
+        daysBetweenPayments = 14;
+        break;
+      case 'monthly':
+        daysBetweenPayments = 30;
+        break;
+      default:
+        daysBetweenPayments = 1;
+    }
+
+    // Organizar pagos por número de cuota
+    final Map<int, dynamic> paidByInstallment = {};
+    for (var payment in payments) {
+      final installmentNumber = payment.installmentNumber ?? 0;
+      if (installmentNumber > 0) {
+        paidByInstallment[installmentNumber] = payment;
+      }
+    }
+
+    // Generar fechas de vencimiento y mapear con pagos reales
+    DateTime currentDueDate = startDate;
+    for (int i = 1; i <= totalInstallments; i++) {
+      if (frequency == 'daily' && currentDueDate.weekday == DateTime.sunday) {
+        currentDueDate = currentDueDate.add(const Duration(days: 1));
+      }
+
+      final dueDate = currentDueDate;
+
+      // Verificar si hay un pago para esta cuota
+      final payment = paidByInstallment[i];
+      String status;
+      double paidAmount = 0.0;
+      double remainingAmount = installmentAmount;
+      DateTime? lastPaymentDate;
+      String? paymentMethod;
+      int paymentCount = 0;
+
+      if (payment != null) {
+        paidAmount = payment.amount;
+        remainingAmount = (installmentAmount - paidAmount).clamp(0.0, installmentAmount);
+        lastPaymentDate = payment.paymentDate;
+        paymentMethod = payment.paymentType;
+        paymentCount = 1;
+
+        // Determinar status basado en el monto pagado
+        if (payment.status == 'completed' && remainingAmount < 0.01) {
+          status = 'paid';
+        } else if (remainingAmount > 0.01) {
+          status = 'partial';
+        } else {
+          status = 'paid';
+        }
+      } else {
+        // NO hay pago para esta cuota
+        if (dueDate.isBefore(DateTime.now())) {
+          status = 'overdue';
+        } else {
+          status = 'pending';
+        }
+      }
+
+      // Agregar cuota al cronograma
+      schedule.add(
+        PaymentSchedule(
+          installmentNumber: i,
+          dueDate: dueDate,
+          amount: installmentAmount,
+          status: status,
+          paidAmount: paidAmount,
+          remainingAmount: remainingAmount,
+          isPaidFull: status == 'paid',
+          isPartial: status == 'partial',
+          paymentCount: paymentCount,
+          lastPaymentDate: lastPaymentDate,
+          paymentMethod: paymentMethod,
+        ),
+      );
+
+      // Avanzar a la siguiente fecha de vencimiento
+      currentDueDate = currentDueDate.add(Duration(days: daysBetweenPayments));
+    }
+
+    return schedule;
+  }
 }

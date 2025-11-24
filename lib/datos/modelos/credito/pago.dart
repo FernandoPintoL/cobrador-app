@@ -17,6 +17,7 @@ class Pago {
   final double? latitude;
   final double? longitude;
   final int? receivedBy;
+  final int? cashBalanceId; // ID del balance de caja asociado
   final Usuario? cobrador; // info del cobrador que recibió el pago
 
   Pago({
@@ -34,6 +35,7 @@ class Pago {
     this.latitude,
     this.longitude,
     this.receivedBy,
+    this.cashBalanceId,
     this.cobrador,
   });
 
@@ -60,6 +62,7 @@ class Pago {
       latitude: _tryDouble(json['latitude']),
       longitude: _tryDouble(json['longitude']),
       receivedBy: json['received_by'],
+      cashBalanceId: json['cash_balance_id'],
       cobrador: json['cobrador'] is Map<String, dynamic>
           ? Usuario.fromJson(json['cobrador'])
           : null,
@@ -82,6 +85,7 @@ class Pago {
       'latitude': latitude,
       'longitude': longitude,
       'received_by': receivedBy,
+      'cash_balance_id': cashBalanceId,
       // No serializamos 'cobrador' completo aquí por simplicidad
     };
   }

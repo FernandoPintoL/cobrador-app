@@ -5,6 +5,7 @@ import '../../negocio/providers/pago_provider.dart';
 import '../../datos/modelos/credito.dart';
 import '../../datos/modelos/usuario.dart';
 import '../widgets/error_handler.dart';
+import '../widgets/quick_payment/widgets.dart';
 
 class QuickPaymentScreen extends ConsumerStatefulWidget {
   const QuickPaymentScreen({super.key});
@@ -207,7 +208,10 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -301,184 +305,42 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
               ),
             ),
 
-            // Detalles del crédito seleccionado
-            if (_selectedCredit != null) ...[
+            // Detalles del crédito seleccionado con nuevos widgets
+            if (_selectedCredit != null && _selectedClient != null) ...[
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+
+              // Widget de información del cliente
+              ClientInfoWidget(client: _selectedClient!),
+
+              const SizedBox(height: 16),
+
+              // Widget de resumen del crédito
+              CreditSummaryWidget(credit: _selectedCredit!),
+
+              const SizedBox(height: 16),
+
+              // Widget de información de cuotas
+              InstallmentInfoWidget(credit: _selectedCredit!),
+
+              // Widget unificado: Historial y Cronograma de pagos con toggle
+              if (_selectedCredit!.payments != null && _selectedCredit!.payments!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                PaymentViewWidget(
+                  credit: _selectedCredit!,
+                  payments: _selectedCredit!.payments!,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Detalles del Crédito Seleccionado',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const Divider(),
-                    _buildInfoRow('Cliente:', _selectedClient?.nombre ?? 'N/A'),
-                    _buildInfoRow(
-                      'Balance:',
-                      'Bs ${_selectedCredit!.balance.toStringAsFixed(2)}',
-                    ),
-                    _buildInfoRow(
-                      'Monto Original:',
-                      'Bs ${_selectedCredit!.amount.toStringAsFixed(2)}',
-                    ),
-                    _buildInfoRow(
-                      'Cuota:',
-                      'Bs ${_selectedCredit!.installmentAmount?.toStringAsFixed(2) ?? 'N/A'}',
-                    ),
-                    _buildInfoRow(
-                      'Frecuencia:',
-                      _selectedCredit!.frequencyLabel,
-                    ),
-                    _buildInfoRow(
-                      'Tasa de Interés:',
-                      '${_selectedCredit!.interestRate ?? 0}%',
-                    ),
-                    if (_selectedCredit!.backendIsOverdue == true)
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.warning,
-                              size: 16,
-                              color: Colors.red,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Crédito con mora: Bs ${_selectedCredit!.overdueAmount?.toStringAsFixed(2) ?? 'N/A'}',
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              ],
+
+              // Widget de información del cobrador (solo si hay pagos con cobrador)
+              if (_selectedCredit!.payments != null && _selectedCredit!.payments!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                CollectorInfoWidget(payments: _selectedCredit!.payments!),
+              ],
             ],
 
-            const SizedBox(height: 16),
-
-            // Monto a cobrar
-            if (_selectedCredit != null)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Monto a Cobrar',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _amountController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: '0.00',
-                          prefixText: 'Bs ',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        enabled: !_isProcessing,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 16),
-
-            // Método de pago
-            if (_selectedCredit != null)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Método de Pago',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          ChoiceChip(
-                            label: const Text('Efectivo'),
-                            selected: _paymentMethod == 'cash',
-                            onSelected: !_isProcessing
-                                ? (selected) {
-                                    if (selected) {
-                                      setState(() => _paymentMethod = 'cash');
-                                    }
-                                  }
-                                : null,
-                          ),
-                          ChoiceChip(
-                            label: const Text('Transferencia'),
-                            selected: _paymentMethod == 'transfer',
-                            onSelected: !_isProcessing
-                                ? (selected) {
-                                    if (selected) {
-                                      setState(
-                                        () => _paymentMethod = 'transfer',
-                                      );
-                                    }
-                                  }
-                                : null,
-                          ),
-                          ChoiceChip(
-                            label: const Text('Tarjeta'),
-                            selected: _paymentMethod == 'card',
-                            onSelected: !_isProcessing
-                                ? (selected) {
-                                    if (selected) {
-                                      setState(() => _paymentMethod = 'card');
-                                    }
-                                  }
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            if (_selectedCredit == null)
+            // Mensaje cuando no hay crédito seleccionado
+            if (_selectedCredit == null) ...[
+              const SizedBox(height: 16),
               Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 32.0),
@@ -499,57 +361,33 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
                   ),
                 ),
               ),
+            ],
 
-            const SizedBox(height: 24),
-
-            // Botón de registro
-            ElevatedButton(
-              onPressed: _selectedCredit != null && !_isProcessing
-                  ? _processPayment
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: _isProcessing
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Procesar Pago',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-            ),
+            // Espacio para evitar que el contenido quede oculto por el footer
+            const SizedBox(height: 80),
           ],
         ),
-      ),
-    );
-  }
+            ),
+          ),
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-          Text(value),
+          // Sticky Footer - solo visible cuando hay crédito seleccionado
+          if (_selectedCredit != null)
+            PaymentStickyFooter(
+              amountController: _amountController,
+              selectedPaymentMethod: _paymentMethod,
+              isProcessing: _isProcessing,
+              onProcessPayment: _processPayment,
+              onPaymentMethodChanged: (method) {
+                setState(() {
+                  _paymentMethod = method;
+                });
+              },
+            ),
         ],
       ),
     );
   }
+
 
   @override
   void dispose() {
