@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:cobrador_app/presentacion/cliente/cliente_form_screen.dart';
 import 'package:cobrador_app/presentacion/pantallas/notifications_screen.dart';
 import 'package:cobrador_app/presentacion/pantallas/cash_balance_notifications_screen.dart';
+import 'package:cobrador_app/presentacion/map/route_planner_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -222,6 +223,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         '/notifications': (context) => const NotificationsScreen(),
         '/cash-balance-notifications': (context) =>
             const CashBalanceNotificationsScreen(),
+        '/route-planner': (context) => const RoutePlannerScreen(),
       },
     );
   }

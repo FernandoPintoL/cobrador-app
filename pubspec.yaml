@@ -61,6 +61,7 @@ dependencies:
   # Mapas
   google_maps_flutter: ^2.12.3
   flutter_map: ^8.2.1
+  flutter_polyline_points: ^2.1.0
 
   # UI y componentes
   flutter_svg: ^2.0.9

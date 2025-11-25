@@ -105,4 +105,19 @@ class MapApiService extends BaseApiService {
       throw Exception('Error al obtener clusters de ubicaciones: $e');
     }
   }
+
+  /// GET /api/map/clients-to-visit-today
+  /// Obtiene lista de clientes que deben ser visitados hoy (para optimización de rutas)
+  Future<Map<String, dynamic>> getClientsToVisitToday({int? cobradorId}) async {
+    try {
+      final query = <String, dynamic>{};
+      if (cobradorId != null) query['cobrador_id'] = cobradorId;
+      final resp = await get('/map/clients-to-visit-today', queryParameters: query);
+      return Map<String, dynamic>.from(resp.data as Map);
+    } on DioException catch (e) {
+      throw Exception(handleDioError(e));
+    } catch (e) {
+      throw Exception('Error al obtener clientes para visitar: $e');
+    }
+  }
 }

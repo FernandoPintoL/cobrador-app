@@ -31,6 +31,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   int? _selectedCobradorId;
   String? _statusFilter;
   String? _searchQuery;
+  bool _sortByDistance = false;
 
   // Ubicación inicial (Lima)
   static const LatLng _initialCenter = LatLng(-12.0464, -77.0428);
@@ -103,6 +104,62 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return lowered.isNotEmpty ? lowered.first : '';
   }
 
+  /// Calcula la distancia desde la ubicación actual al punto dado
+  String? _calculateDistance(double lat, double lng) {
+    if (_myLocation == null) return null;
+
+    final distanceInMeters = Geolocator.distanceBetween(
+      _myLocation!.latitude,
+      _myLocation!.longitude,
+      lat,
+      lng,
+    );
+
+    if (distanceInMeters < 1000) {
+      return '${distanceInMeters.round()}m';
+    } else {
+      return '${(distanceInMeters / 1000).toStringAsFixed(1)}km';
+    }
+  }
+
+  /// Calcula la distancia en metros (para ordenamiento)
+  double? _calculateDistanceInMeters(double lat, double lng) {
+    if (_myLocation == null) return null;
+
+    return Geolocator.distanceBetween(
+      _myLocation!.latitude,
+      _myLocation!.longitude,
+      lat,
+      lng,
+    );
+  }
+
+  /// Ordena los clusters por distancia si está activado
+  List<LocationCluster> _sortClusters(List<LocationCluster> clusters) {
+    if (!_sortByDistance || _myLocation == null) {
+      return clusters;
+    }
+
+    final sortedClusters = List<LocationCluster>.from(clusters);
+    sortedClusters.sort((a, b) {
+      final distA = _calculateDistanceInMeters(
+        a.location.latitude,
+        a.location.longitude,
+      );
+      final distB = _calculateDistanceInMeters(
+        b.location.latitude,
+        b.location.longitude,
+      );
+
+      if (distA == null && distB == null) return 0;
+      if (distA == null) return 1;
+      if (distB == null) return -1;
+      return distA.compareTo(distB);
+    });
+
+    return sortedClusters;
+  }
+
   /// Construye los marcadores desde los clusters
   /// UN MARCADOR POR CLUSTER (casa), no por persona
   Future<Set<Marker>> _buildMarkers(List<LocationCluster> clusters) async {
@@ -113,6 +170,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final lng = cluster.location.longitude;
       final peopleCount = cluster.people.length;
       final clusterStatus = cluster.clusterStatus;
+
+      // Calcular distancia
+      final distance = _calculateDistance(lat, lng);
 
       // Color basado en el estado del cluster
       final color = _getColorForClusterStatus(clusterStatus);
@@ -168,6 +228,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         );
       }
 
+      // Crear snippet con dirección y distancia
+      String snippet = cluster.location.address;
+      if (distance != null) {
+        snippet = '$snippet\n📍 A $distance';
+      }
+
       markers.add(
         Marker(
           markerId: MarkerId('cluster_${cluster.clusterId}'),
@@ -177,7 +243,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             title: peopleCount == 1
                 ? cluster.people.first.name
                 : '$peopleCount personas',
-            snippet: cluster.location.address,
+            snippet: snippet,
             onTap: () => _showClusterModal(context, cluster),
           ),
           onTap: () => _showClusterModal(context, cluster),
@@ -206,12 +272,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// Si hay 1 persona: muestra detalles directamente
   /// Si hay múltiples: muestra listado para seleccionar
   void _showClusterModal(BuildContext context, LocationCluster cluster) {
+    final location = LatLng(cluster.location.latitude, cluster.location.longitude);
     if (cluster.people.length == 1) {
       // Caso: 1 persona → mostrar detalles directamente
-      _showClientDetailsSheet(context, cluster.people.first);
+      _showClientDetailsSheet(context, cluster.people.first, location: location);
     } else {
       // Caso: múltiples personas → mostrar listado
-      _showClusterPeopleListSheet(context, cluster);
+      _showClusterPeopleListSheet(context, cluster, location);
     }
   }
 
@@ -219,6 +286,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _showClusterPeopleListSheet(
     BuildContext context,
     LocationCluster cluster,
+    LatLng location,
   ) {
     showModalBottomSheet(
       context: context,
@@ -244,7 +312,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               cluster: cluster,
               onPersonSelected: (person) {
                 Navigator.pop(context); // Cerrar listado
-                _showClientDetailsSheet(context, person);
+                _showClientDetailsSheet(context, person, location: location);
               },
             ),
           ),
@@ -254,7 +322,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   /// Muestra el modal con detalles del cliente
-  void _showClientDetailsSheet(BuildContext context, ClusterPerson person) {
+  void _showClientDetailsSheet(BuildContext context, ClusterPerson person, {LatLng? location}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -285,6 +353,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 builder: (_, controller) => ClientDetailsSheet(
                   person: person,
                   scrollController: controller,
+                  latitude: location?.latitude,
+                  longitude: location?.longitude,
                 ),
               ),
             ),
@@ -464,11 +534,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ? MapType.normal
               : MapType.satellite;
         }),
+        onPlanRoute: () {
+          // TODO: Navegar a pantalla de planificación de rutas
+          Navigator.pushNamed(context, '/route-planner');
+        },
       ),
     );
   }
 
   Widget _buildMapView(List<LocationCluster> clusters, BuildContext context) {
+    // Aplicar ordenamiento por distancia si está activado
+    final sortedClusters = _sortClusters(clusters);
+
     return Column(
       children: [
         // Búsqueda
@@ -476,22 +553,64 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           onSearch: (query) => setState(() => _searchQuery = query.isEmpty ? null : query),
         ),
 
-        // Filtros de estado
-        MapStatusFiltersBar(
-          selectedStatus: _statusFilter,
-          onStatusChanged: (status) => setState(() => _statusFilter = status),
+        // Filtros de estado y ordenamiento
+        Row(
+          children: [
+            Expanded(
+              child: MapStatusFiltersBar(
+                selectedStatus: _statusFilter,
+                onStatusChanged: (status) => setState(() => _statusFilter = status),
+              ),
+            ),
+            // Botón de ordenar por distancia
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _myLocation == null
+                      ? null
+                      : () => setState(() => _sortByDistance = !_sortByDistance),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _sortByDistance
+                          ? Colors.blue
+                          : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: _sortByDistance
+                          ? [
+                              BoxShadow(
+                                color: Colors.blue.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Icon(
+                      Icons.near_me_rounded,
+                      color: _sortByDistance ? Colors.white : Colors.grey.shade600,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
 
         // Estadísticas (mostrar solo si hay un cluster seleccionado o el primero)
-        if (clusters.isNotEmpty)
-          ClusterStatsBar(cluster: clusters.first),
+        if (sortedClusters.isNotEmpty)
+          ClusterStatsBar(cluster: sortedClusters.first),
 
         // Mapa
         Expanded(
           child: Stack(
             children: [
               FutureBuilder<Set<Marker>>(
-                future: _buildMarkers(clusters),
+                future: _buildMarkers(sortedClusters),
                 builder: (context, snapshot) {
                   final markers = snapshot.data ?? {};
                   return GoogleMap(
@@ -517,9 +636,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   );
                 },
               ),
-              if (clusters.isEmpty)
+              if (sortedClusters.isEmpty)
                 _buildEmptyView()
-              else if (clusters.length == 1 && clusters.first.people.isEmpty)
+              else if (sortedClusters.length == 1 && sortedClusters.first.people.isEmpty)
                 _buildEmptyView(),
             ],
           ),
@@ -615,11 +734,13 @@ class _MapSpeedDial extends StatefulWidget {
   final Color primaryColor;
   final VoidCallback onCenterMap;
   final VoidCallback onToggleMapType;
+  final VoidCallback onPlanRoute;
 
   const _MapSpeedDial({
     required this.primaryColor,
     required this.onCenterMap,
     required this.onToggleMapType,
+    required this.onPlanRoute,
   });
 
   @override
@@ -672,6 +793,17 @@ class _MapSpeedDialState extends State<_MapSpeedDial>
       children: [
         // Acciones secundarias
         if (_isExpanded) ...[
+          _buildSpeedDialOption(
+            icon: Icons.route_rounded,
+            label: 'Planificar ruta',
+            color: Colors.green,
+            isDark: isDark,
+            onTap: () {
+              _toggleExpand();
+              widget.onPlanRoute();
+            },
+          ),
+          const SizedBox(height: 12),
           _buildSpeedDialOption(
             icon: Icons.my_location_rounded,
             label: 'Mi ubicación',

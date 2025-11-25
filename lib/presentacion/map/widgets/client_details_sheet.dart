@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../datos/modelos/map/location_cluster.dart';
 import '../../../datos/modelos/credito.dart';
 import '../../widgets/payment_dialog.dart';
@@ -11,11 +13,15 @@ import '../utils/translations.dart';
 class ClientDetailsSheet extends ConsumerStatefulWidget {
   final ClusterPerson person;
   final ScrollController scrollController;
+  final double? latitude;
+  final double? longitude;
 
   const ClientDetailsSheet({
     super.key,
     required this.person,
     required this.scrollController,
+    this.latitude,
+    this.longitude,
   });
 
   @override
@@ -23,6 +29,32 @@ class ClientDetailsSheet extends ConsumerStatefulWidget {
 }
 
 class _ClientDetailsSheetState extends ConsumerState<ClientDetailsSheet> {
+  /// Calcula la distancia desde la ubicación actual del usuario
+  Future<String?> _calculateDistanceFromUser() async {
+    if (widget.latitude == null || widget.longitude == null) return null;
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+
+      final distanceInMeters = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        widget.latitude!,
+        widget.longitude!,
+      );
+
+      if (distanceInMeters < 1000) {
+        return '${distanceInMeters.round()}m';
+      } else {
+        return '${(distanceInMeters / 1000).toStringAsFixed(1)}km';
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = widget.person.personStatus;
@@ -192,9 +224,31 @@ class _ClientDetailsSheetState extends ConsumerState<ClientDetailsSheet> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    widget.person.address,
-                    style: TextStyle(color: Colors.grey.shade700),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.person.address,
+                        style: TextStyle(color: Colors.grey.shade700),
+                      ),
+                      if (widget.latitude != null && widget.longitude != null)
+                        FutureBuilder<String?>(
+                          future: _calculateDistanceFromUser(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData && snapshot.data != null) {
+                              return Text(
+                                '📍 A ${snapshot.data}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                    ],
                   ),
                 ),
               ],
@@ -216,9 +270,105 @@ class _ClientDetailsSheetState extends ConsumerState<ClientDetailsSheet> {
               ],
             ),
           ],
+          // Botón "Cómo llegar"
+          if (widget.latitude != null && widget.longitude != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _openNavigation(context),
+                icon: const Icon(Icons.directions, size: 20),
+                label: const Text('Cómo llegar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: color,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  /// Abre la navegación en Google Maps o Waze
+  Future<void> _openNavigation(BuildContext context) async {
+    if (widget.latitude == null || widget.longitude == null) return;
+
+    final lat = widget.latitude!;
+    final lng = widget.longitude!;
+    final address = Uri.encodeComponent(widget.person.address);
+
+    // Intentar abrir en Google Maps primero
+    final googleMapsUrl = Uri.parse('google.navigation:q=$lat,$lng');
+    final googleMapsWebUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&destination_place_id=$address');
+
+    // Intentar Waze como alternativa
+    final wazeUrl = Uri.parse('waze://?ll=$lat,$lng&navigate=yes');
+
+    // Mostrar diálogo de selección
+    if (!context.mounted) return;
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Navegar con'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.map, color: Colors.blue),
+              title: const Text('Google Maps'),
+              onTap: () => Navigator.pop(ctx, 'google'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.navigation, color: Colors.cyan),
+              title: const Text('Waze'),
+              onTap: () => Navigator.pop(ctx, 'waze'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+
+    try {
+      if (choice == 'google') {
+        // Intentar abrir app de Google Maps
+        if (await canLaunchUrl(googleMapsUrl)) {
+          await launchUrl(googleMapsUrl);
+        } else {
+          // Si no tiene la app, abrir en navegador
+          await launchUrl(googleMapsWebUrl, mode: LaunchMode.externalApplication);
+        }
+      } else if (choice == 'waze') {
+        if (await canLaunchUrl(wazeUrl)) {
+          await launchUrl(wazeUrl);
+        } else {
+          // Waze no instalado, mostrar mensaje
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Waze no está instalado'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al abrir navegación: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildBalanceCard() {

@@ -42,7 +42,15 @@
       "Bash(git push:*)",
       "Bash(chmod:*)",
       "Bash(./setup_api_keys.sh:*)",
-      "Bash(pod install:*)"
+      "Bash(pod install:*)",
+      "Bash(./gradlew signingReport:*)",
+      "Bash(keytool:*)",
+      "Bash(mv:*)",
+      "Bash(curl:*)",
+      "Bash(php artisan tinker:*)",
+      "Bash(php create_test_data.php:*)",
+      "Bash(psql:*)",
+      "Bash(php create_test_clients.php:*)"
     ],
     "deny": [],
     "ask": []

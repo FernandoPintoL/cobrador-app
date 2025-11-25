@@ -58,6 +58,13 @@ app.*.map.json
 .env.production
 .env.staging
 
+# Archivos de firma Android (NUNCA subir a Git)
+*.keystore
+*.jks
+android/key.properties
+android/app/upload-keystore.jks
+KEYSTORE_INFO.md
+
 # WebSocket Server (Node.js)
 /websocket-server/
 /documentaciones
