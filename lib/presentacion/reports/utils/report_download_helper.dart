@@ -30,8 +30,16 @@ class ReportDownloadHelper {
             format: format.toLowerCase(),
           );
 
+      // Validar que la respuesta sea bytes válidos
       if (bytes is! List<int>) {
         _showError(context, 'Error: respuesta inválida del servidor');
+        return;
+      }
+
+      // Validar que los bytes no estén vacíos
+      final bytesList = bytes as List<int>;
+      if (bytesList.isEmpty) {
+        _showError(context, 'Error: el archivo generado está vacío');
         return;
       }
 
@@ -42,7 +50,7 @@ class ReportDownloadHelper {
       final filePath = '${dir.path}/$fileName';
       final file = File(filePath);
 
-      await file.writeAsBytes(bytes);
+      await file.writeAsBytes(bytesList);
 
       // Mostrar éxito
       _showSuccess(context, fileName, file);

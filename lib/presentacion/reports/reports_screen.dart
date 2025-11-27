@@ -6,6 +6,7 @@ import '../../negocio/services/report_authorization_service.dart';
 import 'utils/report_state_helper.dart';
 import 'views/report_view_factory.dart';
 import 'widgets/role_aware_filter_builder.dart';
+import 'services/report_defaults_service.dart';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -76,11 +77,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           return Column(
             children: [
               // 🎯 BARRA DE FILTROS COMPACTA EN LA PARTE SUPERIOR
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
+              Flexible(
+                flex: 0,  // ✅ Permite que tome solo el espacio necesario
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 decoration: BoxDecoration(
                   color: theme.scaffoldBackgroundColor,
                   border: Border(
@@ -137,11 +140,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       child: _showFilters
                           ? Container(
                               constraints: const BoxConstraints(
-                                maxHeight: 400,
+                                maxHeight: 365,  // ✅ Reducido a 365 para evitar overflow en diferentes estados
                               ),
                               child: Padding(
                                 padding:
-                                    const EdgeInsets.fromLTRB(8, 12, 8, 12),
+                                    const EdgeInsets.fromLTRB(8, 10, 8, 10),  // ✅ Reducido vertical padding de 12 a 10
                                 child: SingleChildScrollView(
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
@@ -200,12 +203,23 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                                 ),
                                               )
                                               .toList(),
-                                          onChanged: (v) => setState(() {
-                                            _selectedReport = v;
-                                            _quickRangeIndex = null;
-                                            _filters.remove('start_date');
-                                            _filters.remove('end_date');
-                                          }),
+                                          onChanged: (v) {
+                                            if (v == null) return;
+
+                                            setState(() {
+                                              _selectedReport = v;
+
+                                              // ✅ Aplicar defaults inteligentes al seleccionar reporte
+                                              final usuario = ref.read(authProvider).usuario;
+                                              _filters = ReportDefaultsService.getDefaultFilters(
+                                                reportType: v,
+                                                usuario: usuario,
+                                              );
+
+                                              // ✅ Pre-seleccionar chip de rango rápido correspondiente
+                                              _quickRangeIndex = ReportDefaultsService.getDefaultQuickRangeIndex(v);
+                                            });
+                                          },
                                         ),
                                       ),
                                       const SizedBox(height: 12),
@@ -250,6 +264,39 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                               ),
                                             ),
                                           ),
+                                        // ✅ Banner informativo de defaults aplicados
+                                        if (_filters.isNotEmpty)
+                                          Container(
+                                            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),  // ✅ Reducido vertical de 4 a 3
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),  // ✅ Reducido vertical de 8 a 6
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: Colors.blue.withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.auto_awesome,
+                                                  size: 16,
+                                                  color: Colors.blue[700],
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Filtros aplicados: ${ReportDefaultsService.getFiltersDescription(_filters, _selectedReport!)}',
+                                                    style: theme.textTheme.bodySmall?.copyWith(
+                                                      color: Colors.blue[700],
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
                                         // Filtros dinámicos con soporte para roles
                                         if (usuario != null)
                                           Flexible(
@@ -343,19 +390,42 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          FilledButton.icon(
-                            onPressed: _selectedReport == null
-                                ? null
-                                : _generateReport,
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text('Generar'),
+                          // ✅ Botón con descripción de filtros
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: _selectedReport == null
+                                    ? null
+                                    : _generateReport,
+                                icon: const Icon(Icons.play_arrow_rounded),
+                                label: const Text('Generar'),
+                              ),
+                              // ✅ Badge con descripción de filtros aplicados
+                              if (_selectedReport != null && _filters.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4, left: 8),
+                                  child: Text(
+                                    ReportDefaultsService.getFiltersDescription(
+                                      _filters,
+                                      _selectedReport!,
+                                    ),
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
                       ),
                     ),
                   ],
                 ),
-              ),
+              ),  // Container
+              ),  // ✅ Cierre del Flexible
               // 📊 CONTENIDO DE RESULTADOS - OCUPA MÁXIMO ESPACIO
               Expanded(
                 child: Container(

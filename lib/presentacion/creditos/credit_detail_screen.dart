@@ -60,11 +60,10 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
 
       if (details != null) {
         setState(() {
-          // Actualizar resumen, cronograma y historial desde la respuesta
+          // ✅ OPTIMIZACIÓN: Actualizar resumen y cronograma desde la respuesta
+          // El cronograma ahora incluye toda la información de pagos (incluyendo cobrador)
           _creditSummary = details.summary;
           _apiPaymentSchedule = details.schedule;
-          // paymentsHistory is provided in details.paymentsHistory but this screen
-          // uses calendar/list widgets which can read the provider or details.credit.payments
           // Mantener la referencia del crédito actualizada con los datos retornados
           _credito = details.credit;
         });

@@ -31,7 +31,16 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
     });
     try {
       final details = await ref.read(creditProvider.notifier).getCreditFullDetails(widget.creditId);
-      final history = details?.paymentsHistory ?? [];
+
+      // ✅ OPTIMIZACIÓN: Usar PaymentScheduleHelper para convertir schedule a payments
+      final schedule = details?.schedule ?? [];
+      final history = schedule.isNotEmpty
+          ? PaymentScheduleHelper.scheduleToPayments(
+              schedule: schedule,
+              creditId: widget.creditId,
+            )
+          : <Pago>[];
+
       // Ordenar descendente por fecha de creación o pago
       history.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
       setState(() {

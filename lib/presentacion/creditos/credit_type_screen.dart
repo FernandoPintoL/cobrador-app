@@ -263,12 +263,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     return Scaffold(
       backgroundColor: isDark ? Colors.grey[900] : Colors.grey[50],
       appBar: AppBar(
-        title: const Flexible(
-          child: Text(
-            'Créditos',
-            style: TextStyle(fontWeight: FontWeight.bold),
-            overflow: TextOverflow.ellipsis,
-          ),
+        title: const Text(
+          'Créditos',
+          style: TextStyle(fontWeight: FontWeight.bold),
+          overflow: TextOverflow.ellipsis,
         ),
         backgroundColor: RoleColors.getPrimaryColor(currentUserRole),
         foregroundColor: Colors.white,
@@ -914,8 +912,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   Future<void> _showQuickDeliveryDialog(Credito credit) async {
     DateTime now = DateTime.now();
     DateTime selectedDate = credit.scheduledDeliveryDate ?? now;
+    bool firstPaymentToday = false; // ⭐ NUEVO
 
-    final result = await showDialog<String>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
@@ -942,12 +941,36 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   style: TextStyle(fontSize: 12, color: Colors.orange),
                 ),
               const SizedBox(height: 16),
-              const Text('¿Cómo deseas proceder?'),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                '¿El cliente realizará el primer pago HOY?',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                value: firstPaymentToday,
+                onChanged: (v) => setState(() => firstPaymentToday = v ?? false),
+                title: const Text('Sí, primer pago hoy'),
+                subtitle: Text(
+                  firstPaymentToday
+                      ? 'El cronograma iniciará desde HOY'
+                      : 'El cronograma iniciará desde MAÑANA',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: firstPaymentToday ? Colors.green : Colors.orange,
+                  ),
+                ),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 8),
+              const Text('¿Cómo deseas proceder?', style: TextStyle(fontSize: 12)),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, 'cancel'),
+              onPressed: () => Navigator.pop(context, {'action': 'cancel'}),
               child: const Text('Cancelar'),
             ),
             TextButton.icon(
@@ -984,7 +1007,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                         );
                     if (ok) {
                       if (context.mounted)
-                        Navigator.pop(context, 'rescheduled');
+                        Navigator.pop(context, {'action': 'rescheduled'});
                     }
                   }
                 }
@@ -993,7 +1016,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               label: const Text('Reprogramar fecha'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, 'deliver_now'),
+              onPressed: () => Navigator.pop(context, {
+                'action': 'deliver_now',
+                'first_payment_today': firstPaymentToday,
+              }),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
@@ -1005,15 +1031,17 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       ),
     );
 
-    if (result == 'deliver_now') {
+    if (result != null && result['action'] == 'deliver_now') {
+      final bool firstPaymentToday = result['first_payment_today'] ?? false;
       await ref
           .read(creditProvider.notifier)
           .deliverCreditToClient(
             creditId: credit.id,
             notes: 'Entrega confirmada desde lista de espera',
+            firstPaymentToday: firstPaymentToday,
           );
       _loadInitialData();
-    } else if (result == 'rescheduled') {
+    } else if (result != null && result['action'] == 'rescheduled') {
       // Tras reprogramar, refrescar listas para reflejar la nueva fecha
       _loadInitialData();
     }

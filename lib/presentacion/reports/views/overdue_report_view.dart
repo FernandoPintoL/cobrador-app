@@ -54,8 +54,9 @@ class OverdueFilterNotifier extends StateNotifier<OverdueFilterState> {
   }
 
   void _initializeItems() {
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
     final items = payload is Map
-        ? (payload['items'] ?? payload['credits']) as List?
+        ? payload['items'] as List?
         : null;
 
     if (items != null) {
@@ -66,8 +67,9 @@ class OverdueFilterNotifier extends StateNotifier<OverdueFilterState> {
   }
 
   void _applyFilters() {
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
     final items = payload is Map
-        ? (payload['items'] ?? payload['credits']) as List?
+        ? payload['items'] as List?
         : null;
 
     if (items == null) return;
@@ -180,9 +182,9 @@ class OverdueReportView extends BaseReportView {
     final filterState = ref.watch(overdueFilterStateProvider(payload));
     final notifier = ref.read(overdueFilterStateProvider(payload).notifier);
 
-    // Acceder a items con fallback a credits
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
     final items = payload is Map
-        ? (payload['items'] ?? payload['credits']) as List?
+        ? payload['items'] as List?
         : null;
     final summary = payload is Map ? payload['summary'] as Map<String, dynamic>? : null;
 

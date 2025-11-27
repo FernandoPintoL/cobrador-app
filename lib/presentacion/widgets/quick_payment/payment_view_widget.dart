@@ -1,25 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../datos/modelos/credito.dart';
-import '../../../negocio/utils/payment_schedule_generator.dart';
+import '../../../negocio/providers/credit_provider.dart';
 import '../payment_schedule_calendar.dart';
 
 /// Widget que permite alternar entre vista de Historial y Cronograma de pagos
-class PaymentViewWidget extends StatefulWidget {
+class PaymentViewWidget extends ConsumerStatefulWidget {
   final Credito credit;
   final List<Pago> payments;
+  final List<PaymentSchedule>? schedule;
 
   const PaymentViewWidget({
     super.key,
     required this.credit,
     required this.payments,
+    this.schedule,
   });
 
   @override
-  State<PaymentViewWidget> createState() => _PaymentViewWidgetState();
+  ConsumerState<PaymentViewWidget> createState() => _PaymentViewWidgetState();
 }
 
-class _PaymentViewWidgetState extends State<PaymentViewWidget> {
+class _PaymentViewWidgetState extends ConsumerState<PaymentViewWidget> {
   bool _showSchedule = false; // false = Historial, true = Cronograma
+  List<PaymentSchedule>? _cachedSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -158,34 +162,77 @@ class _PaymentViewWidgetState extends State<PaymentViewWidget> {
   }
 
   Widget _buildScheduleView() {
-    // Generar el cronograma de pagos desde el crédito
-    final schedule = _generateScheduleFromCredit();
+    return FutureBuilder<List<PaymentSchedule>>(
+      future: _getSchedule(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32.0),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
 
-    return Column(
-      key: const ValueKey('schedule'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Cronograma de Pagos',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Vista completa de todas las cuotas',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
-        const SizedBox(height: 12),
-        PaymentScheduleCalendar(
-          schedule: schedule,
-          credit: widget.credit,
-        ),
-      ],
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'Error al cargar cronograma: ${snapshot.error}',
+                style: TextStyle(
+                  color: Colors.red[600],
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+        }
+
+        final schedule = snapshot.data ?? [];
+
+        if (schedule.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'No hay cronograma disponible',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          key: const ValueKey('schedule'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Cronograma de Pagos',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Vista completa de todas las cuotas',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 12),
+            PaymentScheduleCalendar(
+              schedule: schedule,
+              credit: widget.credit,
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -315,8 +362,30 @@ class _PaymentViewWidgetState extends State<PaymentViewWidget> {
     );
   }
 
-  List<PaymentSchedule> _generateScheduleFromCredit() {
-    return PaymentScheduleGenerator.generateScheduleFromCredit(widget.credit);
+  Future<List<PaymentSchedule>> _getSchedule() async {
+    // Si ya tenemos el schedule provisto como parámetro, usarlo
+    if (widget.schedule != null) {
+      return widget.schedule!;
+    }
+
+    // Si ya lo cargamos antes, usar el cache
+    if (_cachedSchedule != null) {
+      return _cachedSchedule!;
+    }
+
+    // Cargar desde el API
+    try {
+      final details = await ref.read(creditProvider.notifier).getCreditFullDetails(widget.credit.id);
+      final schedule = details?.schedule ?? [];
+
+      setState(() {
+        _cachedSchedule = schedule;
+      });
+
+      return schedule;
+    } catch (e) {
+      return [];
+    }
   }
 
   bool _isToday(DateTime date) {

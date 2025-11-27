@@ -24,16 +24,16 @@ class CreditsReportView extends BaseReportView {
   @override
   bool hasValidPayload() {
     if (!super.hasValidPayload()) return false;
-    // Ahora accedemos a 'items' en lugar de 'credits'
-    return payload is Map && (payload.containsKey('items') || payload.containsKey('credits'));
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
+    return payload is Map && payload.containsKey('items');
   }
 
 
   /// Construye la tabla de créditos con columnas apropiadas
   Widget _buildCreditsTable() {
-    // Ahora accedemos a 'items', con fallback a 'credits' para backward compatibility
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
     final credits = payload is Map
-      ? (payload['items'] ?? payload['credits']) as List?
+      ? payload['items'] as List?
       : null;
 
     if (credits == null || credits.isEmpty) {
@@ -434,9 +434,9 @@ class CreditsReportView extends BaseReportView {
 
   @override
   Widget buildReportContent(BuildContext context, WidgetRef ref) {
-    // Ahora accedemos a 'items', con fallback a 'credits' para backward compatibility
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
     final credits = payload is Map
-      ? (payload['items'] ?? payload['credits']) as List?
+      ? payload['items'] as List?
       : null;
 
     return Column(

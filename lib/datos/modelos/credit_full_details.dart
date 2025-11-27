@@ -1,16 +1,22 @@
 import 'credito.dart';
 
+/// ✅ OPTIMIZACIÓN: El backend ya no envía el array completo 'payments'
+/// El payment_schedule ahora incluye toda la información necesaria:
+/// - Estado de cuotas (paid/overdue/pending)
+/// - Montos pagados y restantes
+/// - Información del cobrador (receivedById, receivedByName)
+/// - Método de pago y fechas
+///
+/// Esto reduce la redundancia ~70% y mejora performance
 class CreditFullDetails {
   final Credito credit;
   final Map<String, dynamic>? summary;
   final List<PaymentSchedule>? schedule;
-  final List<Pago>? paymentsHistory;
 
   CreditFullDetails({
     required this.credit,
     this.summary,
     this.schedule,
-    this.paymentsHistory,
   });
 
   factory CreditFullDetails.fromApi(Map<String, dynamic> response) {
@@ -35,24 +41,13 @@ class CreditFullDetails {
       }
     }
 
+    // ✅ OPTIMIZACIÓN: Solo cargar payment_schedule (incluye toda la info)
     List<PaymentSchedule>? schedule;
     final rawSchedule = (data is Map<String, dynamic>) ? data['payment_schedule'] : null;
     if (rawSchedule is List) {
       schedule = rawSchedule
           .whereType<Map<String, dynamic>>()
           .map((e) => PaymentSchedule.fromJson(e))
-          .toList();
-    }
-
-    List<Pago>? history;
-    // Intentar primero con 'payments_history', luego con 'payments'
-    final rawHistory = (data is Map<String, dynamic>)
-        ? (data['payments_history'] ?? data['payments'])
-        : null;
-    if (rawHistory is List) {
-      history = rawHistory
-          .whereType<Map<String, dynamic>>()
-          .map((e) => Pago.fromJson(e))
           .toList();
     }
 
@@ -88,7 +83,6 @@ class CreditFullDetails {
       credit: credito,
       summary: summary,
       schedule: schedule,
-      paymentsHistory: history,
     );
   }
 }

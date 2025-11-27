@@ -323,11 +323,12 @@ class _QuickPaymentScreenState extends ConsumerState<QuickPaymentScreen> {
               InstallmentInfoWidget(credit: _selectedCredit!),
 
               // Widget unificado: Historial y Cronograma de pagos con toggle
-              if (_selectedCredit!.payments != null && _selectedCredit!.payments!.isNotEmpty) ...[
+              // Mostrar para créditos activos (incluso sin pagos registrados)
+              if (_selectedCredit!.status == 'active') ...[
                 const SizedBox(height: 16),
                 PaymentViewWidget(
                   credit: _selectedCredit!,
-                  payments: _selectedCredit!.payments!,
+                  payments: _selectedCredit!.payments ?? [],
                 ),
               ],
 

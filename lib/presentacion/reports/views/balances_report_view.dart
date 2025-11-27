@@ -24,16 +24,16 @@ class BalancesReportView extends BaseReportView {
   @override
   bool hasValidPayload() {
     if (!super.hasValidPayload()) return false;
-    // Ahora accedemos a 'items' en lugar de 'balances'
-    return payload is Map && (payload.containsKey('items') || payload.containsKey('balances'));
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
+    return payload is Map && payload.containsKey('items');
   }
 
 
   /// Construye la tabla de balances modernizada
   Widget _buildBalancesTable() {
-    // Ahora accedemos a 'items', con fallback a 'balances' para backward compatibility
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
     final balances = payload is Map
-      ? (payload['items'] ?? payload['balances']) as List?
+      ? payload['items'] as List?
       : null;
 
     if (balances == null || balances.isEmpty) {
@@ -281,7 +281,7 @@ class BalancesReportView extends BaseReportView {
   Widget buildReportContent(BuildContext context, WidgetRef ref) {
     // Ahora accedemos a 'items', con fallback a 'balances' para backward compatibility
     final balances = payload is Map
-      ? (payload['items'] ?? payload['balances']) as List?
+      ? payload['items'] as List?
       : null;
     final hasBalances = balances != null && balances.isNotEmpty;
 

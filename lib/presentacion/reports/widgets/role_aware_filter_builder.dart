@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../negocio/providers/auth_provider.dart';
 import '../services/filter_visibility_service.dart';
+import 'search_select_field.dart';
 
 /// Widget que construye filtros dinámicamente según el rol del usuario
 class RoleAwareFilterBuilder extends ConsumerWidget {
@@ -171,6 +172,14 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
           context,
         );
 
+      case 'search_select':
+        return _buildSearchSelectInput(
+          config,
+          currentValue,
+          onChanged,
+          context,
+        );
+
       case 'number':
         return _buildNumberInput(
           config,
@@ -247,6 +256,23 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// Construye input de búsqueda con selección (SearchSelectField)
+  Widget _buildSearchSelectInput(
+    FilterVisibilityConfig config,
+    dynamic currentValue,
+    Function(dynamic) onChanged,
+    BuildContext context,
+  ) {
+    return SearchSelectField(
+      label: config.label,
+      initialValue: currentValue?.toString(),
+      type: config.searchType ?? 'categoria',  // Usa searchType de la config
+      onSelected: (id, label) {
+        onChanged(id);  // Envía solo el ID (código) al filtro
+      },
     );
   }
 

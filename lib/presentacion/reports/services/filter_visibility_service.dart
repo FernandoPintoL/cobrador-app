@@ -4,10 +4,11 @@ import '../../../datos/modelos/usuario.dart';
 class FilterVisibilityConfig {
   final String filterKey;
   final String label;
-  final String type; // 'date', 'select', 'text', 'number'
+  final String type; // 'date', 'select', 'text', 'number', 'search_select'
   final String? description;
   final bool required;
   final Map<String, dynamic>? options; // Para select
+  final String? searchType; // Para search_select: 'cobrador', 'cliente', 'categoria'
 
   FilterVisibilityConfig({
     required this.filterKey,
@@ -16,6 +17,7 @@ class FilterVisibilityConfig {
     this.description,
     this.required = false,
     this.options,
+    this.searchType,
   });
 }
 
@@ -178,15 +180,10 @@ class FilterVisibilityService {
           FilterVisibilityConfig(
             filterKey: 'client_category',
             label: 'Categoría de Cliente',
-            type: 'select',
+            type: 'search_select',  // ✅ Cambiar a search_select para usar SearchSelectField
             description: 'Filtrar por categoría',
             required: false,
-            options: {
-              'vip': 'VIP',
-              'premium': 'Premium',
-              'regular': 'Regular',
-              'new': 'Nuevo',
-            },
+            searchType: 'categoria',  // ✅ Indica que debe cargar categorías desde backend
           ),
           FilterVisibilityConfig(
             filterKey: 'min_days_overdue',
@@ -290,6 +287,20 @@ class FilterVisibilityService {
 
       case 'credits':
         return [
+          FilterVisibilityConfig(
+            filterKey: 'start_date',
+            label: 'Fecha Inicio',
+            type: 'date',
+            description: 'Desde qué fecha (créditos creados)',
+            required: false,
+          ),
+          FilterVisibilityConfig(
+            filterKey: 'end_date',
+            label: 'Fecha Fin',
+            type: 'date',
+            description: 'Hasta qué fecha (créditos creados)',
+            required: false,
+          ),
           FilterVisibilityConfig(
             filterKey: 'status',
             label: 'Estado del Crédito',

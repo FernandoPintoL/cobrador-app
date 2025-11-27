@@ -8,7 +8,6 @@ import '../../datos/modelos/cash_balance_status.dart';
 import 'auth_provider.dart';
 import 'pago_provider.dart';
 import '../utils/schedule_utils.dart';
-import '../utils/payment_schedule_generator.dart';
 
 // Estado del provider de créditos
 class CreditState {
@@ -1199,21 +1198,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
       if (response['success'] == true) {
         final details = CreditFullDetails.fromApi(response);
 
-        // Si el backend no proveyó cronograma, generarlo localmente
-        if (details.schedule == null || details.schedule!.isEmpty) {
-          // Usar la clase PaymentScheduleGenerator para crear el cronograma
-          final generatedSchedule = await _generateScheduleFromApiData(
-            response,
-          );
-
-          // Crear una nueva instancia con el cronograma generado
-          return CreditFullDetails(
-            credit: details.credit,
-            summary: details.summary,
-            schedule: generatedSchedule,
-            paymentsHistory: details.paymentsHistory,
-          );
-        }
+        // ⭐ El backend SIEMPRE retorna el cronograma ahora (fuente única de verdad)
+        // No es necesario generarlo localmente
 
         return details;
       } else {
@@ -1617,6 +1603,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
   Future<bool> deliverCreditToClient({
     required int creditId,
     String? notes,
+    bool firstPaymentToday = false,
   }) async {
     try {
       state = state.copyWith(
@@ -1660,6 +1647,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
       final response = await _creditApiService.deliverCreditToClient(
         creditId,
         notes: notes,
+        firstPaymentToday: firstPaymentToday,
       );
 
       if (response['success'] == true) {
@@ -1746,28 +1734,6 @@ class CreditNotifier extends StateNotifier<CreditState> {
     final est = (totalAmount / installmentAmount).round();
     if (est <= 0) return null;
     return est;
-  }
-
-  /// Genera un cronograma de pagos local basado en los datos del crédito
-  /// Genera el cronograma a partir de los datos de API
-  Future<List<PaymentSchedule>> _generateScheduleFromApiData(
-    Map<String, dynamic> apiData,
-  ) async {
-    try {
-      return PaymentScheduleGenerator.extractFromPayments(apiData);
-    } catch (e) {
-      print('❌ Error generando cronograma desde API: $e');
-      // Si falla, intentar con el crédito de la respuesta
-      if (apiData['data'] != null) {
-        final creditJson = apiData['data'];
-        if (creditJson is Map<String, dynamic>) {
-          final credit = Credito.fromJson(creditJson);
-          return _generatePaymentSchedule(credit);
-        }
-      }
-      // Si todo falla, devolver lista vacía
-      return [];
-    }
   }
 
   List<PaymentSchedule> _generatePaymentSchedule(Credito credit) {

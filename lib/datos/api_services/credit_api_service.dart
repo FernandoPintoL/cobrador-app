@@ -589,14 +589,22 @@ class CreditApiService extends BaseApiService {
   }
 
   /// Entrega un crédito al cliente
+  ///
+  /// [firstPaymentToday] indica si el primer pago es el mismo día de entrega (true)
+  /// o si el cronograma inicia al día siguiente (false, por defecto)
   Future<Map<String, dynamic>> deliverCreditToClient(
     int creditId, {
     String? notes,
+    bool firstPaymentToday = false,
   }) async {
     try {
       print('🚚 Entregando crédito al cliente: $creditId');
+      print('📅 Primer pago hoy: $firstPaymentToday');
 
-      final data = <String, dynamic>{};
+      final data = <String, dynamic>{
+        'first_payment_today': firstPaymentToday,
+      };
+
       if (notes != null && notes.isNotEmpty) {
         data['notes'] = notes;
       }
@@ -609,6 +617,13 @@ class CreditApiService extends BaseApiService {
       if (response.statusCode == 200) {
         final responseData = response.data as Map<String, dynamic>;
         print('✅ Crédito entregado al cliente exitosamente');
+
+        // El backend ahora incluye payment_schedule en la respuesta
+        if (responseData['data'] != null &&
+            responseData['data']['payment_schedule'] != null) {
+          print('📊 Cronograma de pagos recibido del backend (${responseData['data']['payment_schedule'].length} cuotas)');
+        }
+
         return responseData;
       } else {
         throw Exception(

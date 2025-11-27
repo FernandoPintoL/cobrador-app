@@ -24,8 +24,8 @@ class PaymentsReportView extends BaseReportView {
   @override
   bool hasValidPayload() {
     if (!super.hasValidPayload()) return false;
-    // Ahora accedemos a 'items' en lugar de 'payments'
-    return payload is Map && (payload.containsKey('items') || payload.containsKey('payments'));
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
+    return payload is Map && payload.containsKey('items');
   }
 
 
@@ -53,9 +53,9 @@ class PaymentsReportView extends BaseReportView {
 
   /// Construye la tabla de pagos con columnas apropiadas
   Widget _buildPaymentsTable() {
-    // Ahora accedemos a 'items', con fallback a 'payments' para backward compatibility
+    // ✅ El backend SIEMPRE envía 'items' (estandarizado)
     final payments = payload is Map
-      ? (payload['items'] ?? payload['payments']) as List?
+      ? payload['items'] as List?
       : null;
 
     if (payments == null || payments.isEmpty) {

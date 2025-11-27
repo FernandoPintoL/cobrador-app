@@ -13,6 +13,11 @@ class PaymentSchedule {
   final DateTime? lastPaymentDate;
   final String? paymentMethod;
 
+  // ✅ OPTIMIZACIÓN: Información del cobrador que recibió el pago
+  // Ahora viene directo del backend, sin necesidad de cargar payments
+  final int? receivedById;
+  final String? receivedByName;
+
   PaymentSchedule({
     required this.installmentNumber,
     required this.dueDate,
@@ -25,6 +30,8 @@ class PaymentSchedule {
     this.paymentCount = 0,
     this.lastPaymentDate,
     this.paymentMethod,
+    this.receivedById,
+    this.receivedByName,
   });
 
   factory PaymentSchedule.fromJson(Map<String, dynamic> json) {
@@ -42,6 +49,8 @@ class PaymentSchedule {
           ? DateTime.tryParse(json['last_payment_date'])
           : null,
       paymentMethod: json['payment_method'],
+      receivedById: json['received_by_id'],
+      receivedByName: json['received_by_name'],
     );
   }
 

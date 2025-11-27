@@ -50,7 +50,8 @@
       "Bash(php artisan tinker:*)",
       "Bash(php create_test_data.php:*)",
       "Bash(psql:*)",
-      "Bash(php create_test_clients.php:*)"
+      "Bash(php create_test_clients.php:*)",
+      "Bash(tee:*)"
     ],
     "deny": [],
     "ask": []

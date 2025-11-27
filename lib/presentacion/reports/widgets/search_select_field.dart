@@ -337,17 +337,43 @@ class _SearchModalState extends ConsumerState<_SearchModal> {
     _loadCategories();
   }
 
-  void _loadCategories() {
-    // Cargar categorías según el tipo
-    // Por ahora, colocar categorías locales de prueba
-    final categories = [
-      {'id': '1', 'label': 'Categoría A'},
-      {'id': '2', 'label': 'Categoría B'},
-      {'id': '3', 'label': 'Categoría C'},
-    ];
-    setState(() {
-      _filteredResults = categories;
-    });
+  void _loadCategories() async {
+    // ✅ Cargar categorías desde el backend (single source of truth)
+    try {
+      final svc = UserApiService();
+      final resp = await svc.getClientCategories();
+
+      if (resp['success'] == true && resp['data'] is List) {
+        final List<dynamic> data = resp['data'] as List<dynamic>;
+        final categories = data.map<Map<String, String>>((e) {
+          final map = e as Map<String, dynamic>;
+          final code = (map['code'] ?? '').toString();
+          final name = (map['name'] ?? '').toString();
+          final description = (map['description'] ?? '').toString();
+
+          // Usar el código como ID y mostrar "Código - Nombre" como label
+          final label = description.isNotEmpty
+            ? '$code - $name ($description)'
+            : '$code - $name';
+
+          return {'id': code, 'label': label};
+        }).toList();
+
+        setState(() {
+          _filteredResults = categories;
+        });
+      } else {
+        // Fallback en caso de error
+        setState(() {
+          _filteredResults = [];
+        });
+      }
+    } catch (e) {
+      // Fallback en caso de error
+      setState(() {
+        _filteredResults = [];
+      });
+    }
   }
 
   void _filterResults(String query) {
