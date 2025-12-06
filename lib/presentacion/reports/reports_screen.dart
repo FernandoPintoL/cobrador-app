@@ -90,25 +90,30 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
           final theme = Theme.of(context);
           final cs = theme.colorScheme;
-          return Column(
-            children: [
-              // 🎯 BARRA DE FILTROS COMPACTA EN LA PARTE SUPERIOR
-              Flexible(
-                flex: 0,  // ✅ Permite que tome solo el espacio necesario
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: cs.outlineVariant.withValues(alpha: 0.2),
-                      width: 1,
+
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              // 📱 Calcular altura máxima responsiva para filtros
+              // Dejar al menos 320px para el contenido de resultados + padding extra
+              final maxFilterHeight = (constraints.maxHeight - 320).clamp(180.0, 320.0);
+
+              return Column(
+                children: [
+                  // 🎯 BARRA DE FILTROS COMPACTA EN LA PARTE SUPERIOR
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
                     ),
-                  ),
-                ),
+                    decoration: BoxDecoration(
+                      color: theme.scaffoldBackgroundColor,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: cs.outlineVariant.withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                      ),
+                    ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -117,7 +122,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       onTap: () =>
                           setState(() => _showFilters = !_showFilters),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
                           children: [
                             Icon(
@@ -125,29 +130,32 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   ? Icons.filter_alt
                                   : Icons.filter_alt_off,
                               color: cs.primary,
-                              size: 20,
+                              size: 18,
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Filtros de búsqueda',
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: cs.primary,
+                                  fontSize: 13,
                                 ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                             ),
                             // 🎯 Badge de conteo de filtros activos
                             if (_filters.isNotEmpty)
                               Container(
-                                margin: const EdgeInsets.only(right: 8),
+                                margin: const EdgeInsets.only(right: 6),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
+                                  horizontal: 8,
+                                  vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
                                   color: cs.primaryContainer,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
                                     color: cs.primary.withValues(alpha: 0.3),
                                     width: 1,
@@ -158,7 +166,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   style: TextStyle(
                                     color: cs.onPrimaryContainer,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 12,
+                                    fontSize: 11,
                                   ),
                                 ),
                               ),
@@ -168,6 +176,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               child: Icon(
                                 Icons.expand_more,
                                 color: cs.primary,
+                                size: 20,
                               ),
                             ),
                           ],
@@ -214,12 +223,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       curve: Curves.easeInOut,
                       child: _showFilters
                           ? Container(
-                              constraints: const BoxConstraints(
-                                maxHeight: 365,  // ✅ Reducido a 365 para evitar overflow en diferentes estados
+                              constraints: BoxConstraints(
+                                maxHeight: maxFilterHeight,  // 📱 Altura responsiva calculada dinámicamente
                               ),
                               child: Padding(
                                 padding:
-                                    const EdgeInsets.fromLTRB(8, 10, 8, 10),  // ✅ Reducido vertical padding de 12 a 10
+                                    const EdgeInsets.fromLTRB(8, 8, 8, 8),  // 📱 Reducido padding
                                 child: SingleChildScrollView(
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
@@ -242,7 +251,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 8),
+                                      const SizedBox(height: 6),
                                       Container(
                                         decoration: BoxDecoration(
                                           border: Border.all(
@@ -251,7 +260,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                             ),
                                           ),
                                           borderRadius: BorderRadius.circular(
-                                            12,
+                                            10,
                                           ),
                                         ),
                                         child: DropdownButton<String>(
@@ -308,7 +317,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                           },
                                         ),
                                       ),
-                                      const SizedBox(height: 12),
+                                      const SizedBox(height: 8),
                                       if (_selectedReport != null) ...[
                                         if ((types[_selectedReport!]?['filters']
                                                     as List<dynamic>? ??
@@ -353,8 +362,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                         // ✅ Banner informativo de defaults aplicados
                                         if (_filters.isNotEmpty)
                                           Container(
-                                            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),  // ✅ Reducido vertical de 4 a 3
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),  // ✅ Reducido vertical de 8 a 6
+                                            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),  // 📱 Reducido más
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),  // 📱 Más compacto
                                             decoration: BoxDecoration(
                                               color: Colors.blue.withValues(alpha: 0.1),
                                               borderRadius: BorderRadius.circular(8),
@@ -385,24 +394,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
                                         // Filtros dinámicos con soporte para roles
                                         if (usuario != null)
-                                          Flexible(
-                                            child: SingleChildScrollView(
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(8),
-                                                child: RoleAwareFilterBuilder(
-                                                  reportType: _selectedReport ?? '',
-                                                  currentFilters: _filters,
-                                                  onFilterChanged: (key, value) {
-                                                    setState(() {
-                                                      if (value == null) {
-                                                        _filters.remove(key);
-                                                      } else {
-                                                        _filters[key] = value;
-                                                      }
-                                                    });
-                                                  },
-                                                ),
-                                              ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8),
+                                            child: RoleAwareFilterBuilder(
+                                              reportType: _selectedReport ?? '',
+                                              currentFilters: _filters,
+                                              onFilterChanged: (key, value) {
+                                                setState(() {
+                                                  if (value == null) {
+                                                    _filters.remove(key);
+                                                  } else {
+                                                    _filters[key] = value;
+                                                  }
+                                                });
+                                              },
                                             ),
                                           )
                                         else
@@ -420,25 +425,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     ),
                     // Footer con botones de acción
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
                         children: [
                           Expanded(
+                            flex: 2,
                             child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
+                              spacing: 6,
+                              runSpacing: 6,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 Text(
                                   'Formato:',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: cs.onSurfaceVariant,
+                                    fontSize: 11,
                                   ),
                                 ),
                                 Tooltip(
                                   message: FormatLabels.getTechnicalHint(_format),
                                   child: DropdownButton<String>(
                                     value: _format,
+                                    isDense: true,
                                     items: ((types[_selectedReport]?['formats']
                                                 as List<dynamic>?) ??
                                             ['json'])
@@ -452,13 +460,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                                 children: [
                                                   Icon(
                                                     FormatLabels.getIcon(format),
-                                                    size: 18,
+                                                    size: 16,
                                                     color: cs.primary,
                                                   ),
-                                                  const SizedBox(width: 8),
+                                                  const SizedBox(width: 6),
                                                   Text(
                                                     FormatLabels.getLabel(format),
-                                                    style: theme.textTheme.bodySmall,
+                                                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
                                                   ),
                                                 ],
                                               ),
@@ -484,42 +492,54 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                       ),
                                     );
                                   },
-                                  icon:
-                                      const Icon(Icons.clear_all, size: 18),
-                                  label: const Text('Limpiar'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  icon: const Icon(Icons.clear_all, size: 16),
+                                  label: const Text('Limpiar', style: TextStyle(fontSize: 11)),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           // ✅ Botón con descripción de filtros
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              FilledButton.icon(
-                                onPressed: _selectedReport == null
-                                    ? null
-                                    : _generateReport,
-                                icon: const Icon(Icons.play_arrow_rounded),
-                                label: const Text('Generar'),
-                              ),
-                              // ✅ Badge con descripción de filtros aplicados
-                              if (_selectedReport != null && _filters.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4, left: 8),
-                                  child: Text(
-                                    ReportDefaultsService.getFiltersDescription(
-                                      _filters,
-                                      _selectedReport!,
-                                    ),
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: cs.onSurfaceVariant,
-                                      fontSize: 10,
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                FilledButton.icon(
+                                  onPressed: _selectedReport == null
+                                      ? null
+                                      : _generateReport,
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                                  label: const Text('Generar', style: TextStyle(fontSize: 12)),
+                                ),
+                                // ✅ Badge con descripción de filtros aplicados
+                                if (_selectedReport != null && _filters.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4, right: 4),
+                                    child: Text(
+                                      ReportDefaultsService.getFiltersDescription(
+                                        _filters,
+                                        _selectedReport!,
+                                      ),
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                        fontSize: 9,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.right,
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -527,7 +547,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   ],
                 ),
               ),  // Container
-              ),  // ✅ Cierre del Flexible
               // 📊 CONTENIDO DE RESULTADOS - OCUPA MÁXIMO ESPACIO
               Expanded(
                 child: Container(
@@ -540,6 +559,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               ),
             ],
           );
+            },
+          );  // LayoutBuilder
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, st) =>

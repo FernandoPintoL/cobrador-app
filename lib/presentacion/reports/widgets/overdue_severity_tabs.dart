@@ -166,24 +166,25 @@ class _CompactOverdueCard extends StatelessWidget {
           const SizedBox(height: 4),
           Row(
             children: [
-              Icon(Icons.calendar_today, size: 12, color: Colors.grey[600]),
-              const SizedBox(width: 4),
+              Icon(Icons.calendar_today, size: 11, color: Colors.grey[600]),
+              const SizedBox(width: 3),
               Text(
-                '${item.absDaysOverdue} días',
-                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                '${item.absDaysOverdue}d',
+                style: TextStyle(fontSize: 11, color: Colors.grey[700]),
               ),
-              const SizedBox(width: 8),
-              Icon(Icons.receipt_long, size: 12, color: Colors.grey[600]),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
+              Icon(Icons.receipt_long, size: 11, color: Colors.grey[600]),
+              const SizedBox(width: 3),
               Flexible(
                 child: Text(
-                  '${item.overdueInstallments} cuotas retrasadas',
+                  '${item.overdueInstallments} cuotas',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: Colors.grey[700],
                     fontWeight: FontWeight.w500,
                   ),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],
@@ -191,17 +192,18 @@ class _CompactOverdueCard extends StatelessWidget {
           const SizedBox(height: 4),
           Row(
             children: [
-              Icon(Icons.account_balance_wallet, size: 12, color: Colors.grey[600]),
-              const SizedBox(width: 4),
+              Icon(Icons.account_balance_wallet, size: 11, color: Colors.grey[600]),
+              const SizedBox(width: 3),
               Flexible(
                 child: Text(
                   item.overdueAmountFormatted,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: item.severityColor,
                     fontWeight: FontWeight.w600,
                   ),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],

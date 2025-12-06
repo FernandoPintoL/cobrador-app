@@ -121,27 +121,35 @@ class OverdueDashboard extends StatelessWidget {
             if (bySeverity != null) ...[
               const Divider(height: 1),
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildSeverityBadge(
-                      label: 'Leve',
-                      count: bySeverity['light'] ?? 0,
-                      color: Colors.amber,
-                      icon: Icons.info_outline,
+                    Flexible(
+                      child: _buildSeverityBadge(
+                        label: 'Leve',
+                        count: bySeverity['light'] ?? 0,
+                        color: Colors.amber,
+                        icon: Icons.info_outline,
+                      ),
                     ),
-                    _buildSeverityBadge(
-                      label: 'Moderada',
-                      count: bySeverity['moderate'] ?? 0,
-                      color: Colors.orange,
-                      icon: Icons.warning_amber,
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: _buildSeverityBadge(
+                        label: 'Mod',
+                        count: bySeverity['moderate'] ?? 0,
+                        color: Colors.orange,
+                        icon: Icons.warning_amber,
+                      ),
                     ),
-                    _buildSeverityBadge(
-                      label: 'Crítica',
-                      count: bySeverity['severe'] ?? 0,
-                      color: Colors.red,
-                      icon: Icons.error_outline,
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: _buildSeverityBadge(
+                        label: 'Crít',
+                        count: bySeverity['severe'] ?? 0,
+                        color: Colors.red,
+                        icon: Icons.error_outline,
+                      ),
                     ),
                   ],
                 ),
@@ -197,37 +205,46 @@ class OverdueDashboard extends StatelessWidget {
     required IconData icon,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: color,
-                  fontWeight: FontWeight.w600,
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 8,
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                    height: 1.0,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: color,
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                    height: 1.1,
+                  ),
+                  maxLines: 1,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

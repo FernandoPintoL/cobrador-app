@@ -31,28 +31,36 @@ class MiniStatCard extends StatelessWidget {
       child: Card(
         elevation: 2,
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(12.0),  // 📱 Reducido de 16 a 12
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,  // 📱 Centra verticalmente
             children: [
               CircleAvatar(
-                radius: 22,
-                backgroundColor: color.withOpacity(0.12),
+                radius: 20,  // 📱 Reducido de 22 a 20
+                backgroundColor: color.withValues(alpha: 0.12),
                 foregroundColor: color,
-                child: Icon(icon, size: 22),
+                child: Icon(icon, size: 20),  // 📱 Reducido de 22 a 20
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),  // 📱 Reducido de 14 a 12
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,  // 📱 Centra el contenido
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
                       style: (Theme.of(context).textTheme.labelLarge ??
                               const TextStyle())
-                          .copyWith(color: Colors.grey[700], fontSize: 14),
+                          .copyWith(
+                            color: Colors.grey[700],
+                            fontSize: 12,  // 📱 Reducido de 14 a 12
+                            height: 1.2,  // 📱 Controla el interlineado
+                          ),
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 2),  // 📱 Reducido de 4 a 2
                     Text(
                       value,
                       style:
@@ -60,9 +68,11 @@ class MiniStatCard extends StatelessWidget {
                                   const TextStyle(fontSize: 18))
                               .copyWith(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 18,
+                                fontSize: 15,  // 📱 Reducido de 16 a 15
+                                height: 1.2,  // 📱 Controla el interlineado
                               ),
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ],
                 ),
