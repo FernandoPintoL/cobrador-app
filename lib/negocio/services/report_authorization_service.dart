@@ -68,17 +68,15 @@ class ReportAuthorizationService {
   }
 
   /// Autoriza filtros para reporte de Pagos
-  /// Manager: Solo puede ver pagos de sus cobradores
+  /// Manager: Puede filtrar por cobrador específico (de sus asignados)
   /// Cobrador: Solo puede ver sus propios pagos
   static Map<String, dynamic> _authorizePaymentsFilters(
     Map<String, dynamic> filters,
     Usuario usuario,
   ) {
     if (usuario.esManager()) {
-      // Manager: No permitir que especifique cobrador_id de otros
-      // El backend debería filtrar a los cobradores asignados
-      // Por ahora, dejamos que el filtro se envíe pero validamos que sea válido
-      filters.remove('cobrador_id'); // Manager no puede filtrar por cobrador específico
+      // Manager: PUEDE filtrar por cobrador_id específico (de sus asignados)
+      // El backend validará que el cobrador esté asignado al manager
       return filters;
     } else if (usuario.esCobrador()) {
       // Cobrador: Solo ve sus propios pagos
@@ -90,16 +88,16 @@ class ReportAuthorizationService {
   }
 
   /// Autoriza filtros para reporte de Créditos
-  /// Manager: Solo puede ver créditos de sus cobradores
+  /// Manager: Puede filtrar por cobrador específico (de sus asignados)
   /// Cobrador: Solo puede ver créditos asignados a él
   static Map<String, dynamic> _authorizeCreditsFilters(
     Map<String, dynamic> filters,
     Usuario usuario,
   ) {
     if (usuario.esManager()) {
-      // Manager: Remover cobrador_id si está presente (backend filtra sus cobradores)
-      filters.remove('cobrador_id');
-      // Manager no puede filtrar por cliente_id de otros
+      // Manager: PUEDE filtrar por cobrador_id específico (de sus asignados)
+      // El backend validará que el cobrador esté asignado al manager
+      // Solo removemos client_id por seguridad
       filters.remove('client_id');
       return filters;
     } else if (usuario.esCobrador()) {
@@ -113,15 +111,14 @@ class ReportAuthorizationService {
   }
 
   /// Autoriza filtros para reporte de Balance
-  /// Manager: Solo ve balance de sus cobradores
+  /// Manager: Puede filtrar por cobrador específico (de sus asignados)
   /// Cobrador: Solo ve su balance
   static Map<String, dynamic> _authorizeBalanceFilters(
     Map<String, dynamic> filters,
     Usuario usuario,
   ) {
     if (usuario.esManager()) {
-      // Manager: Backend filtra sus cobradores
-      filters.remove('cobrador_id');
+      // Manager: PUEDE filtrar por cobrador_id específico (de sus asignados)
       return filters;
     } else if (usuario.esCobrador()) {
       // Cobrador: Solo su balance
@@ -153,15 +150,14 @@ class ReportAuthorizationService {
   }
 
   /// Autoriza filtros para reporte de Desempeño
-  /// Manager: Solo ve desempeño de sus cobradores
+  /// Manager: Puede filtrar por cobrador específico (de sus asignados)
   /// Cobrador: Solo ve su desempeño
   static Map<String, dynamic> _authorizePerformanceFilters(
     Map<String, dynamic> filters,
     Usuario usuario,
   ) {
     if (usuario.esManager()) {
-      // Manager: Backend filtra sus cobradores
-      filters.remove('cobrador_id');
+      // Manager: PUEDE filtrar por cobrador_id específico (de sus asignados)
       return filters;
     } else if (usuario.esCobrador()) {
       // Cobrador: Solo su desempeño
@@ -173,15 +169,14 @@ class ReportAuthorizationService {
   }
 
   /// Autoriza filtros para reporte de Actividad Diaria
-  /// Manager: Ve actividad de sus cobradores
+  /// Manager: Puede filtrar por cobrador específico (de sus asignados)
   /// Cobrador: Solo ve su actividad
   static Map<String, dynamic> _authorizeDailyActivityFilters(
     Map<String, dynamic> filters,
     Usuario usuario,
   ) {
     if (usuario.esManager()) {
-      // Manager: Backend filtra sus cobradores
-      filters.remove('cobrador_id');
+      // Manager: PUEDE filtrar por cobrador_id específico (de sus asignados)
       return filters;
     } else if (usuario.esCobrador()) {
       // Cobrador: Solo su actividad

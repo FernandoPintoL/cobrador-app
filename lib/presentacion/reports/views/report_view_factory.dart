@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../../negocio/providers/reports_provider.dart' as rp;
 import '../../../datos/modelos/reporte/daily_activity_report.dart';
 import '../utils/generic_report_builder.dart';
-import '../widgets/daily_activity_widgets.dart';
 import 'base_report_view.dart';
 import 'payments_report_view.dart';
 import 'credits_report_view.dart';
@@ -205,7 +204,7 @@ class _DailyActivityReportView extends BaseReportView {
                 Icon(
                   Icons.inbox,
                   size: 64,
-                  color: Colors.grey.withOpacity(0.5),
+                  color: Colors.grey.withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -216,7 +215,7 @@ class _DailyActivityReportView extends BaseReportView {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'No hay registros de pagos',
+                  'No hay registros de actividad',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.grey,
                       ),
@@ -228,66 +227,42 @@ class _DailyActivityReportView extends BaseReportView {
         );
       }
 
-      // Mostrar el reporte con los widgets modernos
+      final currencyFormat = NumberFormat.currency(
+        locale: 'es_BO',
+        symbol: 'Bs ',
+        decimalDigits: 2,
+      );
+
+      // Mostrar el reporte con los datos nuevos
       return SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Card de resumen
-              DailyActivitySummaryCard(summary: report.summary),
+              // Card de resumen del día
+              _buildDaySummaryCard(context, report.summary, currencyFormat),
               const SizedBox(height: 24),
 
-              // Resumen por cobrador
-              if (report.summary.byCobradores.isNotEmpty) ...[
-                Text(
-                  'Resumen por Cobrador',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 12),
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: report.summary.byCobradores.entries.length,
-                  itemBuilder: (context, index) {
-                    final entry =
-                        report.summary.byCobradores.entries.elementAt(index);
-                    final cobradorId = entry.key;
-                    final cobradorSummary = entry.value;
-
-                    // Encontrar el nombre del cobrador desde los items
-                    final cobradorName = report.items
-                        .where((item) => item.cobradorId.toString() == cobradorId)
-                        .firstOrNull
-                        ?.cobradorName;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: CobradorSummaryCard(
-                        cobradorId: cobradorId,
-                        summary: cobradorSummary,
-                        cobradorName: cobradorName,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-              ],
-
-              // Detalle de actividades
+              // Actividad por cobrador
               Text(
-                'Detalle de Pagos',
+                'Actividad por Cobrador',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
               const SizedBox(height: 12),
-              DailyActivityListView(
-                items: report.items,
-                onItemTap: (item) => _showPaymentDetails(context, item),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: report.items.length,
+                itemBuilder: (context, index) {
+                  final cobradorItem = report.items[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildCobradorCard(context, cobradorItem, currencyFormat),
+                  );
+                },
               ),
             ],
           ),
@@ -301,194 +276,92 @@ class _DailyActivityReportView extends BaseReportView {
     }
   }
 
-  void _showPaymentDetails(BuildContext context, DailyActivityItem item) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'es_BO',
-      symbol: 'Bs ',
-      decimalDigits: 2,
-    );
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Detalles del Pago',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      Text(
-                        'Pago #${item.id}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey,
-                            ),
-                      ),
-                    ],
+  Widget _buildDaySummaryCard(
+    BuildContext context,
+    DailyActivitySummary summary,
+    NumberFormat currencyFormat,
+  ) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Resumen del Día',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                  PaymentStatusChip(status: item.status),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Información del cliente
-              _buildDetailSection(
-                context,
-                'Cliente',
-                [
-                  _buildDetailRow(context, 'Nombre', item.clientName),
-                  _buildDetailRow(context, 'Crédito ID', '#${item.creditId}'),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Información del pago
-              _buildDetailSection(
-                context,
-                'Información del Pago',
-                [
-                  _buildDetailRow(
-                    context,
-                    'Monto',
-                    currencyFormat.format(item.amount),
-                    isHighlight: true,
+            ),
+            Text(
+              '${summary.dayName}, ${summary.date}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
                   ),
-                  _buildDetailRow(
-                    context,
-                    'Método',
-                    item.paymentMethodDisplay,
-                  ),
-                  _buildDetailRow(
-                    context,
-                    'Cuota',
-                    '${item.installmentNumber}',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Información del cobrador
-              _buildDetailSection(
-                context,
-                'Cobrador',
-                [
-                  _buildDetailRow(context, 'Nombre', item.cobradorName),
-                  _buildDetailRow(context, 'ID', item.cobradorId.toString()),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Fechas
-              _buildDetailSection(
-                context,
-                'Fechas',
-                [
-                  _buildDetailRow(
-                    context,
-                    'Fecha de Pago',
-                    _formatDate(item.paymentDate),
-                  ),
-                  _buildDetailRow(
-                    context,
-                    'Creado',
-                    _formatDate(item.createdAt),
-                  ),
-                ],
-              ),
-
-              // Ubicación si está disponible
-              if (item.latitude != null && item.longitude != null) ...[
-                const SizedBox(height: 16),
-                _buildDetailSection(
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildStatChip(
                   context,
-                  'Ubicación',
-                  [
-                    _buildDetailRow(
-                      context,
-                      'Latitud',
-                      item.latitude.toString(),
-                    ),
-                    _buildDetailRow(
-                      context,
-                      'Longitud',
-                      item.longitude.toString(),
-                    ),
-                  ],
+                  'Créditos Entregados',
+                  summary.totals.creditsDelivered.toString(),
+                  Icons.add_card,
+                ),
+                _buildStatChip(
+                  context,
+                  'Monto Prestado',
+                  currencyFormat.format(summary.totals.amountLent),
+                  Icons.attach_money,
+                ),
+                _buildStatChip(
+                  context,
+                  'Pagos Cobrados',
+                  summary.totals.paymentsCollected.toString(),
+                  Icons.receipt,
+                ),
+                _buildStatChip(
+                  context,
+                  'Monto Cobrado',
+                  currencyFormat.format(summary.totals.amountCollected),
+                  Icons.money,
+                ),
+                _buildStatChip(
+                  context,
+                  'Eficiencia',
+                  summary.overallEfficiencyFormatted,
+                  Icons.trending_up,
                 ),
               ],
-
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cerrar'),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildDetailSection(
-    BuildContext context,
-    String title,
-    List<Widget> children,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        const SizedBox(height: 8),
-        ...children,
-      ],
-    );
-  }
-
-  Widget _buildDetailRow(
+  Widget _buildStatChip(
     BuildContext context,
     String label,
-    String value, {
-    bool isHighlight = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    String value,
+    IconData icon,
+  ) {
+    return Chip(
+      avatar: Icon(icon, size: 18),
+      label: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey,
-                ),
+            style: Theme.of(context).textTheme.labelSmall,
           ),
           Text(
             value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
-                  color: isHighlight ? Colors.green.shade700 : null,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
           ),
         ],
@@ -496,8 +369,78 @@ class _DailyActivityReportView extends BaseReportView {
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  Widget _buildCobradorCard(
+    BuildContext context,
+    DailyActivityCobradorItem cobrador,
+    NumberFormat currencyFormat,
+  ) {
+    return Card(
+      child: ExpansionTile(
+        leading: CircleAvatar(
+          child: Text(cobrador.cobradorName.substring(0, 1)),
+        ),
+        title: Text(
+          cobrador.cobradorName,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text('ID: ${cobrador.cobradorId}'),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoRow(
+                  'Balance',
+                  cobrador.cashBalance.isOpen ? 'Abierto' : 'Cerrado',
+                ),
+                _buildInfoRow(
+                  'Monto Cobrado',
+                  currencyFormat.format(cobrador.cashBalance.collectedAmount),
+                ),
+                _buildInfoRow(
+                  'Monto Prestado',
+                  currencyFormat.format(cobrador.cashBalance.lentAmount),
+                ),
+                _buildInfoRow(
+                  'Créditos Entregados',
+                  '${cobrador.creditsDelivered.count}',
+                ),
+                _buildInfoRow(
+                  'Pagos Cobrados',
+                  '${cobrador.paymentsCollected.count}',
+                ),
+                _buildInfoRow(
+                  'Pagos Esperados',
+                  '${cobrador.expectedPayments.count}',
+                ),
+                _buildInfoRow(
+                  'Pendientes',
+                  '${cobrador.expectedPayments.pending}',
+                ),
+                _buildInfoRow(
+                  'Eficiencia',
+                  cobrador.expectedPayments.efficiencyFormatted,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
   }
 }
 

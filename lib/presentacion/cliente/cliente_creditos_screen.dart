@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
@@ -15,7 +14,6 @@ import '../widgets/profile_image_widget.dart';
 import '../../ui/widgets/loading_overlay.dart';
 import '../../ui/widgets/client_category_chip.dart';
 import 'cliente_perfil_screen.dart';
-import 'location_picker_screen.dart';
 
 class ClienteCreditosScreen extends ConsumerStatefulWidget {
   final Usuario cliente;
@@ -134,172 +132,110 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
   }
 
   Widget _buildClientInfoCard() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Card(
       margin: const EdgeInsets.all(16),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         onTap: () => _navegarAlPerfil(),
         child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
+          padding: const EdgeInsets.all(16),
+          child: Row(
             children: [
-              // Header con foto y información principal
-              Row(
-                children: [
-                  // Foto de perfil del cliente
-                  ProfileImageWidget(
-                    profileImage: widget.cliente.profileImage,
-                    size: 60,
-                  ),
-                  const SizedBox(width: 16),
-                  // Información principal
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                widget.cliente.nombre,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            // Botón de perfil completo
-                            IconButton(
-                              icon: Icon(
-                                Icons.person,
-                                color: RoleColors.clientePrimary,
-                              ),
-                              onPressed: () => _navegarAlPerfil(),
-                              tooltip: 'Ver perfil completo',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        ClientCategoryChip(
-                          category: widget.cliente.clientCategory,
-                          compact: true,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.email_outlined,
-                              size: 16,
-                              color: Colors.grey[600],
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                widget.cliente.email,
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (widget.cliente.telefono.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.phone_outlined,
-                                size: 16,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  widget.cliente.telefono,
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (widget.cliente.direccion.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.location_on_outlined,
-                                size: 16,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  widget.cliente.direccion,
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 12,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
+              // Foto de perfil del cliente - tamaño reducido
+              ProfileImageWidget(
+                profileImage: widget.cliente.profileImage,
+                size: 56,
+              ),
+              const SizedBox(width: 12),
+
+              // Información principal - compacta
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.cliente.nombre,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+
+                    // Categoría del cliente
+                    ClientCategoryChip(
+                      category: widget.cliente.clientCategory,
+                      compact: true,
+                    ),
+
+                    // Contacto rápido - solo si tiene teléfono
+                    if (widget.cliente.telefono.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          _buildCompactActionChip(
+                            icon: Icons.phone,
+                            label: 'Llamar',
+                            color: Colors.green,
+                            onTap: () => _llamarCliente(),
+                          ),
+                          _buildCompactActionChip(
+                            icon: Icons.message,
+                            label: 'WhatsApp',
+                            color: Colors.green[700]!,
+                            onTap: () => _enviarWhatsApp(),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
 
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 12),
+              const SizedBox(width: 8),
 
-              // Botones de acción rápida
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              // Botón para ver perfil completo
+              Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Botón de llamar
-                  if (widget.cliente.telefono.isNotEmpty)
-                    _buildActionButton(
-                      icon: Icons.phone,
-                      label: 'Llamar',
-                      color: Colors.green,
-                      onTap: () => _llamarCliente(),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: RoleColors.clientePrimary.withValues(alpha: isDark ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-
-                  // Botón de WhatsApp
-                  if (widget.cliente.telefono.isNotEmpty)
-                    _buildActionButton(
-                      icon: Icons.message,
-                      label: 'WhatsApp',
-                      color: Colors.green[600]!,
-                      onTap: () => _enviarWhatsApp(),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.person_outline,
+                        color: RoleColors.clientePrimary,
+                        size: 22,
+                      ),
+                      onPressed: () => _navegarAlPerfil(),
+                      tooltip: 'Ver perfil completo',
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
                     ),
-
-                  // Botón de ver perfil
-                  _buildActionButton(
-                    icon: Icons.account_circle,
-                    label: 'Perfil',
-                    color: RoleColors.clientePrimary,
-                    onTap: () => _navegarAlPerfil(),
                   ),
-
-                  // Botón de ubicación (si tiene coordenadas)
-                  if (widget.cliente.latitud != null && widget.cliente.longitud != null)
-                    _buildActionButton(
-                      icon: Icons.location_on,
-                      label: 'Ubicación',
-                      color: Colors.blue,
-                      onTap: () => _verUbicacion(),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Perfil',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: RoleColors.clientePrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
+                  ),
                 ],
               ),
             ],
@@ -309,33 +245,33 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
     );
   }
 
-  Widget _buildActionButton({
+  Widget _buildCompactActionChip({
     required IconData icon,
     required String label,
     required Color color,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Column(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: color.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 20,
-              ),
-            ),
-            const SizedBox(height: 4),
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
@@ -365,8 +301,10 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceAround,
           children: [
             _buildStatItem(
               'Total',
@@ -404,26 +342,46 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
     IconData icon,
     Color color,
   ) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: color,
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return SizedBox(
+      width: 70,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
           ),
-          textAlign: TextAlign.center,
-        ),
-        Text(
-          label,
-          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-          textAlign: TextAlign.center,
-        ),
-      ],
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: 10,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
@@ -793,44 +751,6 @@ class _ClienteCreditosScreenState extends ConsumerState<ClienteCreditosScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => ClientePerfilScreen(cliente: widget.cliente),
-      ),
-    );
-  }
-
-  void _verUbicacion() {
-    if (widget.cliente.latitud != null && widget.cliente.longitud != null) {
-      // Usar la misma lógica que en el perfil del cliente
-      _mostrarUbicacionEnMapa();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Este cliente no tiene ubicación GPS registrada'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-  }
-
-  void _mostrarUbicacionEnMapa() {
-    // Crear marcador para la ubicación del cliente
-    final clienteMarker = Marker(
-      markerId: MarkerId('cliente_${widget.cliente.id}'),
-      position: LatLng(widget.cliente.latitud!, widget.cliente.longitud!),
-      infoWindow: InfoWindow(
-        title: widget.cliente.nombre,
-        snippet: 'Cliente ${widget.cliente.clientCategory ?? 'B'} - ${widget.cliente.telefono}',
-      ),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-    );
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => LocationPickerScreen(
-          allowSelection: false, // Modo solo visualización
-          extraMarkers: {clienteMarker},
-          customTitle: 'Ubicación de ${widget.cliente.nombre}',
-        ),
       ),
     );
   }

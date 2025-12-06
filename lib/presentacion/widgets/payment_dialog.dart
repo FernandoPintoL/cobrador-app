@@ -98,7 +98,10 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
       // Calcular remaining si no viene del backend
       suggestedAmount = installment.remainingAmount > 0
           ? installment.remainingAmount
-          : (installment.amount - installment.paidAmount).clamp(0.0, installment.amount);
+          : (installment.amount - installment.paidAmount).clamp(
+              0.0,
+              installment.amount,
+            );
     } else if (widget.creditSummary != null) {
       final installmentValue = widget.creditSummary!['installment_amount'];
       if (installmentValue != null) {
@@ -369,7 +372,8 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                           final installment = widget.specificInstallment!;
                           final remaining = installment.remainingAmount > 0
                               ? installment.remainingAmount
-                              : (installment.amount - installment.paidAmount).clamp(0.0, installment.amount);
+                              : (installment.amount - installment.paidAmount)
+                                    .clamp(0.0, installment.amount);
                           return Text(
                             _formatCurrency(remaining),
                             style: TextStyle(
@@ -402,9 +406,11 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(widget.specificInstallment != null
-                          ? 'Monto sugerido:'
-                          : 'Cuota sugerida:'),
+                      Text(
+                        widget.specificInstallment != null
+                            ? 'Monto sugerido:'
+                            : 'Cuota sugerida:',
+                      ),
                       Text(
                         _formatCurrency(suggestedAmount),
                         style: TextStyle(
@@ -468,46 +474,50 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              TextButton(
-                onPressed: isProcessing
-                    ? null
-                    : () {
-                        /* widget.onCancel?.call();
-                        // Solo llamar a onFinished si está definido
-                        if (widget.onFinished != null) {
-                          widget.onFinished!({
-                            'success': false,
-                            'message': null,
-                          });
-                        } else {
+              Expanded(
+                child: TextButton(
+                  onPressed: isProcessing
+                      ? null
+                      : () {
                           Navigator.of(context).pop();
-                        } */
-                        Navigator.of(context).pop();
-                      },
-                child: const Text('Cancelar'),
+                        },
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Cancelar', overflow: TextOverflow.ellipsis),
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: isProcessing
-                    ? null
-                    : () => _processPayment(setDialogState),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                ),
-                child: isProcessing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: isProcessing
+                      ? null
+                      : () => _processPayment(setDialogState),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isProcessing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Procesar Pago',
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      )
-                    : const Text('Procesar Pago'),
+                ),
               ),
             ],
           ),

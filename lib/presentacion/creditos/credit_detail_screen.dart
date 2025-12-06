@@ -37,7 +37,6 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
   Map<String, dynamic>? _creditSummary;
   List<PaymentSchedule>? _apiPaymentSchedule;
   bool _showAllDetails = false;
-  bool _showClientInfo = false;
   bool _showSummaryInfo = true; // Inicia abierto
 
   @override
@@ -103,7 +102,10 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
           children: [
             Flexible(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -141,12 +143,18 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
             },
           ),
           if (isManager) ...[
-            _buildModernActionButton(
-              icon: Icons.edit_rounded,
-              tooltip: 'Editar Crédito',
-              color: Colors.orange,
-              onPressed: () => _editCredit(currentCredit),
-            ),
+            // Solo mostrar botón editar si:
+            // - El crédito NO está activo, O
+            // - Está activo pero con menos de 1 pago registrado
+            // Protege la integridad: incluso con 1 solo pago ya no se puede editar
+            if (currentCredit.status != 'active' ||
+                (currentCredit.paidInstallmentsCount ?? 0) < 1)
+              _buildModernActionButton(
+                icon: Icons.edit_rounded,
+                tooltip: 'Editar Crédito',
+                color: Colors.orangeAccent,
+                onPressed: () => _editCredit(currentCredit),
+              ),
             PopupMenuButton<String>(
               onSelected: (value) => _handleMenuAction(value, currentCredit),
               icon: Container(
@@ -197,6 +205,8 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
         children: [
           Column(
             children: [
+              // Header compacto del cliente - siempre visible
+              _buildClientHeader(currentCredit),
               // Botón fijo en la parte superior (solo para créditos activos)
               if (currentCredit.status == 'active')
                 Container(
@@ -247,10 +257,11 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
                         Theme.of(
                           context,
-                        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.96),
+                        ).colorScheme.surface.withValues(alpha: 0.96),
+                        Theme.of(context).colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.96),
                       ],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -417,7 +428,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                                   Icon(
                                     Icons.summarize_rounded,
                                     size: 24,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                   ),
                                   const SizedBox(width: 12),
                                   Flexible(
@@ -426,7 +439,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleLarge
-                                          ?.copyWith(fontWeight: FontWeight.bold),
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -445,9 +460,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                                     _showSummaryInfo
                                         ? Icons.expand_less
                                         : Icons.expand_more,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ],
                               ),
@@ -464,185 +479,205 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                    const SizedBox(height: 12),
-                    _buildKpisRow(credit, _creditSummary!),
-                    const SizedBox(height: 12),
-                    // Información esencial en grid de 2 columnas
-                    _buildEssentialInfoGrid(_creditSummary!),
-                    const SizedBox(height: 12),
-                    // Botón para expandir/colapsar detalles adicionales
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          _showAllDetails = !_showAllDetails;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .outlineVariant
-                                .withValues(alpha: 0.5),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _showAllDetails
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                              size: 20,
-                              color:
-                                  Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _showAllDetails
-                                  ? 'Ocultar detalles'
-                                  : 'Ver más detalles',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Detalles adicionales (expandibles)
-                    if (_showAllDetails) ...[
-                      const SizedBox(height: 12),
-                      _buildAdditionalDetailsGrid(_creditSummary!),
-                    ],
-                    const SizedBox(height: 16),
-                    // Barra de progreso moderna con gradiente
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Progreso del crédito',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            Text(
-                              '${(progress * 100).toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: progress < 0.5
-                                    ? Colors.red
-                                    : (progress < 0.8
-                                          ? Colors.orange
-                                          : Colors.green),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Stack(
-                            children: [
-                              Container(
-                                height: 16,
+                            const SizedBox(height: 12),
+                            _buildKpisRow(credit, _creditSummary!),
+                            const SizedBox(height: 12),
+                            // Información esencial en grid de 2 columnas
+                            _buildEssentialInfoGrid(_creditSummary!),
+                            const SizedBox(height: 12),
+                            // Botón para expandir/colapsar detalles adicionales
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _showAllDetails = !_showAllDetails;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context)
                                       .colorScheme
                                       .surfaceContainerHighest
-                                      .withValues(alpha: 0.5),
+                                      .withValues(alpha: 0.3),
                                   borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .outlineVariant
+                                        .withValues(alpha: 0.5),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      _showAllDetails
+                                          ? Icons.expand_less
+                                          : Icons.expand_more,
+                                      size: 20,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _showAllDetails
+                                          ? 'Ocultar detalles'
+                                          : 'Ver más detalles',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              FractionallySizedBox(
-                                widthFactor: progress.clamp(0.0, 1.0),
-                                child: Container(
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: progress < 0.5
-                                          ? [
-                                              Colors.red.shade400,
-                                              Colors.red.shade600,
-                                            ]
-                                          : (progress < 0.8
-                                                ? [
-                                                    Colors.orange.shade400,
-                                                    Colors.orange.shade600,
-                                                  ]
-                                                : [
-                                                    Colors.green.shade400,
-                                                    Colors.green.shade600,
-                                                  ]),
+                            ),
+                            // Detalles adicionales (expandibles)
+                            if (_showAllDetails) ...[
+                              const SizedBox(height: 12),
+                              _buildAdditionalDetailsGrid(_creditSummary!),
+                            ],
+                            const SizedBox(height: 16),
+                            // Barra de progreso moderna con gradiente
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Progreso del crédito',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
                                     ),
-                                    borderRadius: BorderRadius.circular(8),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            (progress < 0.5
-                                                    ? Colors.red
-                                                    : (progress < 0.8
-                                                          ? Colors.orange
-                                                          : Colors.green))
-                                                .withValues(alpha: 0.4),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
+                                    Text(
+                                      '${(progress * 100).toStringAsFixed(1)}%',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: progress < 0.5
+                                            ? Colors.red
+                                            : (progress < 0.8
+                                                  ? Colors.orange
+                                                  : Colors.green),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Stack(
+                                    children: [
+                                      Container(
+                                        height: 16,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surfaceContainerHighest
+                                              .withValues(alpha: 0.5),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                      ),
+                                      FractionallySizedBox(
+                                        widthFactor: progress.clamp(0.0, 1.0),
+                                        child: Container(
+                                          height: 16,
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: progress < 0.5
+                                                  ? [
+                                                      Colors.red.shade400,
+                                                      Colors.red.shade600,
+                                                    ]
+                                                  : (progress < 0.8
+                                                        ? [
+                                                            Colors
+                                                                .orange
+                                                                .shade400,
+                                                            Colors
+                                                                .orange
+                                                                .shade600,
+                                                          ]
+                                                        : [
+                                                            Colors
+                                                                .green
+                                                                .shade400,
+                                                            Colors
+                                                                .green
+                                                                .shade600,
+                                                          ]),
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color:
+                                                    (progress < 0.5
+                                                            ? Colors.red
+                                                            : (progress < 0.8
+                                                                  ? Colors
+                                                                        .orange
+                                                                  : Colors
+                                                                        .green))
+                                                        .withValues(alpha: 0.4),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    IntrinsicHeight(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: _buildDateInfo('F. Inicio', credit.startDate),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildDateInfo(
-                              'F. Vencimiento',
-                              credit.endDate,
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (credit.scheduledDeliveryDate != null)
-                      _buildDateInfo(
-                        'Fecha para Entrega',
-                        credit.scheduledDeliveryDate!,
-                      ),
+                            const SizedBox(height: 8),
+                            IntrinsicHeight(
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: _buildDateInfo(
+                                      'F. Inicio',
+                                      credit.startDate,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildDateInfo(
+                                      'F. Vencimiento',
+                                      credit.endDate,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (credit.scheduledDeliveryDate != null)
+                              _buildDateInfo(
+                                'Fecha para Entrega',
+                                credit.scheduledDeliveryDate!,
+                              ),
                           ],
                         ),
                       ),
@@ -652,8 +687,6 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
               ),
             ),
           const SizedBox(height: 12),
-          // INFORMACIÓN DEL CLIENTE - Colapsable
-          _buildCollapsableClientCard(credit),
         ],
       ),
     );
@@ -706,19 +739,26 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
     // Calcular monto restante (por si el backend no lo envía)
     final double remaining = installment.remainingAmount > 0
         ? installment.remainingAmount
-        : (installment.amount - installment.paidAmount).clamp(0.0, installment.amount);
+        : (installment.amount - installment.paidAmount).clamp(
+            0.0,
+            installment.amount,
+          );
 
     // Verificar si la cuota puede ser pagada (no está completamente pagada)
-    final bool canPay = installment.status != 'paid' &&
-                        !installment.isPaidFull &&
-                        remaining > 0;
+    final bool canPay =
+        installment.status != 'paid' &&
+        !installment.isPaidFull &&
+        remaining > 0;
 
     // Verificar si hay cuotas anteriores sin pagar (pago fuera de orden)
-    final bool hasUnpaidPreviousInstallments = _apiPaymentSchedule
-            ?.where((s) =>
-                s.installmentNumber < installment.installmentNumber &&
-                s.status != 'paid' &&
-                !s.isPaidFull)
+    final bool hasUnpaidPreviousInstallments =
+        _apiPaymentSchedule
+            ?.where(
+              (s) =>
+                  s.installmentNumber < installment.installmentNumber &&
+                  s.status != 'paid' &&
+                  !s.isPaidFull,
+            )
             .isNotEmpty ??
         false;
 
@@ -742,9 +782,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
               color: canPay ? Colors.green : statusColor,
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text('Cuota #${installment.installmentNumber}'),
-            ),
+            Expanded(child: Text('Cuota #${installment.installmentNumber}')),
           ],
         ),
         content: Column(
@@ -793,7 +831,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              if (installment.lastPaymentDate!.isAfter(installment.dueDate)) ...[
+              if (installment.lastPaymentDate!.isAfter(
+                installment.dueDate,
+              )) ...[
                 const SizedBox(height: 2),
                 Text(
                   '⚠️ Pagado ${installment.lastPaymentDate!.difference(installment.dueDate).inDays} día(s) tarde',
@@ -803,7 +843,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                     fontStyle: FontStyle.italic,
                   ),
                 ),
-              ] else if (installment.lastPaymentDate!.isBefore(installment.dueDate)) ...[
+              ] else if (installment.lastPaymentDate!.isBefore(
+                installment.dueDate,
+              )) ...[
                 const SizedBox(height: 2),
                 Text(
                   '✓ Pagado ${installment.dueDate.difference(installment.lastPaymentDate!).inDays} día(s) antes',
@@ -905,12 +947,16 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
 
   Future<void> _paySpecificInstallment(PaymentSchedule installment) async {
     // Verificar si hay cuotas anteriores sin pagar
-    final unpaidPrevious = _apiPaymentSchedule
-        ?.where((s) =>
-            s.installmentNumber < installment.installmentNumber &&
-            s.status != 'paid' &&
-            !s.isPaidFull)
-        .toList() ?? [];
+    final unpaidPrevious =
+        _apiPaymentSchedule
+            ?.where(
+              (s) =>
+                  s.installmentNumber < installment.installmentNumber &&
+                  s.status != 'paid' &&
+                  !s.isPaidFull,
+            )
+            .toList() ??
+        [];
 
     // Si hay cuotas anteriores sin pagar, mostrar confirmación
     if (unpaidPrevious.isNotEmpty) {
@@ -921,9 +967,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
             children: [
               Icon(Icons.warning_rounded, color: Colors.orange, size: 28),
               const SizedBox(width: 12),
-              const Expanded(
-                child: Text('Advertencia: Pago fuera de orden'),
-              ),
+              const Expanded(child: Text('Advertencia: Pago fuera de orden')),
             ],
           ),
           content: Column(
@@ -940,7 +984,9 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -949,11 +995,18 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         children: [
-                          Icon(Icons.circle, size: 6, color: Colors.orange.shade700),
+                          Icon(
+                            Icons.circle,
+                            size: 6,
+                            color: Colors.orange.shade700,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Cuota #${s.installmentNumber} - ${_getStatusLabel(s.status)}',
-                            style: TextStyle(fontSize: 13, color: Colors.orange.shade900),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.orange.shade900,
+                            ),
                           ),
                         ],
                       ),
@@ -965,7 +1018,11 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Y ${unpaidPrevious.length - 5} cuota(s) más...',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ],
               const SizedBox(height: 16),
@@ -976,7 +1033,11 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
               const SizedBox(height: 8),
               Text(
                 'Recomendación: Es mejor pagar las cuotas en orden secuencial para mantener un mejor control del crédito.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontStyle: FontStyle.italic),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ],
           ),
@@ -1053,596 +1114,6 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
     }
   }
 
-  Widget _buildCollapsableClientCard(Credito credit) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Card(
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? [
-                    Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.3),
-                    Theme.of(context).colorScheme.surface,
-                  ]
-                : [
-                    Theme.of(context).colorScheme.surface,
-                    Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.2),
-                  ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: [
-            // Header colapsable del cliente
-            InkWell(
-              onTap: () {
-                setState(() {
-                  _showClientInfo = !_showClientInfo;
-                });
-              },
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    // Foto
-                    Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.3),
-                            blurRadius: 16,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: ProfileImageWidget(
-                        profileImage: credit.client?.profileImage,
-                        size: 64,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Info básica del cliente
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                flex: 3,
-                                child: Text(
-                                  credit.client?.nombre ??
-                                      'Cliente #${credit.clientId}',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.3,
-                                      ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (credit.client?.clientCategory != null) ...[
-                                const SizedBox(width: 8),
-                                ClientCategoryChip(
-                                  category: credit.client!.clientCategory,
-                                  compact: true,
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'ID: ${credit.clientId}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      _showClientInfo
-                          ? Icons.expand_less
-                          : Icons.expand_more,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Contenido expandible del cliente
-            if (_showClientInfo && credit.client != null) ...[
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    // Info adicional
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.phone_rounded,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            credit.client!.telefono.isNotEmpty
-                                ? credit.client!.telefono
-                                : 'Sin teléfono',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.badge_rounded,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            credit.client?.ci ?? 'Sin CI',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // Botones de acción
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildContactButton(
-                          icon: Icons.phone_rounded,
-                          label: 'Llamar',
-                          color: Colors.green,
-                          onTap: (credit.client!.telefono.isNotEmpty)
-                              ? () async {
-                                  try {
-                                    await ContactActionsWidget.makePhoneCall(
-                                      credit.client!.telefono,
-                                    );
-                                  } catch (e) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(e.toString()),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                }
-                              : null,
-                        ),
-                        _buildContactButton(
-                          icon: Icons.message_rounded,
-                          label: 'WhatsApp',
-                          color: const Color(0xFF25D366),
-                          onTap: (credit.client!.telefono.isNotEmpty)
-                              ? () async {
-                                  try {
-                                    await ContactActionsWidget.openWhatsApp(
-                                      credit.client!.telefono,
-                                      message:
-                                          'Hola ${credit.client!.nombre}, me comunico desde la aplicación.',
-                                      context: context,
-                                    );
-                                  } catch (e) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(e.toString()),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                }
-                              : null,
-                        ),
-                        _buildContactButton(
-                          icon: Icons.map_rounded,
-                          label: 'Ubicación',
-                          color: Colors.blue,
-                          onTap:
-                              (credit.client?.latitud != null &&
-                                  credit.client?.longitud != null)
-                              ? () {
-                                  final clienteMarker = Marker(
-                                    markerId: MarkerId(
-                                      'cliente_${credit.client!.id}',
-                                    ),
-                                    position: LatLng(
-                                      credit.client!.latitud!,
-                                      credit.client!.longitud!,
-                                    ),
-                                    infoWindow: InfoWindow(
-                                      title: credit.client!.nombre,
-                                      snippet:
-                                          'Cliente ${credit.client!.clientCategory ?? 'B'} - ${credit.client!.telefono}',
-                                    ),
-                                    icon: BitmapDescriptor.defaultMarkerWithHue(
-                                      BitmapDescriptor.hueBlue,
-                                    ),
-                                  );
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => LocationPickerScreen(
-                                        allowSelection: false,
-                                        extraMarkers: {clienteMarker},
-                                        customTitle:
-                                            'Ubicación de ${credit.client!.nombre}',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              : () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Este cliente no tiene ubicación GPS registrada',
-                                      ),
-                                      backgroundColor: Colors.orange,
-                                    ),
-                                  );
-                                },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModernClientCard(Credito credit) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Card(
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? [
-                    Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.3),
-                    Theme.of(context).colorScheme.surface,
-                  ]
-                : [
-                    Theme.of(context).colorScheme.surface,
-                    Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.2),
-                  ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            // Header con perfil e info básica
-            Row(
-              children: [
-                // Foto con glow effect
-                GestureDetector(
-                  onTap: credit.client != null
-                      ? () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  ClientePerfilScreen(cliente: credit.client!),
-                            ),
-                          );
-                        }
-                      : null,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: ProfileImageWidget(
-                      profileImage: credit.client?.profileImage,
-                      size: 64,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Info del cliente
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              credit.client?.nombre ??
-                                  'Cliente #${credit.clientId}',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.3,
-                                  ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (credit.client?.clientCategory != null)
-                            ClientCategoryChip(
-                              category: credit.client!.clientCategory,
-                              compact: true,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'ID: ${credit.clientId}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            if (credit.client != null) ...[
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 12),
-
-              // Info adicional
-              Row(
-                children: [
-                  Icon(
-                    Icons.phone_rounded,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      credit.client!.telefono.isNotEmpty
-                          ? credit.client!.telefono
-                          : 'Sin teléfono',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(
-                    Icons.badge_rounded,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      credit.client?.ci ?? 'Sin CI',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // Botones de acción con gradientes
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildContactButton(
-                    icon: Icons.phone_rounded,
-                    label: 'Llamar',
-                    color: Colors.green,
-                    onTap: (credit.client!.telefono.isNotEmpty)
-                        ? () async {
-                            try {
-                              await ContactActionsWidget.makePhoneCall(
-                                credit.client!.telefono,
-                              );
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(e.toString()),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
-                            }
-                          }
-                        : null,
-                  ),
-                  _buildContactButton(
-                    icon: Icons.message_rounded,
-                    label: 'WhatsApp',
-                    color: const Color(0xFF25D366),
-                    onTap: (credit.client!.telefono.isNotEmpty)
-                        ? () async {
-                            try {
-                              await ContactActionsWidget.openWhatsApp(
-                                credit.client!.telefono,
-                                message:
-                                    'Hola ${credit.client!.nombre}, me comunico desde la aplicación.',
-                                context: context,
-                              );
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(e.toString()),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
-                            }
-                          }
-                        : null,
-                  ),
-                  _buildContactButton(
-                    icon: Icons.map_rounded,
-                    label: 'Ubicación',
-                    color: Colors.blue,
-                    onTap:
-                        (credit.client?.latitud != null &&
-                            credit.client?.longitud != null)
-                        ? () {
-                            final clienteMarker = Marker(
-                              markerId: MarkerId(
-                                'cliente_${credit.client!.id}',
-                              ),
-                              position: LatLng(
-                                credit.client!.latitud!,
-                                credit.client!.longitud!,
-                              ),
-                              infoWindow: InfoWindow(
-                                title: credit.client!.nombre,
-                                snippet:
-                                    'Cliente ${credit.client!.clientCategory ?? 'B'} - ${credit.client!.telefono}',
-                              ),
-                              icon: BitmapDescriptor.defaultMarkerWithHue(
-                                BitmapDescriptor.hueBlue,
-                              ),
-                            );
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => LocationPickerScreen(
-                                  allowSelection: false,
-                                  extraMarkers: {clienteMarker},
-                                  customTitle:
-                                      'Ubicación de ${credit.client!.nombre}',
-                                ),
-                              ),
-                            );
-                          }
-                        : () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Este cliente no tiene ubicación GPS registrada',
-                                ),
-                                backgroundColor: Colors.orange,
-                              ),
-                            );
-                          },
-                  ),
-                ],
-              ),
-            ],
-
-            // Estado de carga o botón para recargar
-            if (_isLoadingDetails) ...[
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Cargando datos del cliente...',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-
-            if (credit.client == null && !_isLoadingDetails) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _loadCreditDetails,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Recargar datos del cliente'),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildContactButton({
     required IconData icon,
     required String label,
@@ -1706,6 +1177,233 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClientHeader(Credito credit) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Foto del cliente
+          GestureDetector(
+            onTap: credit.client != null
+                ? () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ClientePerfilScreen(cliente: credit.client!),
+                      ),
+                    );
+                  }
+                : null,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: ProfileImageWidget(
+                profileImage: credit.client?.profileImage,
+                size: 40,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Nombre e ID del cliente
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  credit.client?.nombre ?? 'Cliente #${credit.clientId}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'ID: ${credit.clientId}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (credit.client?.clientCategory != null) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: ClientCategoryChip(
+                          category: credit.client!.clientCategory,
+                          compact: true,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Botones de acción compactos
+          if (credit.client != null) ...[
+            _buildCompactActionButton(
+              icon: Icons.phone_rounded,
+              color: Colors.green,
+              onTap: credit.client!.telefono.isNotEmpty
+                  ? () async {
+                      try {
+                        await ContactActionsWidget.makePhoneCall(
+                          credit.client!.telefono,
+                        );
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(e.toString()),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  : null,
+            ),
+            const SizedBox(width: 6),
+            _buildCompactActionButton(
+              icon: Icons.message_rounded,
+              color: const Color(0xFF25D366),
+              onTap: credit.client!.telefono.isNotEmpty
+                  ? () async {
+                      try {
+                        await ContactActionsWidget.openWhatsApp(
+                          credit.client!.telefono,
+                          message:
+                              'Hola ${credit.client!.nombre}, me comunico desde la aplicación.',
+                          context: context,
+                        );
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(e.toString()),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  : null,
+            ),
+            const SizedBox(width: 6),
+            _buildCompactActionButton(
+              icon: Icons.map_rounded,
+              color: Colors.blue,
+              onTap:
+                  (credit.client?.latitud != null &&
+                      credit.client?.longitud != null)
+                  ? () {
+                      final clienteMarker = Marker(
+                        markerId: MarkerId('cliente_${credit.client!.id}'),
+                        position: LatLng(
+                          credit.client!.latitud!,
+                          credit.client!.longitud!,
+                        ),
+                        infoWindow: InfoWindow(
+                          title: credit.client!.nombre,
+                          snippet:
+                              'Cliente ${credit.client!.clientCategory ?? 'B'} - ${credit.client!.telefono}',
+                        ),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueBlue,
+                        ),
+                      );
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => LocationPickerScreen(
+                            allowSelection: false,
+                            extraMarkers: {clienteMarker},
+                            customTitle:
+                                'Ubicación de ${credit.client!.nombre}',
+                          ),
+                        ),
+                      );
+                    }
+                  : () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Este cliente no tiene ubicación GPS registrada',
+                          ),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                    },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactActionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: onTap != null ? 0.15 : 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: color.withValues(alpha: onTap != null ? 0.4 : 0.2),
+              width: 1.5,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: onTap != null ? color : color.withValues(alpha: 0.5),
           ),
         ),
       ),
@@ -1869,7 +1567,11 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.account_balance_wallet, size: 20, color: Colors.orange),
+              const Icon(
+                Icons.account_balance_wallet,
+                size: 20,
+                color: Colors.orange,
+              ),
               const SizedBox(height: 4),
               Text(
                 'Saldo',
@@ -1925,67 +1627,6 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildInfoChip(String label, String value) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                  scheme.surfaceContainerHighest.withValues(alpha: 0.2),
-                ]
-              : [
-                  scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                  scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : Colors.grey).withValues(alpha: 0.1),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: scheme.onSurface,
-              fontSize: 14,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -2083,10 +1724,7 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
                 ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: (isDark ? Colors.black : Colors.grey).withValues(alpha: 0.1),
@@ -2098,14 +1736,11 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 18,
-                color: color,
-              ),
+              Icon(icon, size: 18, color: color),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -2122,16 +1757,18 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: scheme.onSurface,
-              fontSize: 15,
-              letterSpacing: -0.2,
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: scheme.onSurface,
+                fontSize: 15,
+                letterSpacing: -0.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

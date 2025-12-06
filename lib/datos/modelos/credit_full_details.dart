@@ -58,22 +58,22 @@ class CreditFullDetails {
       if (data['summary'] is Map<String, dynamic>) {
         summary = data['summary'] as Map<String, dynamic>;
       } else {
-        // Si no, construir el summary a partir de los campos disponibles en data
+        // Si no, construir el summary a partir de los campos disponibles en credit
         summary = {
-          'installment_amount': data['installment_amount'],
-          'pending_installments': data['pending_installments'],
-          'completed_installments_count': data['completed_installments_count'],
-          'total_installments': data['total_installments'],
-          'balance': data['balance'],
-          'total_amount': data['total_amount'],
-          'amount': data['amount'],
-          'original_amount': data['amount'], // Monto del préstamo original
-          'interest_rate': data['interest_rate'],
-          'total_paid': data['total_paid'],
-          'paid_installments': data['paid_installments'],
+          'installment_amount': creditJson['installment_amount'],
+          'pending_installments': creditJson['pending_installments'],
+          'completed_installments_count': creditJson['completed_installments_count'],
+          'total_installments': creditJson['total_installments'],
+          'balance': creditJson['balance'],
+          'total_amount': creditJson['total_amount'],
+          'amount': creditJson['amount'],
+          'original_amount': creditJson['amount'], // Monto del préstamo original
+          'interest_rate': creditJson['interest_rate'],
+          'total_paid': creditJson['total_paid'],
+          'paid_installments': creditJson['paid_installments'],
           // Calcular si está en mora basado en el balance y la fecha
-          'is_overdue': (data['balance'] != null &&
-                         (double.tryParse(data['balance'].toString()) ?? 0) > 0),
+          'is_overdue': (creditJson['balance'] != null &&
+                         (double.tryParse(creditJson['balance'].toString()) ?? 0) > 0),
           'overdue_amount': 0, // El API no provee este campo directamente
         };
       }

@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// Modelo específico para el reporte de créditos en mora
 /// Esta estructura mapea exactamente lo que devuelve el endpoint /api/reports/overdue
 
@@ -44,53 +46,39 @@ class OverdueReportItem {
   final int id;
   final int clientId;
   final String clientName;
-  final String? clientPhone;
   final String? clientCategory;
-  final int cobradorId;
   final String cobradorName;
   final double amount;
   final String amountFormatted;
   final double balance;
   final String balanceFormatted;
-  final String status;
+  final String? startDate;
+  final String? startDateFormatted;
   final int daysOverdue;
   final double overdueAmount;
   final String overdueAmountFormatted;
-  final int totalInstallments;
-  final int completedInstallments;
-  final int expectedInstallments;
-  final int pendingInstallments;
-  final int installmentsOverdue;
-  final String createdAt;
-  final String createdAtFormatted;
-  final String? lastPaymentDate;
-  final String? lastPaymentDateFormatted;
+  final int overdueInstallments;
+  final double completionRate;
+  final String severity; // 'light', 'moderate', 'severe'
 
   OverdueReportItem({
     required this.id,
     required this.clientId,
     required this.clientName,
-    this.clientPhone,
     this.clientCategory,
-    required this.cobradorId,
     required this.cobradorName,
     required this.amount,
     required this.amountFormatted,
     required this.balance,
     required this.balanceFormatted,
-    required this.status,
+    this.startDate,
+    this.startDateFormatted,
     required this.daysOverdue,
     required this.overdueAmount,
     required this.overdueAmountFormatted,
-    required this.totalInstallments,
-    required this.completedInstallments,
-    required this.expectedInstallments,
-    required this.pendingInstallments,
-    required this.installmentsOverdue,
-    required this.createdAt,
-    required this.createdAtFormatted,
-    this.lastPaymentDate,
-    this.lastPaymentDateFormatted,
+    required this.overdueInstallments,
+    required this.completionRate,
+    required this.severity,
   });
 
   factory OverdueReportItem.fromJson(Map<String, dynamic> json) {
@@ -98,27 +86,20 @@ class OverdueReportItem {
       id: json['id'] as int? ?? 0,
       clientId: json['client_id'] as int? ?? 0,
       clientName: json['client_name'] as String? ?? '',
-      clientPhone: json['client_phone'] as String?,
       clientCategory: json['client_category'] as String?,
-      cobradorId: json['cobrador_id'] as int? ?? 0,
       cobradorName: json['cobrador_name'] as String? ?? '',
       amount: _toDouble(json['amount']),
       amountFormatted: json['amount_formatted'] as String? ?? '',
       balance: _toDouble(json['balance']),
       balanceFormatted: json['balance_formatted'] as String? ?? '',
-      status: json['status'] as String? ?? '',
+      startDate: json['start_date'] as String?,
+      startDateFormatted: json['start_date_formatted'] as String?,
       daysOverdue: json['days_overdue'] as int? ?? 0,
       overdueAmount: _toDouble(json['overdue_amount']),
       overdueAmountFormatted: json['overdue_amount_formatted'] as String? ?? '',
-      totalInstallments: json['total_installments'] as int? ?? 0,
-      completedInstallments: json['completed_installments'] as int? ?? 0,
-      expectedInstallments: json['expected_installments'] as int? ?? 0,
-      pendingInstallments: json['pending_installments'] as int? ?? 0,
-      installmentsOverdue: json['installments_overdue'] as int? ?? 0,
-      createdAt: json['created_at'] as String? ?? '',
-      createdAtFormatted: json['created_at_formatted'] as String? ?? '',
-      lastPaymentDate: json['last_payment_date'] as String?,
-      lastPaymentDateFormatted: json['last_payment_date_formatted'] as String?,
+      overdueInstallments: json['overdue_installments'] as int? ?? 0,
+      completionRate: _toDouble(json['completion_rate']),
+      severity: json['severity'] as String? ?? 'light',
     );
   }
 
@@ -126,46 +107,70 @@ class OverdueReportItem {
     'id': id,
     'client_id': clientId,
     'client_name': clientName,
-    'client_phone': clientPhone,
     'client_category': clientCategory,
-    'cobrador_id': cobradorId,
     'cobrador_name': cobradorName,
     'amount': amount,
     'amount_formatted': amountFormatted,
     'balance': balance,
     'balance_formatted': balanceFormatted,
-    'status': status,
+    'start_date': startDate,
+    'start_date_formatted': startDateFormatted,
     'days_overdue': daysOverdue,
     'overdue_amount': overdueAmount,
     'overdue_amount_formatted': overdueAmountFormatted,
-    'total_installments': totalInstallments,
-    'completed_installments': completedInstallments,
-    'expected_installments': expectedInstallments,
-    'pending_installments': pendingInstallments,
-    'installments_overdue': installmentsOverdue,
-    'created_at': createdAt,
-    'created_at_formatted': createdAtFormatted,
-    'last_payment_date': lastPaymentDate,
-    'last_payment_date_formatted': lastPaymentDateFormatted,
+    'overdue_installments': overdueInstallments,
+    'completion_rate': completionRate,
+    'severity': severity,
   };
 
-  /// Calcula la severidad de la mora (0-3: bajo, medio, alto, crítico)
-  int get severityLevel {
-    if (daysOverdue <= 7) return 0;       // Bajo (1-7 días)
-    if (daysOverdue <= 15) return 1;      // Medio (8-15 días)
-    if (daysOverdue <= 30) return 2;      // Alto (16-30 días)
-    return 3;                              // Crítico (>30 días)
+  /// Obtiene el número absoluto de días en mora
+  int get absDaysOverdue => daysOverdue.abs();
+
+  /// Etiqueta de severidad en español
+  String get severityLabel {
+    switch (severity) {
+      case 'light':
+        return 'Leve';
+      case 'moderate':
+        return 'Moderada';
+      case 'severe':
+        return 'Crítica';
+      default:
+        return 'Desconocido';
+    }
   }
 
-  /// Etiqueta de severidad
-  String get severityLabel {
-    switch (severityLevel) {
-      case 0: return 'Bajo';
-      case 1: return 'Medio';
-      case 2: return 'Alto';
-      case 3: return 'Crítico';
-      default: return 'Desconocido';
+  /// Color según severidad
+  Color get severityColor {
+    switch (severity) {
+      case 'light':
+        return Colors.amber;
+      case 'moderate':
+        return Colors.orange;
+      case 'severe':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
+  }
+
+  /// Color según categoría del cliente
+  Color get categoryColor {
+    switch (clientCategory?.toUpperCase()) {
+      case 'A':
+        return Colors.green; // Mejor categoría - Bajo riesgo
+      case 'B':
+        return Colors.blue; // Categoría intermedia - Riesgo medio
+      case 'C':
+        return Colors.deepOrange; // Categoría de mayor riesgo
+      default:
+        return Colors.grey; // Sin categoría
+    }
+  }
+
+  /// Etiqueta de categoría
+  String get categoryLabel {
+    return clientCategory != null ? 'Cat. $clientCategory' : 'Sin Cat.';
   }
 
   static double _toDouble(dynamic value) {

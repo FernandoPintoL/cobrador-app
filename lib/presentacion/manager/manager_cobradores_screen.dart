@@ -8,6 +8,7 @@ import '../../negocio/providers/user_management_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
+import '../widgets/profile_image_widget.dart';
 import '../pantallas/change_password_screen.dart';
 import '../cliente/clientes_screen.dart'; // Nueva pantalla genérica
 import '../cobrador/cobrador_form_screen.dart';
@@ -137,7 +138,7 @@ class _ManagerCobradoresScreenState
         children: [
           const SizedBox(height: 8),
           // Estadísticas rápidas
-          // _buildEstadisticasCard(managerState),
+          _buildEstadisticasCard(managerState),
 
           // Barra de búsqueda
           _buildBarraBusqueda(),
@@ -156,33 +157,27 @@ class _ManagerCobradoresScreenState
   }
 
   Widget _buildEstadisticasCard(ManagerState managerState) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final stats = managerState.estadisticas;
+    final totalCobradores = stats?['total_cobradores'] ?? managerState.cobradoresAsignados.length;
+    final cobradoresActivos = stats?['cobradores_activos'] ?? managerState.cobradoresAsignados.length;
+    final totalClientes = stats?['total_clientes'] ?? 0;
 
     return Card(
       margin: const EdgeInsets.all(16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+        padding: const EdgeInsets.all(20),
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          alignment: WrapAlignment.spaceAround,
           children: [
-            _buildStatItem(
-              'Cobradores',
-              '${stats?['total_cobradores'] ?? managerState.cobradoresAsignados.length}',
-              Icons.person,
-              Colors.blue,
-            ),
-            /* _buildStatItem(
-              'Clientes',
-              '${stats?['total_clientes'] ?? 0}',
-              Icons.business,
-              Colors.green,
-            ), */
-            _buildStatItem(
-              'Activos',
-              '${stats?['cobradores_activos'] ?? managerState.cobradoresAsignados.length}',
-              Icons.check_circle,
-              Colors.orange,
-            ),
+            _buildStatItem(theme, isDark, 'Total', '$totalCobradores', Icons.person, Colors.blue),
+            _buildStatItem(theme, isDark, 'Activos', '$cobradoresActivos', Icons.check_circle, Colors.green),
+            _buildStatItem(theme, isDark, 'Clientes', '$totalClientes', Icons.business, Colors.orange),
           ],
         ),
       ),
@@ -190,26 +185,45 @@ class _ManagerCobradoresScreenState
   }
 
   Widget _buildStatItem(
+    ThemeData theme,
+    bool isDark,
     String label,
     String value,
     IconData icon,
     Color color,
   ) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color,
+    return SizedBox(
+      width: 80,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 22),
           ),
-        ),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
@@ -240,14 +254,17 @@ class _ManagerCobradoresScreenState
   }
 
   Widget _buildListaCobradores(ManagerState managerState) {
+    final theme = Theme.of(context);
+
     if (managerState.isLoading) {
       return const Center(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text('Cargando cobradores...'),
-            SizedBox(height: 16),
             CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Cargando cobradores...'),
           ],
         ),
       );
@@ -255,27 +272,41 @@ class _ManagerCobradoresScreenState
 
     if (managerState.cobradoresAsignados.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.person_off, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Aún no tienes cobradores registrados',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Usa el botón + para crear un nuevo cobrador',
-              style: TextStyle(color: Colors.grey[500]),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => _navegarCrearCobrador(),
-              icon: const Icon(Icons.person_add),
-              label: const Text('Crear Cobrador'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.person_off,
+                size: 80,
+                color: theme.colorScheme.primary.withValues(alpha: 0.3),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Aún no tienes cobradores registrados',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Usa el botón + para crear un nuevo cobrador',
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => _navegarCrearCobrador(),
+                icon: const Icon(Icons.person_add),
+                label: const Text('Crear Cobrador'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -285,113 +316,234 @@ class _ManagerCobradoresScreenState
       itemCount: managerState.cobradoresAsignados.length,
       itemBuilder: (context, index) {
         final cobrador = managerState.cobradoresAsignados[index];
-        return _buildCobradorCard(cobrador);
+        return _buildCobradorCard(cobrador, managerState);
       },
     );
   }
 
-  Widget _buildCobradorCard(Usuario cobrador) {
+  Widget _buildCobradorCard(Usuario cobrador, ManagerState managerState) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Obtener clientes asignados desde el campo del endpoint
+    final clientesAsignados = cobrador.assignedClientsCount ?? 0;
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: ProfileAvatarWidget(
-          role: 'cobrador',
-          userName: cobrador.nombre,
-          profileImagePath: cobrador.profileImage,
-          radius: 25,
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: RoleColors.cobradorPrimary.withValues(alpha: isDark ? 0.3 : 0.2),
+          width: 2,
         ),
-        title: Text(
-          cobrador.nombre,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(cobrador.email),
-            if (cobrador.telefono.isNotEmpty)
-              ContactActionsWidget.buildPhoneDisplay(
-                context: context,
-                userName: cobrador.nombre,
-                phoneNumber: cobrador.telefono,
-                userRole: 'cobrador',
-                customMessage: ContactActionsWidget.getDefaultMessage(
-                  'cobrador',
-                  cobrador.nombre,
+      ),
+      child: InkWell(
+        onTap: () => _navegarAClientesCobrador(cobrador),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Foto de perfil
+              Stack(
+                children: [
+                  ProfileImageWidget(
+                    profileImage: cobrador.profileImage,
+                    size: 56,
+                  ),
+                  // Badge con número de clientes
+                  if (clientesAsignados > 0)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: theme.cardColor,
+                            width: 2,
+                          ),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 20,
+                          minHeight: 20,
+                        ),
+                        child: Text(
+                          '$clientesAsignados',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+
+              // Información del cobrador
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Nombre
+                    Text(
+                      cobrador.nombre,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Teléfono con icono
+                    if (cobrador.telefono.isNotEmpty)
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.phone,
+                            size: 14,
+                            color: Colors.green,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              cobrador.telefono,
+                              style: theme.textTheme.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                    // Badge con clientes asignados
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: isDark ? 0.3 : 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.business,
+                            size: 12,
+                            color: Colors.green,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$clientesAsignados cliente${clientesAsignados != 1 ? 's' : ''}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Botón de contacto rápido
-            if (cobrador.telefono.isNotEmpty)
-              ContactActionsWidget.buildContactButton(
-                context: context,
-                userName: cobrador.nombre,
-                phoneNumber: cobrador.telefono,
-                userRole: 'cobrador',
-                customMessage: ContactActionsWidget.getDefaultMessage(
-                  'cobrador',
-                  cobrador.nombre,
-                ),
-                color: RoleColors.cobradorPrimary,
-                tooltip: 'Contactar cobrador',
+
+              const SizedBox(width: 8),
+
+              // Botones de acción
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Botón ver clientes
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: isDark ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.business, size: 20),
+                      color: Colors.blue,
+                      onPressed: () => _navegarAClientesCobrador(cobrador),
+                      tooltip: 'Ver clientes',
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // Menú de más opciones
+                  PopupMenuButton<String>(
+                    onSelected: (value) => _manejarAccionCobrador(value, cobrador),
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: theme.iconTheme.color,
+                      size: 20,
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'asignar_clientes',
+                        child: ListTile(
+                          leading: Icon(Icons.person_add, color: Colors.green, size: 20),
+                          title: Text('Asignar Clientes'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                      if (cobrador.telefono.isNotEmpty)
+                        ContactActionsWidget.buildContactMenuItem(
+                          phoneNumber: cobrador.telefono,
+                          value: 'contactar',
+                          icon: Icons.phone,
+                          iconColor: Colors.green,
+                          label: 'Llamar / WhatsApp',
+                        ),
+                      const PopupMenuItem(
+                        value: 'change_password',
+                        child: ListTile(
+                          leading: Icon(Icons.lock_reset, color: Colors.orange, size: 20),
+                          title: Text('Cambiar Contraseña'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'editar',
+                        child: ListTile(
+                          leading: Icon(Icons.edit, color: Colors.blue, size: 20),
+                          title: Text('Editar'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'eliminar',
+                        child: ListTile(
+                          leading: Icon(Icons.delete, color: Colors.red, size: 20),
+                          title: Text('Eliminar'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            // Menú contextual
-            PopupMenuButton<String>(
-              onSelected: (value) => _manejarAccionCobrador(value, cobrador),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'ver_clientes',
-                  child: ListTile(
-                    leading: Icon(Icons.business),
-                    title: Text('Ver Clientes'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                ContactActionsWidget.buildContactMenuItem(
-                  phoneNumber: cobrador.telefono,
-                  value: 'contactar',
-                  icon: Icons.phone,
-                  iconColor: Colors.green,
-                  label: 'Llamar / WhatsApp',
-                ),
-                const PopupMenuItem(
-                  value: 'asignar_clientes',
-                  child: ListTile(
-                    leading: Icon(Icons.person_add, color: Colors.green),
-                    title: Text('Asignar Clientes'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'change_password',
-                  child: ListTile(
-                    leading: Icon(Icons.lock_reset, color: Colors.orange),
-                    title: Text('Cambiar Contraseña'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'editar',
-                  child: ListTile(
-                    leading: Icon(Icons.edit, color: Colors.blue),
-                    title: Text('Editar Cobrador'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'eliminar',
-                  child: ListTile(
-                    leading: Icon(Icons.delete, color: Colors.red),
-                    title: Text('Eliminar Cobrador'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

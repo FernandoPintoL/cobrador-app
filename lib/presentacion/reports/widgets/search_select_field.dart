@@ -32,19 +32,84 @@ class _SearchSelectFieldState extends ConsumerState<SearchSelectField> {
   late FocusNode _focusNode;
   final bool _useOverlay = false;
   bool _showInline = false;
+  String? _selectedId; // Guardar el ID seleccionado
+  String? _selectedLabel; // Guardar el label seleccionado
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialValue ?? '');
     _focusNode = FocusNode();
+
+    // Si hay initialValue, intentar cargar el nombre completo
+    if (widget.initialValue != null && widget.initialValue!.isNotEmpty) {
+      _loadInitialValue(widget.initialValue!);
+    }
   }
 
   @override
   void didUpdateWidget(covariant SearchSelectField oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialValue != widget.initialValue) {
-      _controller.text = widget.initialValue ?? '';
+      if (widget.initialValue != null && widget.initialValue!.isNotEmpty) {
+        _loadInitialValue(widget.initialValue!);
+      } else {
+        _controller.text = '';
+        _selectedId = null;
+        _selectedLabel = null;
+      }
+    }
+  }
+
+  /// Carga el nombre completo cuando se inicializa con un ID
+  Future<void> _loadInitialValue(String initialId) async {
+    // Si no es un tipo que requiere búsqueda, solo mostrar el ID
+    if (widget.type == 'categoria') {
+      _controller.text = initialId;
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+    });
+
+    try {
+      final svc = UserApiService();
+      final resp = await svc.getUser(initialId);
+
+      if (resp['success'] == true && resp['data'] != null) {
+        final user = resp['data'] as Map<String, dynamic>;
+        final name = (user['name'] ?? user['full_name'] ?? '').toString();
+        final ci = (user['ci'] ?? user['document'] ?? '').toString();
+
+        final labelParts = <String>[];
+        if (ci.isNotEmpty) labelParts.add(ci);
+        if (name.isNotEmpty) labelParts.add(name);
+        final label = labelParts.join(' • ');
+
+        setState(() {
+          _controller.text = label.isNotEmpty ? label : initialId;
+          _selectedId = initialId;
+          _selectedLabel = label.isNotEmpty ? label : name;
+          _loading = false;
+        });
+      } else {
+        // Si falla, mostrar solo el ID
+        setState(() {
+          _controller.text = initialId;
+          _selectedId = initialId;
+          _selectedLabel = null;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      // Si falla, mostrar solo el ID
+      setState(() {
+        _controller.text = initialId;
+        _selectedId = initialId;
+        _selectedLabel = null;
+        _loading = false;
+      });
     }
   }
 

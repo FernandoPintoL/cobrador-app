@@ -144,10 +144,11 @@ class _ManagerCobradorFormScreenState
     });
   }
 
-  void _procesarErroresCampos(List<String>? fieldErrors) {
-    if (fieldErrors == null || fieldErrors.isEmpty) return;
+  void _procesarErroresCampos(Map<String, dynamic>? errorsMap) {
+    if (errorsMap == null || errorsMap.isEmpty) return;
 
     setState(() {
+      // Limpiar errores previos
       _nombreError = null;
       _emailError = null;
       _passwordError = null;
@@ -155,44 +156,29 @@ class _ManagerCobradorFormScreenState
       _telefonoError = null;
       _direccionError = null;
 
-      for (String error in fieldErrors) {
-        String errorLower = error.toLowerCase();
+      // Procesar errores del backend
+      // El formato es: { "field": ["error message 1", "error message 2"] }
+      errorsMap.forEach((field, messages) {
+        if (messages is List && messages.isNotEmpty) {
+          final errorMessage = messages.first.toString();
+          final fieldLower = field.toLowerCase();
 
-        // Errores de nombre
-        if (errorLower.contains('name') || errorLower.contains('nombre')) {
-          _nombreError = error;
+          // Mapear campos del backend a variables de error
+          if (fieldLower == 'name' || fieldLower == 'nombre') {
+            _nombreError = errorMessage;
+          } else if (fieldLower == 'email' || fieldLower == 'correo') {
+            _emailError = errorMessage;
+          } else if (fieldLower == 'password' || fieldLower == 'contraseña') {
+            _passwordError = errorMessage;
+          } else if (fieldLower == 'phone' || fieldLower == 'telefono' || fieldLower == 'teléfono') {
+            _telefonoError = errorMessage;
+          } else if (fieldLower == 'address' || fieldLower == 'direccion' || fieldLower == 'dirección') {
+            _direccionError = errorMessage;
+          } else if (fieldLower == 'ci' || fieldLower == 'cedula' || fieldLower == 'cédula') {
+            _ciError = errorMessage;
+          }
         }
-        // Errores de email
-        else if (errorLower.contains('email') ||
-            errorLower.contains('correo')) {
-          _emailError = error;
-        }
-        // Errores de contraseña
-        else if (errorLower.contains('password') ||
-            errorLower.contains('contraseña') ||
-            errorLower.contains('clave')) {
-          _passwordError = error;
-        }
-        // Errores de teléfono
-        else if (errorLower.contains('phone') ||
-            errorLower.contains('teléfono') ||
-            errorLower.contains('telefono')) {
-          _telefonoError = error;
-        }
-        // Errores de dirección
-        else if (errorLower.contains('address') ||
-            errorLower.contains('dirección') ||
-            errorLower.contains('direccion')) {
-          _direccionError = error;
-        }
-        // Errores de CI
-        else if (errorLower.contains('ci') ||
-            errorLower.contains('cédula') ||
-            errorLower.contains('cedula') ||
-            errorLower.contains('documento')) {
-          _ciError = error;
-        }
-      }
+      });
     });
   }
 
@@ -365,7 +351,7 @@ class _ManagerCobradorFormScreenState
                     ),
                     helperText: _isEditMode
                         ? 'Deja vacío si no deseas cambiar la contraseña'
-                        : 'Mínimo 6 caracteres',
+                        : 'Mínimo 8 caracteres',
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
@@ -386,15 +372,15 @@ class _ManagerCobradorFormScreenState
                       if (value == null || value.isEmpty) {
                         return 'Por favor ingresa una contraseña';
                       }
-                      if (value.length < 6) {
-                        return 'La contraseña debe tener al menos 6 caracteres';
+                      if (value.length < 8) {
+                        return 'La contraseña debe tener al menos 8 caracteres';
                       }
                     } else {
                       // En modo edición, la contraseña es opcional pero debe ser válida si se proporciona
                       if (value != null &&
                           value.isNotEmpty &&
-                          value.length < 6) {
-                        return 'La contraseña debe tener al menos 6 caracteres';
+                          value.length < 8) {
+                        return 'La contraseña debe tener al menos 8 caracteres';
                       }
                     }
                     return null;
@@ -509,15 +495,30 @@ class _ManagerCobradorFormScreenState
                   focusedErrorBorder: const OutlineInputBorder(
                     borderSide: BorderSide(color: Colors.red),
                   ),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _ubicacionObtenida
-                          ? Icons.gps_fixed
-                          : Icons.gps_not_fixed,
-                      color: _ubicacionObtenida ? Colors.green : null,
-                    ),
-                    onPressed: _obtenerUbicacionGPS,
-                    tooltip: 'Obtener ubicación GPS',
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Botón para obtener ubicación actual automática
+                      IconButton(
+                        icon: Icon(
+                          _ubicacionObtenida
+                              ? Icons.gps_fixed
+                              : Icons.gps_not_fixed,
+                          color: _ubicacionObtenida ? Colors.green : null,
+                        ),
+                        onPressed: _obtenerUbicacionActual,
+                        tooltip: 'Obtener ubicación actual',
+                      ),
+                      // Botón para abrir mapa y seleccionar manualmente
+                      IconButton(
+                        icon: const Icon(
+                          Icons.map,
+                          color: Colors.blue,
+                        ),
+                        onPressed: _abrirMapaParaSeleccionar,
+                        tooltip: 'Seleccionar en mapa',
+                      ),
+                    ],
                   ),
                   helperText: _ubicacionObtenida
                       ? 'Ubicación GPS obtenida ✓'
@@ -717,11 +718,76 @@ class _ManagerCobradorFormScreenState
     }
   }
 
-  Future<void> _obtenerUbicacionGPS() async {
+  Future<void> _obtenerUbicacionActual() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _mostrarError('Los servicios de ubicación están desactivados');
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _mostrarError('Permisos de ubicación denegados');
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _mostrarError('Permisos de ubicación denegados permanentemente');
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+
+      String direccionObtenida = '';
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          direccionObtenida = [
+            place.street,
+            place.locality,
+            place.administrativeArea,
+            place.country,
+          ].where((e) => e != null && e.isNotEmpty).join(', ');
+        }
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() {
+        _latitud = position.latitude;
+        _longitud = position.longitude;
+        _ubicacionObtenida = true;
+        if (direccionObtenida.isNotEmpty) {
+          _direccionController.text = direccionObtenida;
+        }
+      });
+
+      _mostrarExito('Ubicación actual obtenida correctamente');
+    } catch (e) {
+      _mostrarError('Error al obtener ubicación: $e');
+    }
+  }
+
+  Future<void> _abrirMapaParaSeleccionar() async {
     try {
       // Navegar a la pantalla de selección de ubicación
+      // Si hay ubicación guardada (modo edición), mostrarla en el mapa
       final result = await Navigator.of(context).push<Map<String, dynamic>>(
-        MaterialPageRoute(builder: (context) => const LocationPickerScreen()),
+        MaterialPageRoute(
+          builder: (context) => LocationPickerScreen(
+            allowSelection: true, // Permitir selección manual
+            customTitle: 'Seleccionar ubicación del cobrador',
+            initialLatitude: _latitud, // Pasar ubicación guardada si existe
+            initialLongitude: _longitud, // Pasar ubicación guardada si existe
+          ),
+        ),
       );
 
       if (result != null) {
@@ -737,7 +803,7 @@ class _ManagerCobradorFormScreenState
           }
         });
 
-        _mostrarExito('Ubicación GPS obtenida correctamente');
+        _mostrarExito('Ubicación seleccionada correctamente');
       }
     } catch (e) {
       _mostrarError('Error al obtener ubicación: $e');

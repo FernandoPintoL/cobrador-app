@@ -1,8 +1,6 @@
-import '../credito/credito.dart' as credito_model;
-import '../usuario.dart';
-
+/// Modelo principal del reporte de actividad diaria
 class DailyActivityReport {
-  final List<DailyActivityItem> items;
+  final List<DailyActivityCobradorItem> items;
   final DailyActivitySummary summary;
   final DateTime generatedAt;
   final String generatedBy;
@@ -15,10 +13,10 @@ class DailyActivityReport {
   });
 
   factory DailyActivityReport.fromJson(Map<String, dynamic> json) {
-    List<DailyActivityItem> parseItems(dynamic itemsList) {
+    List<DailyActivityCobradorItem> parseItems(dynamic itemsList) {
       if (itemsList is List) {
         return itemsList
-            .map((item) => DailyActivityItem.fromJson(item as Map<String, dynamic>))
+            .map((item) => DailyActivityCobradorItem.fromJson(item as Map<String, dynamic>))
             .toList();
       }
       return [];
@@ -40,178 +38,365 @@ class DailyActivityReport {
   };
 }
 
-class DailyActivityItem {
-  final int id;
-  final int clientId;
+/// Item individual por cobrador en el reporte diario
+class DailyActivityCobradorItem {
+  final String cobradorName;
   final int cobradorId;
-  final int creditId;
-  final double amount;
-  final DateTime paymentDate;
-  final String paymentMethod; // 'cash', 'card', etc.
-  final double? latitude;
-  final double? longitude;
-  final String status; // 'completed', 'pending', etc.
-  final String? transactionId;
-  final int installmentNumber;
-  final int? receivedBy;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final int? cashBalanceId;
-  final double? accumulatedAmount;
+  final CashBalanceInfo cashBalance;
+  final CreditsDeliveredInfo creditsDelivered;
+  final PaymentsCollectedInfo paymentsCollected;
+  final ExpectedPaymentsInfo expectedPayments;
 
-  final Usuario? cobrador;
-  final credito_model.Credito? credit;
-
-  DailyActivityItem({
-    required this.id,
-    required this.clientId,
+  DailyActivityCobradorItem({
+    required this.cobradorName,
     required this.cobradorId,
-    required this.creditId,
-    required this.amount,
-    required this.paymentDate,
-    required this.paymentMethod,
-    this.latitude,
-    this.longitude,
-    required this.status,
-    this.transactionId,
-    required this.installmentNumber,
-    this.receivedBy,
-    required this.createdAt,
-    required this.updatedAt,
-    this.cashBalanceId,
-    this.accumulatedAmount,
-    this.cobrador,
-    this.credit,
+    required this.cashBalance,
+    required this.creditsDelivered,
+    required this.paymentsCollected,
+    required this.expectedPayments,
   });
 
-  factory DailyActivityItem.fromJson(Map<String, dynamic> json) {
-    double? tryDouble(dynamic v) {
-      if (v == null) return null;
-      return double.tryParse(v.toString());
-    }
-
-    int? tryInt(dynamic v) {
-      if (v == null) return null;
-      if (v is int) return v;
-      return int.tryParse(v.toString());
-    }
-
-    return DailyActivityItem(
-      id: json['id'] ?? 0,
-      clientId: json['client_id'] ?? 0,
+  factory DailyActivityCobradorItem.fromJson(Map<String, dynamic> json) {
+    return DailyActivityCobradorItem(
+      cobradorName: json['cobrador_name'] ?? '',
       cobradorId: json['cobrador_id'] ?? 0,
-      creditId: json['credit_id'] ?? 0,
-      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
-      paymentDate:
-          DateTime.tryParse(json['payment_date'] ?? '') ?? DateTime.now(),
-      paymentMethod: json['payment_method'] ?? 'cash',
-      latitude: tryDouble(json['latitude']),
-      longitude: tryDouble(json['longitude']),
-      status: json['status'] ?? 'completed',
-      transactionId: json['transaction_id'],
-      installmentNumber: json['installment_number'] ?? 0,
-      receivedBy: tryInt(json['received_by']),
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-      updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
-      cashBalanceId: tryInt(json['cash_balance_id']),
-      accumulatedAmount: tryDouble(json['accumulated_amount']),
-      cobrador: json['cobrador'] is Map<String, dynamic>
-          ? Usuario.fromJson(json['cobrador'])
-          : null,
-      credit: json['credit'] is Map<String, dynamic>
-          ? credito_model.Credito.fromJson(json['credit'])
-          : null,
+      cashBalance: CashBalanceInfo.fromJson(json['cash_balance'] ?? {}),
+      creditsDelivered: CreditsDeliveredInfo.fromJson(json['credits_delivered'] ?? {}),
+      paymentsCollected: PaymentsCollectedInfo.fromJson(json['payments_collected'] ?? {}),
+      expectedPayments: ExpectedPaymentsInfo.fromJson(json['expected_payments'] ?? {}),
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'client_id': clientId,
+    'cobrador_name': cobradorName,
     'cobrador_id': cobradorId,
-    'credit_id': creditId,
-    'amount': amount,
-    'payment_date': paymentDate.toIso8601String(),
-    'payment_method': paymentMethod,
-    'latitude': latitude,
-    'longitude': longitude,
-    'status': status,
-    'transaction_id': transactionId,
-    'installment_number': installmentNumber,
-    'received_by': receivedBy,
-    'created_at': createdAt.toIso8601String(),
-    'updated_at': updatedAt.toIso8601String(),
-    'cash_balance_id': cashBalanceId,
-    'accumulated_amount': accumulatedAmount,
+    'cash_balance': cashBalance.toJson(),
+    'credits_delivered': creditsDelivered.toJson(),
+    'payments_collected': paymentsCollected.toJson(),
+    'expected_payments': expectedPayments.toJson(),
   };
-
-  String get clientName => credit?.client?.nombre ?? 'N/A';
-  String get cobradorName => cobrador?.nombre ?? 'N/A';
-  String get installmentText => 'Cuota $installmentNumber';
-  String get paymentMethodDisplay => paymentMethod == 'cash' ? 'Efectivo' : paymentMethod == 'card' ? 'Tarjeta' : paymentMethod;
 }
 
-class DailyActivitySummary {
-  final int totalPayments;
-  final double totalAmount;
-  final String totalAmountFormatted;
-  final Map<String, CobradorSummary> byCobradores;
+/// Información del balance de efectivo
+class CashBalanceInfo {
+  final String status;
+  final double initialAmount;
+  final double collectedAmount;
+  final double lentAmount;
+  final double finalAmount;
 
-  DailyActivitySummary({
-    required this.totalPayments,
-    required this.totalAmount,
-    required this.totalAmountFormatted,
-    required this.byCobradores,
+  CashBalanceInfo({
+    required this.status,
+    required this.initialAmount,
+    required this.collectedAmount,
+    required this.lentAmount,
+    required this.finalAmount,
   });
 
-  factory DailyActivitySummary.fromJson(Map<String, dynamic> json) {
-    Map<String, CobradorSummary> parseByCobradores(dynamic byCobradorData) {
-      if (byCobradorData is Map) {
-        return byCobradorData.map(
-          (key, value) => MapEntry(
-            key.toString(),
-            CobradorSummary.fromJson(value as Map<String, dynamic>),
-          ),
-        );
-      }
-      return {};
+  factory CashBalanceInfo.fromJson(Map<String, dynamic> json) {
+    double tryDouble(dynamic v) {
+      if (v == null) return 0.0;
+      return double.tryParse(v.toString()) ?? 0.0;
     }
 
-    return DailyActivitySummary(
-      totalPayments: json['total_payments'] ?? 0,
-      totalAmount: double.tryParse(json['total_amount'].toString()) ?? 0.0,
-      totalAmountFormatted: json['total_amount_formatted'] ?? 'Bs 0.00',
-      byCobradores: parseByCobradores(json['by_cobrador']),
+    return CashBalanceInfo(
+      status: json['status'] ?? 'unknown',
+      initialAmount: tryDouble(json['initial_amount']),
+      collectedAmount: tryDouble(json['collected_amount']),
+      lentAmount: tryDouble(json['lent_amount']),
+      finalAmount: tryDouble(json['final_amount']),
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'total_payments': totalPayments,
-    'total_amount': totalAmount,
-    'total_amount_formatted': totalAmountFormatted,
-    'by_cobrador': byCobradores.map(
-      (key, value) => MapEntry(key, value.toJson()),
-    ),
+    'status': status,
+    'initial_amount': initialAmount,
+    'collected_amount': collectedAmount,
+    'lent_amount': lentAmount,
+    'final_amount': finalAmount,
   };
+
+  bool get isOpen => status.toLowerCase() == 'open';
+  bool get isClosed => status.toLowerCase() == 'closed';
 }
 
-class CobradorSummary {
+/// Información de créditos entregados
+class CreditsDeliveredInfo {
   final int count;
-  final double amount;
+  final List<CreditDetail> details;
 
-  CobradorSummary({
+  CreditsDeliveredInfo({
     required this.count,
-    required this.amount,
+    required this.details,
   });
 
-  factory CobradorSummary.fromJson(Map<String, dynamic> json) {
-    return CobradorSummary(
+  factory CreditsDeliveredInfo.fromJson(Map<String, dynamic> json) {
+    List<CreditDetail> parseDetails(dynamic detailsList) {
+      if (detailsList is List) {
+        return detailsList
+            .map((item) => CreditDetail.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    }
+
+    return CreditsDeliveredInfo(
       count: json['count'] ?? 0,
-      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      details: parseDetails(json['details']),
     );
   }
 
   Map<String, dynamic> toJson() => {
     'count': count,
+    'details': details.map((d) => d.toJson()).toList(),
+  };
+}
+
+/// Detalle de un crédito entregado
+class CreditDetail {
+  final int creditId;
+  final String clientName;
+  final double amount;
+  final String? deliveredAt;
+
+  CreditDetail({
+    required this.creditId,
+    required this.clientName,
+    required this.amount,
+    this.deliveredAt,
+  });
+
+  factory CreditDetail.fromJson(Map<String, dynamic> json) {
+    return CreditDetail(
+      creditId: json['credit_id'] ?? 0,
+      clientName: json['client_name'] ?? '',
+      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      deliveredAt: json['delivered_at'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'credit_id': creditId,
+    'client_name': clientName,
     'amount': amount,
+    'delivered_at': deliveredAt,
+  };
+}
+
+/// Información de pagos cobrados
+class PaymentsCollectedInfo {
+  final int count;
+  final List<PaymentDetail> details;
+
+  PaymentsCollectedInfo({
+    required this.count,
+    required this.details,
+  });
+
+  factory PaymentsCollectedInfo.fromJson(Map<String, dynamic> json) {
+    List<PaymentDetail> parseDetails(dynamic detailsList) {
+      if (detailsList is List) {
+        return detailsList
+            .map((item) => PaymentDetail.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    }
+
+    return PaymentsCollectedInfo(
+      count: json['count'] ?? 0,
+      details: parseDetails(json['details']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'count': count,
+    'details': details.map((d) => d.toJson()).toList(),
+  };
+}
+
+/// Detalle de un pago cobrado
+class PaymentDetail {
+  final int paymentId;
+  final String clientName;
+  final double amount;
+  final String? collectedAt;
+  final String? paymentMethod;
+
+  PaymentDetail({
+    required this.paymentId,
+    required this.clientName,
+    required this.amount,
+    this.collectedAt,
+    this.paymentMethod,
+  });
+
+  factory PaymentDetail.fromJson(Map<String, dynamic> json) {
+    return PaymentDetail(
+      paymentId: json['payment_id'] ?? 0,
+      clientName: json['client_name'] ?? '',
+      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      collectedAt: json['collected_at'],
+      paymentMethod: json['payment_method'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'payment_id': paymentId,
+    'client_name': clientName,
+    'amount': amount,
+    'collected_at': collectedAt,
+    'payment_method': paymentMethod,
+  };
+}
+
+/// Información de pagos esperados
+class ExpectedPaymentsInfo {
+  final int count;
+  final int collected;
+  final int pending;
+  final double efficiency;
+
+  ExpectedPaymentsInfo({
+    required this.count,
+    required this.collected,
+    required this.pending,
+    required this.efficiency,
+  });
+
+  factory ExpectedPaymentsInfo.fromJson(Map<String, dynamic> json) {
+    double tryDouble(dynamic v) {
+      if (v == null) return 0.0;
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+
+    return ExpectedPaymentsInfo(
+      count: json['count'] ?? 0,
+      collected: json['collected'] ?? 0,
+      pending: json['pending'] ?? 0,
+      efficiency: tryDouble(json['efficiency']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'count': count,
+    'collected': collected,
+    'pending': pending,
+    'efficiency': efficiency,
+  };
+
+  String get efficiencyFormatted => '${efficiency.toStringAsFixed(0)}%';
+}
+
+/// Resumen del reporte diario
+class DailyActivitySummary {
+  final String date;
+  final String dayName;
+  final int totalCobradores;
+  final DailyActivityTotals totals;
+  final double overallEfficiency;
+  final CashBalancesStatus cashBalances;
+
+  DailyActivitySummary({
+    required this.date,
+    required this.dayName,
+    required this.totalCobradores,
+    required this.totals,
+    required this.overallEfficiency,
+    required this.cashBalances,
+  });
+
+  factory DailyActivitySummary.fromJson(Map<String, dynamic> json) {
+    double tryDouble(dynamic v) {
+      if (v == null) return 0.0;
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+
+    return DailyActivitySummary(
+      date: json['date'] ?? '',
+      dayName: json['day_name'] ?? '',
+      totalCobradores: json['total_cobradores'] ?? 0,
+      totals: DailyActivityTotals.fromJson(json['totals'] ?? {}),
+      overallEfficiency: tryDouble(json['overall_efficiency']),
+      cashBalances: CashBalancesStatus.fromJson(json['cash_balances'] ?? {}),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'date': date,
+    'day_name': dayName,
+    'total_cobradores': totalCobradores,
+    'totals': totals.toJson(),
+    'overall_efficiency': overallEfficiency,
+    'cash_balances': cashBalances.toJson(),
+  };
+
+  String get overallEfficiencyFormatted => '${overallEfficiency.toStringAsFixed(0)}%';
+}
+
+/// Totales del día
+class DailyActivityTotals {
+  final int creditsDelivered;
+  final double amountLent;
+  final int paymentsCollected;
+  final double amountCollected;
+  final int expectedPayments;
+  final int pendingPayments;
+
+  DailyActivityTotals({
+    required this.creditsDelivered,
+    required this.amountLent,
+    required this.paymentsCollected,
+    required this.amountCollected,
+    required this.expectedPayments,
+    required this.pendingPayments,
+  });
+
+  factory DailyActivityTotals.fromJson(Map<String, dynamic> json) {
+    double tryDouble(dynamic v) {
+      if (v == null) return 0.0;
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+
+    return DailyActivityTotals(
+      creditsDelivered: json['credits_delivered'] ?? 0,
+      amountLent: tryDouble(json['amount_lent']),
+      paymentsCollected: json['payments_collected'] ?? 0,
+      amountCollected: tryDouble(json['amount_collected']),
+      expectedPayments: json['expected_payments'] ?? 0,
+      pendingPayments: json['pending_payments'] ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'credits_delivered': creditsDelivered,
+    'amount_lent': amountLent,
+    'payments_collected': paymentsCollected,
+    'amount_collected': amountCollected,
+    'expected_payments': expectedPayments,
+    'pending_payments': pendingPayments,
+  };
+}
+
+/// Estado de los balances de efectivo
+class CashBalancesStatus {
+  final int opened;
+  final int closed;
+
+  CashBalancesStatus({
+    required this.opened,
+    required this.closed,
+  });
+
+  factory CashBalancesStatus.fromJson(Map<String, dynamic> json) {
+    return CashBalancesStatus(
+      opened: json['opened'] ?? 0,
+      closed: json['closed'] ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'opened': opened,
+    'closed': closed,
   };
 }

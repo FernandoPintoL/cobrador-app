@@ -8,6 +8,8 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/contact_actions_widget.dart';
 import '../widgets/role_widgets.dart';
+import '../widgets/profile_image_widget.dart';
+import '../../ui/widgets/client_category_chip.dart';
 import 'cliente_form_screen.dart';
 import 'cliente_creditos_screen.dart';
 import 'cliente_perfil_screen.dart';
@@ -46,6 +48,20 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
   final TextEditingController _filtroTelefonoController = TextEditingController();
   final TextEditingController _filtroCiController = TextEditingController();
   String _filtroCategoriaSeleccionada = '';
+
+  // Obtener color según categoría del cliente
+  Color _getCategoryColor(String? category) {
+    final cat = (category ?? 'B').toUpperCase();
+    switch (cat) {
+      case 'A':
+        return Colors.amber;
+      case 'C':
+        return Colors.deepOrange;
+      case 'B':
+      default:
+        return RoleColors.clientePrimary;
+    }
+  }
 
   @override
   void initState() {
@@ -1160,65 +1176,191 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
   }
 
   Widget _buildClienteCard(Usuario cliente, String role) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final authState = ref.read(authProvider);
+    final managerId = authState.usuario?.id;
+    final esClienteDirecto = role == 'manager' && cliente.assignedCobradorId == managerId;
+    final categoryColor = _getCategoryColor(cliente.clientCategory);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: ProfileAvatarWidget(
-          role: 'cliente',
-          userName: cliente.nombre,
-          profileImagePath: cliente.profileImage,
-          radius: 25,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: categoryColor.withValues(alpha: isDark ? 0.3 : 0.2),
+          width: 2,
         ),
-        title: Text(
-          cliente.nombre,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Email: ${cliente.email}"),
-            Text("Teléfono: ${cliente.telefono}"),
-            Text("CI: ${cliente.ci}"),
-            if (cliente.clientCategory != null)
-              Container(
-                margin: const EdgeInsets.only(top: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: RoleColors.clientePrimary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Categoría ${cliente.clientCategory}',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
+      child: InkWell(
+        onTap: () => _navegarAPerfilCliente(cliente),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Foto de perfil con indicador de cliente directo
+              Stack(
+                children: [
+                  ProfileImageWidget(
+                    profileImage: cliente.profileImage,
+                    size: 56,
+                  ),
+                  if (esClienteDirecto)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: theme.cardColor,
+                            width: 2,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.person_pin,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+
+              // Información del cliente
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Nombre + chip de categoría
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            cliente.nombre,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ClientCategoryChip(
+                          category: cliente.clientCategory,
+                          compact: true,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Teléfono con icono
+                    if (cliente.telefono.isNotEmpty)
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.phone,
+                            size: 14,
+                            color: Colors.green,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              cliente.telefono,
+                              style: theme.textTheme.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                    // Badge "Directo" si aplica
+                    if (esClienteDirecto) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.withValues(alpha: isDark ? 0.3 : 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.person_pin,
+                              size: 12,
+                              color: Colors.indigo,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Cliente Directo',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.indigo,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Botón de contacto directo
-            ContactActionsWidget.buildContactButton(
-              context: context,
-              userName: cliente.nombre,
-              phoneNumber: cliente.telefono,
-              userRole: 'Cliente',
-              customMessage: ContactActionsWidget.getDefaultMessage(
-                'cliente',
-                cliente.nombre,
+
+              const SizedBox(width: 8),
+
+              // Botones de acción
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Botón ver créditos
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: isDark ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.account_balance_wallet, size: 20),
+                      color: Colors.green,
+                      onPressed: () => _navegarACreditosCliente(cliente),
+                      tooltip: 'Ver créditos',
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // Menú de más opciones
+                  PopupMenuButton<String>(
+                    onSelected: (value) => _manejarAccionCliente(value, cliente, role),
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: theme.iconTheme.color,
+                      size: 20,
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    itemBuilder: (context) => _buildMenuItems(cliente, role),
+                  ),
+                ],
               ),
-              color: RoleColors.clientePrimary,
-              tooltip: 'Contactar cliente',
-            ),
-            // Menú contextual
-            PopupMenuButton<String>(
-              onSelected: (value) =>
-                  _manejarAccionCliente(value, cliente, role),
-              itemBuilder: (context) => _buildMenuItems(cliente, role),
-            ),
-          ],
+            ],
+          ),
         ),
-      ));
+      ),
+    );
   }
 
   List<PopupMenuEntry<String>> _buildMenuItems(Usuario cliente, String role) {
@@ -1243,13 +1385,6 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
           title: Text('Editar Cliente'),
           contentPadding: EdgeInsets.zero,
         ),
-      ),
-      ContactActionsWidget.buildContactMenuItem(
-        phoneNumber: cliente.telefono,
-        value: 'contactar',
-        icon: Icons.phone,
-        iconColor: Colors.green,
-        label: 'Llamar / WhatsApp',
       ),
       const PopupMenuItem(
         value: 'ver_perfil',
@@ -1324,18 +1459,6 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
               cliente: cliente,
               onClienteSaved: _cargarDatos,
             ),
-          ),
-        );
-        break;
-      case 'contactar':
-        ContactActionsWidget.showContactDialog(
-          context: context,
-          userName: cliente.nombre,
-          phoneNumber: cliente.telefono,
-          userRole: 'Cliente',
-          customMessage: ContactActionsWidget.getDefaultMessage(
-            'cliente',
-            cliente.nombre,
           ),
         );
         break;

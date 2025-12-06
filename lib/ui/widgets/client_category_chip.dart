@@ -6,7 +6,12 @@ class ClientCategoryChip extends StatelessWidget {
   final bool compact; // si true, usa tamaño más pequeño
   final EdgeInsetsGeometry? padding;
 
-  const ClientCategoryChip({super.key, this.category, this.compact = true, this.padding});
+  const ClientCategoryChip({
+    super.key,
+    this.category,
+    this.compact = true,
+    this.padding,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -44,20 +49,28 @@ class ClientCategoryChip extends StatelessWidget {
       children: [
         Icon(icon, size: compact ? 12 : 14, color: textColor),
         const SizedBox(width: 4),
-        Text(
-          '$label ($cat)',
-          style: TextStyle(
-            color: textColor,
-            fontSize: compact ? 10 : 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
+        Flexible(
+          child: Text(
+            '$label ($cat)',
+            style: TextStyle(
+              color: textColor,
+              fontSize: compact ? 10 : 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
     );
 
     return Container(
-      padding: padding ?? EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 4 : 6),
+      padding:
+          padding ??
+          EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 10,
+            vertical: compact ? 4 : 6,
+          ),
       decoration: BoxDecoration(
         color: bg,
         border: Border.all(color: border),

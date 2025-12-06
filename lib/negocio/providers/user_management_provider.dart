@@ -10,7 +10,7 @@ class UserManagementState {
   final bool isLoading;
   final String? error;
   final String? successMessage;
-  final List<String>? fieldErrors;
+  final Map<String, dynamic>? fieldErrors; // Cambio: Ahora es Map para manejar errores por campo
   // Extras para categorías
   final List<Map<String, dynamic>>? clientCategories; // from API
   final Map<String, dynamic>? categoryStatistics;
@@ -30,7 +30,7 @@ class UserManagementState {
     bool? isLoading,
     String? error,
     String? successMessage,
-    List<String>? fieldErrors,
+    Map<String, dynamic>? fieldErrors,
     List<Map<String, dynamic>>? clientCategories,
     Map<String, dynamic>? categoryStatistics,
   }) {
@@ -181,11 +181,10 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
         await cargarUsuarios();
         return true;
       } else {
-        // Manejar errores específicos de validación
-        List<String>? fieldErrors;
-        if (response['field_errors'] != null &&
-            response['field_errors'] is List) {
-          fieldErrors = List<String>.from(response['field_errors']);
+        // Manejar errores específicos de validación del backend
+        Map<String, dynamic>? fieldErrors;
+        if (response['errors'] != null && response['errors'] is Map) {
+          fieldErrors = response['errors'] as Map<String, dynamic>;
         }
 
         state = state.copyWith(
@@ -243,9 +242,10 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
 
       final response = await _userApiService.createUser(data);
       if (response['success'] != true) {
-        List<String>? fieldErrors;
-        if (response['field_errors'] != null && response['field_errors'] is List) {
-          fieldErrors = List<String>.from(response['field_errors']);
+        // Procesar errores del backend (formato: { "errors": { "field": ["message"] } })
+        Map<String, dynamic>? fieldErrors;
+        if (response['errors'] != null && response['errors'] is Map) {
+          fieldErrors = response['errors'] as Map<String, dynamic>;
         }
         state = state.copyWith(
           isLoading: false,
@@ -383,11 +383,10 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
         await cargarUsuarios();
         return true;
       } else {
-        // Manejar errores específicos de validación
-        List<String>? fieldErrors;
-        if (response['field_errors'] != null &&
-            response['field_errors'] is List) {
-          fieldErrors = List<String>.from(response['field_errors']);
+        // Manejar errores específicos de validación del backend
+        Map<String, dynamic>? fieldErrors;
+        if (response['errors'] != null && response['errors'] is Map) {
+          fieldErrors = response['errors'] as Map<String, dynamic>;
         }
 
         state = state.copyWith(
@@ -511,11 +510,10 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
         );
         return true;
       } else {
-        // Manejar errores específicos de validación
-        List<String>? fieldErrors;
-        if (response['field_errors'] != null &&
-            response['field_errors'] is List) {
-          fieldErrors = List<String>.from(response['field_errors']);
+        // Manejar errores específicos de validación del backend
+        Map<String, dynamic>? fieldErrors;
+        if (response['errors'] != null && response['errors'] is Map) {
+          fieldErrors = response['errors'] as Map<String, dynamic>;
         }
 
         state = state.copyWith(

@@ -8,12 +8,16 @@ class LocationPickerScreen extends StatefulWidget {
   final bool allowSelection; // Permite seleccionar ubicación tocando el mapa
   final Set<Marker>? extraMarkers; // Marcadores extra (por ejemplo, clientes registrados)
   final String? customTitle; // Título personalizado opcional
+  final double? initialLatitude; // Ubicación inicial para edición
+  final double? initialLongitude; // Ubicación inicial para edición
 
   const LocationPickerScreen({
     super.key,
     this.allowSelection = true,
     this.extraMarkers,
     this.customTitle,
+    this.initialLatitude,
+    this.initialLongitude,
   });
 
   @override
@@ -229,7 +233,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.allowSelection) {
+
+    // Si hay ubicación inicial (modo edición), usarla
+    if (widget.initialLatitude != null && widget.initialLongitude != null) {
+      _selectedLocation = LatLng(
+        widget.initialLatitude!,
+        widget.initialLongitude!,
+      );
+      _isLoading = false;
+      // Obtener dirección de la ubicación guardada
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _obtenerDireccionDesdeCoordenadas();
+      });
+    } else if (widget.allowSelection) {
       _verificarConectividadYPermisos();
     } else {
       // En modo solo visualización, no solicitar permisos ni ubicar automáticamente

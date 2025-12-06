@@ -43,14 +43,8 @@ class _AdvancedFiltersPanelState extends State<AdvancedFiltersPanel> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [
-                  Colors.grey[850]!,
-                  Colors.grey[900]!,
-                ]
-              : [
-                  Colors.white,
-                  Colors.grey[50]!,
-                ],
+              ? [Colors.grey[850]!, Colors.grey[900]!]
+              : [Colors.white, Colors.grey[50]!],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
@@ -113,58 +107,65 @@ class _AdvancedFiltersPanelState extends State<AdvancedFiltersPanel> {
   }
 
   Widget _buildHeader(ThemeData theme, bool isDark) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                theme.colorScheme.primary.withValues(alpha: 0.2),
-                theme.colorScheme.primary.withValues(alpha: 0.1),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  theme.colorScheme.primary.withValues(alpha: 0.2),
+                  theme.colorScheme.primary.withValues(alpha: 0.1),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
               ],
             ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: theme.colorScheme.primary.withValues(alpha: 0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+            child: Icon(
+              Icons.filter_alt,
+              color: theme.colorScheme.primary,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              'Filtros Específicos',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.3,
+                fontSize: 18,
               ),
-            ],
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          child: Icon(
-            Icons.filter_alt,
-            color: theme.colorScheme.primary,
-            size: 22,
+          const Spacer(),
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[800] : Colors.grey[100],
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 20),
+              onPressed: _handleClose,
+              tooltip: 'Cerrar filtros',
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          'Filtros Específicos',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            letterSpacing: -0.3,
-            fontSize: 18,
-          ),
-        ),
-        const Spacer(),
-        Container(
-          decoration: BoxDecoration(
-            color: isDark ? Colors.grey[800] : Colors.grey[100],
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: _handleClose,
-            tooltip: 'Cerrar filtros',
-            padding: const EdgeInsets.all(8),
-            constraints: const BoxConstraints(),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -177,7 +178,12 @@ class _AdvancedFiltersPanelState extends State<AdvancedFiltersPanel> {
         _buildChip('frecuencia', 'Frecuencia', Icons.event_repeat, isDark),
         _buildChip('montos', 'Montos', Icons.attach_money, isDark),
         _buildChip('fechas', 'Fechas', Icons.date_range, isDark),
-        _buildChip('cuotas_atrasadas', 'Cuotas Atrasadas', Icons.money_off, isDark),
+        _buildChip(
+          'cuotas_atrasadas',
+          'Cuotas Atrasadas',
+          Icons.money_off,
+          isDark,
+        ),
         _buildChip('categoria_cliente', 'Categoría', Icons.category, isDark),
       ],
     );
@@ -333,11 +339,7 @@ class _AdvancedFiltersPanelState extends State<AdvancedFiltersPanel> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.check_circle,
-                        size: 20,
-                        color: Colors.white,
-                      ),
+                      Icon(Icons.check_circle, size: 20, color: Colors.white),
                       SizedBox(width: 8),
                       Text(
                         'Aplicar',

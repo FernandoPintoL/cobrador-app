@@ -14,6 +14,7 @@ class Usuario {
   final DateTime fechaActualizacion;
   final List<String> roles;
   final String? clientCategory; // 'A', 'B', or 'C'
+  final int? assignedClientsCount; // Número de clientes asignados (para cobradores)
 
   Usuario({
     required this.id,
@@ -31,6 +32,7 @@ class Usuario {
     required this.fechaActualizacion,
     required this.roles,
     this.clientCategory,
+    this.assignedClientsCount,
   });
 
   factory Usuario.fromJson(Map<String, dynamic> json) {
@@ -136,6 +138,11 @@ class Usuario {
         fechaActualizacion: fechaActualizacion,
         roles: roles,
         clientCategory: json['client_category']?.toString(),
+        assignedClientsCount: json['assigned_clients_count'] is int
+            ? json['assigned_clients_count']
+            : (json['assigned_clients_count'] != null
+                ? int.tryParse(json['assigned_clients_count'].toString())
+                : null),
       );
     } catch (e) {
       print('❌ ERROR parsing Usuario.fromJson: $e');
@@ -155,6 +162,7 @@ class Usuario {
         fechaActualizacion: DateTime.now(),
         roles: ['client'],
         clientCategory: 'B',
+        assignedClientsCount: null,
       );
     }
   }
@@ -171,6 +179,7 @@ class Usuario {
       'address': direccion,
       'ci': ci,
       'client_category': clientCategory,
+      'assigned_clients_count': assignedClientsCount,
       'location': latitud != null && longitud != null
           ? {
               'type': 'Point',

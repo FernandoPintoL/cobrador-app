@@ -8,6 +8,8 @@ import '../../negocio/providers/user_management_provider.dart';
 import '../../config/role_colors.dart';
 import '../widgets/role_widgets.dart';
 import '../widgets/contact_actions_widget.dart';
+import '../widgets/profile_image_widget.dart';
+import '../../ui/widgets/client_category_chip.dart';
 import '../cliente/cliente_creditos_screen.dart';
 import '../cliente/cliente_perfil_screen.dart';
 import '../cliente/location_picker_screen.dart';
@@ -51,6 +53,20 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // Obtener color según categoría del cliente
+  Color _getCategoryColor(String? category) {
+    final cat = (category ?? 'B').toUpperCase();
+    switch (cat) {
+      case 'A':
+        return Colors.amber;
+      case 'C':
+        return Colors.deepOrange;
+      case 'B':
+      default:
+        return RoleColors.clientePrimary;
+    }
   }
 
   @override
@@ -109,13 +125,15 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _navegarCrearCliente,
-        child: const Icon(Icons.add),
         tooltip: 'Crear Cliente',
+        child: const Icon(Icons.add),
       ),
     );
   }
 
   Widget _buildEstadisticasCard(ManagerState managerState) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final totalClientes = managerState.clientesDelManager.length;
     final totalCobradores = managerState.cobradoresAsignados.length;
 
@@ -137,44 +155,46 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
 
     return Card(
       margin: const EdgeInsets.all(16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+        padding: const EdgeInsets.all(20),
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          alignment: WrapAlignment.spaceAround,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatItem(
-                  'Total Clientes',
-                  '$totalClientes',
-                  Icons.business,
-                  Colors.blue,
-                ),
-                _buildStatItem(
-                  'Cobradores',
-                  '$totalCobradores',
-                  Icons.person,
-                  Colors.green,
-                ),
-              ],
+            _buildStatItem(
+              theme,
+              isDark,
+              'Total',
+              '$totalClientes',
+              Icons.business,
+              Colors.blue,
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatItem(
-                  'Clientes Directos',
-                  '$clientesDirectos',
-                  Icons.person_pin,
-                  Colors.indigo,
-                ),
-                _buildStatItem(
-                  'De Cobradores',
-                  '$clientesDeCobradores',
-                  Icons.group,
-                  Colors.orange,
-                ),
-              ],
+            _buildStatItem(
+              theme,
+              isDark,
+              'Cobradores',
+              '$totalCobradores',
+              Icons.person,
+              Colors.green,
+            ),
+            _buildStatItem(
+              theme,
+              isDark,
+              'Directos',
+              '$clientesDirectos',
+              Icons.person_pin,
+              Colors.indigo,
+            ),
+            _buildStatItem(
+              theme,
+              isDark,
+              'Asignados',
+              '$clientesDeCobradores',
+              Icons.group,
+              Colors.orange,
             ),
           ],
         ),
@@ -183,26 +203,45 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   }
 
   Widget _buildStatItem(
+    ThemeData theme,
+    bool isDark,
     String label,
     String value,
     IconData icon,
     Color color,
   ) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: color,
+    return SizedBox(
+      width: 70,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 22),
           ),
-        ),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
@@ -276,32 +315,44 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   }
 
   Widget _buildListaClientes(ManagerState managerState) {
+    final theme = Theme.of(context);
+
     if (managerState.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
     if (_clientesFiltrados.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.business_center, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              managerState.clientesDelManager.isEmpty
-                  ? 'No hay clientes en tu equipo'
-                  : 'No se encontraron clientes',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-            if (managerState.clientesDelManager.isEmpty) ...[
-              const SizedBox(height: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.business_center,
+                size: 80,
+                color: theme.colorScheme.primary.withValues(alpha: 0.3),
+              ),
+              const SizedBox(height: 24),
               Text(
-                'Los clientes aparecerán aquí cuando tus cobradores tengan clientes asignados',
-                style: TextStyle(color: Colors.grey[500]),
+                managerState.clientesDelManager.isEmpty
+                    ? 'No hay clientes en tu equipo'
+                    : 'No se encontraron clientes',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
+              if (managerState.clientesDelManager.isEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Los clientes aparecerán aquí cuando tus cobradores tengan clientes asignados',
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       );
     }
@@ -382,182 +433,299 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   }
 
   Widget _buildClienteCard(Usuario cliente, {bool esEnGrupo = false}) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final authState = ref.read(authProvider);
     final managerId = authState.usuario?.id;
     final esClienteDirecto = cliente.assignedCobradorId == managerId;
+    final categoryColor = _getCategoryColor(cliente.clientCategory);
 
     return Card(
       margin: esEnGrupo
           ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
-          : const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Stack(
-          children: [
-            CircleAvatar(
-              backgroundColor: esClienteDirecto ? Colors.indigo : Colors.green,
-              child: Text(
-                cliente.nombre.isNotEmpty
-                    ? cliente.nombre[0].toUpperCase()
-                    : 'C',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            if (esClienteDirecto)
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Colors.orange,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.person_pin,
-                    size: 12,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-          ],
+          : const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: categoryColor.withValues(alpha: isDark ? 0.3 : 0.2),
+          width: 2,
         ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                cliente.nombre,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      child: InkWell(
+        onTap: () => _navegarAPerfilCliente(cliente),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Foto de perfil con indicador de cliente directo
+              Stack(
+                children: [
+                  ProfileImageWidget(
+                    profileImage: cliente.profileImage,
+                    size: 56,
+                  ),
+                  if (esClienteDirecto)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: theme.cardColor, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.person_pin,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ),
-            if (esClienteDirecto)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.indigo.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  'Directo',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.indigo,
-                  ),
+              const SizedBox(width: 12),
+
+              // Información del cliente
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Nombre + chip de categoría
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            cliente.nombre,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ClientCategoryChip(
+                          category: cliente.clientCategory,
+                          compact: true,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Teléfono con icono
+                    if (cliente.telefono.isNotEmpty)
+                      Row(
+                        children: [
+                          Icon(Icons.phone, size: 14, color: Colors.green),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              cliente.telefono,
+                              style: theme.textTheme.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                    // Cobrador asignado (si aplica)
+                    if (!esEnGrupo &&
+                        !esClienteDirecto &&
+                        cliente.assignedCobradorId != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_outline,
+                            size: 14,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              _obtenerNombreCobrador(
+                                cliente.assignedCobradorId!,
+                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // Badge "Directo" si aplica
+                    if (esClienteDirecto) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.withValues(
+                            alpha: isDark ? 0.3 : 0.15,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.person_pin,
+                              size: 12,
+                              color: Colors.indigo,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Cliente Directo',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.indigo,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-          ],
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(cliente.email),
-            if (cliente.telefono.isNotEmpty)
-              Text(cliente.telefono, style: TextStyle(color: Colors.grey[600])),
-            if (!esEnGrupo &&
-                !esClienteDirecto &&
-                cliente.assignedCobradorId != null)
-              Text(
-                'Cobrador: ${_obtenerNombreCobrador(cliente.assignedCobradorId!)}',
-                style: TextStyle(
-                  color: Theme.of(context).primaryColor,
-                  fontSize: 12,
-                ),
-              ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Botón de contacto rápido
-            if (cliente.telefono.isNotEmpty)
-              ContactActionsWidget.buildContactButton(
-                context: context,
-                userName: cliente.nombre,
-                phoneNumber: cliente.telefono,
-                userRole: 'cliente',
-                customMessage: ContactActionsWidget.getDefaultMessage(
-                  'cliente',
-                  cliente.nombre,
-                ),
-                color: RoleColors.clientePrimary,
-                tooltip: 'Contactar cliente',
-              ),
-            // Menú contextual
-            PopupMenuButton<String>(
-              onSelected: (value) => _manejarAccionCliente(value, cliente),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'ver_creditos',
-                  child: ListTile(
-                    leading: Icon(Icons.account_balance_wallet),
-                    title: Text('Ver Créditos'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                ContactActionsWidget.buildContactMenuItem(
-                  phoneNumber: cliente.telefono,
-                  value: 'contactar',
-                  icon: Icons.phone,
-                  iconColor: Colors.green,
-                  label: 'Llamar / WhatsApp',
-                ),
-                const PopupMenuItem(
-                  value: 'ver_perfil',
-                  child: ListTile(
-                    leading: Icon(Icons.person),
-                    title: Text('Ver Perfil'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'ver_ubicacion',
-                  child: ListTile(
-                    leading: Icon(Icons.location_on),
-                    title: Text('Ver Ubicación'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'editar',
-                  child: ListTile(
-                    leading: Icon(Icons.edit, color: Colors.blue),
-                    title: Text('Editar Cliente'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                if (esClienteDirecto) ...[
-                  const PopupMenuItem(
-                    value: 'asignar_cobrador',
-                    child: ListTile(
-                      leading: Icon(Icons.person_add, color: Colors.orange),
-                      title: Text('Asignar a Cobrador'),
-                      contentPadding: EdgeInsets.zero,
+
+              const SizedBox(width: 8),
+
+              // Botones de acción
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Botón ver créditos
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: isDark ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.account_balance_wallet, size: 20),
+                      color: Colors.green,
+                      onPressed: () => _navegarACreditosCliente(cliente),
+                      tooltip: 'Ver créditos',
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
                     ),
                   ),
-                ] else if (cliente.assignedCobradorId != null) ...[
-                  const PopupMenuItem(
-                    value: 'asignar_cobrador',
-                    child: ListTile(
-                      leading: Icon(Icons.swap_horiz, color: Colors.purple),
-                      title: Text('Reasignar Cobrador'),
-                      contentPadding: EdgeInsets.zero,
+                  const SizedBox(height: 4),
+                  // Menú de más opciones
+                  PopupMenuButton<String>(
+                    onSelected: (value) =>
+                        _manejarAccionCliente(value, cliente),
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: theme.iconTheme.color,
+                      size: 20,
                     ),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'ver_perfil',
+                        child: ListTile(
+                          leading: Icon(Icons.person, size: 20),
+                          title: Text('Ver Perfil'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                      if (cliente.telefono.isNotEmpty)
+                        ContactActionsWidget.buildContactMenuItem(
+                          phoneNumber: cliente.telefono,
+                          value: 'contactar',
+                          icon: Icons.phone,
+                          iconColor: Colors.green,
+                          label: 'Llamar / WhatsApp',
+                        ),
+                      const PopupMenuItem(
+                        value: 'ver_ubicacion',
+                        child: ListTile(
+                          leading: Icon(Icons.location_on, size: 20),
+                          title: Text('Ver Ubicación'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'editar',
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.edit,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
+                          title: Text('Editar'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                      if (esClienteDirecto)
+                        const PopupMenuItem(
+                          value: 'asignar_cobrador',
+                          child: ListTile(
+                            leading: Icon(
+                              Icons.person_add,
+                              color: Colors.orange,
+                              size: 20,
+                            ),
+                            title: Text('Asignar Cobrador'),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        )
+                      else if (cliente.assignedCobradorId != null)
+                        const PopupMenuItem(
+                          value: 'asignar_cobrador',
+                          child: ListTile(
+                            leading: Icon(
+                              Icons.swap_horiz,
+                              color: Colors.purple,
+                              size: 20,
+                            ),
+                            title: Text('Reasignar'),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
+                      const PopupMenuItem(
+                        value: 'eliminar',
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          title: Text('Eliminar'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-                const PopupMenuItem(
-                  value: 'eliminar',
-                  child: ListTile(
-                    leading: Icon(Icons.delete, color: Colors.red),
-                    title: Text('Eliminar Cliente'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -671,7 +839,8 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
         position: LatLng(cliente.latitud!, cliente.longitud!),
         infoWindow: InfoWindow(
           title: cliente.nombre,
-          snippet: 'Cliente ${cliente.clientCategory ?? 'B'} - ${cliente.telefono}',
+          snippet:
+              'Cliente ${cliente.clientCategory ?? 'B'} - ${cliente.telefono}',
         ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
       );
@@ -1034,8 +1203,7 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   void _navegarCrearCliente() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) =>
-            ClienteFormScreen(onClienteSaved: _cargarDatos),
+        builder: (context) => ClienteFormScreen(onClienteSaved: _cargarDatos),
       ),
     );
   }
@@ -1043,10 +1211,8 @@ class _ManagerClientesScreenState extends ConsumerState<ManagerClientesScreen> {
   void _navegarEditarCliente(Usuario cliente) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ClienteFormScreen(
-          cliente: cliente,
-          onClienteSaved: _cargarDatos,
-        ),
+        builder: (context) =>
+            ClienteFormScreen(cliente: cliente, onClienteSaved: _cargarDatos),
       ),
     );
   }

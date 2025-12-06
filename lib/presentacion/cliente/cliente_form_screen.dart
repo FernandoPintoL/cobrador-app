@@ -242,51 +242,40 @@ class _ManagerClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
     }
   }
 
-  void _procesarErroresCampos(List<String>? fieldErrors) {
-    if (fieldErrors == null || fieldErrors.isEmpty) return;
+  void _procesarErroresCampos(Map<String, dynamic>? errorsMap) {
+    if (errorsMap == null || errorsMap.isEmpty) return;
 
     setState(() {
+      // Limpiar errores previos
       _nombreError = null;
       _apellidosError = null;
       _telefonoError = null;
       _direccionError = null;
       _ciError = null;
 
-      for (String error in fieldErrors) {
-        String errorLower = error.toLowerCase();
+      // Procesar errores del backend
+      // El formato es: { "field": ["error message 1", "error message 2"] }
+      errorsMap.forEach((field, messages) {
+        if (messages is List && messages.isNotEmpty) {
+          final errorMessage = messages.first.toString();
+          final fieldLower = field.toLowerCase();
 
-        // Errores de nombre (se pueden aplicar tanto a nombre como apellidos)
-        if (errorLower.contains('name') || errorLower.contains('nombre')) {
-          _nombreError ??= error;
-          _apellidosError ??= error;
+          // Mapear campos del backend a variables de error
+          if (fieldLower == 'name' || fieldLower == 'nombre') {
+            _nombreError = errorMessage;
+            _apellidosError = errorMessage; // Aplicar también a apellidos
+          } else if (fieldLower == 'phone' || fieldLower == 'telefono' || fieldLower == 'teléfono') {
+            _telefonoError = errorMessage;
+          } else if (fieldLower == 'address' || fieldLower == 'direccion' || fieldLower == 'dirección') {
+            _direccionError = errorMessage;
+          } else if (fieldLower == 'descripcion' || fieldLower == 'descripción' ||
+                     fieldLower == 'casa' || fieldLower == 'características') {
+            _descripcionCasaError = errorMessage;
+          } else if (fieldLower == 'ci' || fieldLower == 'cedula' || fieldLower == 'cédula') {
+            _ciError = errorMessage;
+          }
         }
-        // Errores de teléfono
-        else if (errorLower.contains('phone') ||
-            errorLower.contains('teléfono') ||
-            errorLower.contains('telefono')) {
-          _telefonoError = error;
-        }
-        // Errores de dirección
-        else if (errorLower.contains('address') ||
-            errorLower.contains('dirección') ||
-            errorLower.contains('direccion')) {
-          _direccionError = error;
-        }
-        // Errores de descripción de casa
-        else if (errorLower.contains('descripción') ||
-            errorLower.contains('descripcion') ||
-            errorLower.contains('casa') ||
-            errorLower.contains('características')) {
-          _descripcionCasaError = error;
-        }
-        // Errores de CI
-        else if (errorLower.contains('ci') ||
-            errorLower.contains('cédula') ||
-            errorLower.contains('cedula') ||
-            errorLower.contains('documento')) {
-          _ciError = error;
-        }
-      }
+      });
     });
   }
 
@@ -1048,8 +1037,16 @@ class _ManagerClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   Future<void> _obtenerUbicacionGPS() async {
     try {
       // Navegar a la pantalla de selección de ubicación
+      // Si hay ubicación guardada (modo edición), mostrarla en el mapa
       final result = await Navigator.of(context).push<Map<String, dynamic>>(
-        MaterialPageRoute(builder: (context) => const LocationPickerScreen()),
+        MaterialPageRoute(
+          builder: (context) => LocationPickerScreen(
+            allowSelection: true,
+            customTitle: 'Seleccionar ubicación del cliente',
+            initialLatitude: _latitud, // Pasar ubicación guardada si existe
+            initialLongitude: _longitud, // Pasar ubicación guardada si existe
+          ),
+        ),
       );
 
       if (result != null) {

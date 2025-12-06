@@ -5,7 +5,6 @@ import '../../../datos/modelos/reporte/daily_activity_report.dart';
 import '../../../negocio/providers/reports_provider.dart';
 import '../../../negocio/providers/auth_provider.dart';
 import '../../../config/role_colors.dart';
-import '../widgets/daily_activity_widgets.dart';
 
 class DailyActivityReportView extends ConsumerStatefulWidget {
   const DailyActivityReportView({Key? key}) : super(key: key);
@@ -18,7 +17,6 @@ class DailyActivityReportView extends ConsumerStatefulWidget {
 class _DailyActivityReportViewState
     extends ConsumerState<DailyActivityReportView> {
   late DateTime selectedDate;
-  bool _useTableView = false;
 
   @override
   void initState() {
@@ -28,11 +26,9 @@ class _DailyActivityReportViewState
 
   @override
   Widget build(BuildContext context) {
-    // Obtener el usuario actual desde authProvider
     final authState = ref.watch(authProvider);
     final usuario = authState.usuario;
 
-    // Validar que el usuario tenga acceso a este reporte
     if (usuario == null || usuario.roles.isEmpty) {
       return Scaffold(
         appBar: AppBar(
@@ -42,7 +38,6 @@ class _DailyActivityReportViewState
       );
     }
 
-    // Determinar el rol del usuario (prioridad: admin > manager > cobrador)
     final String userRole;
     if (usuario.esAdmin()) {
       userRole = 'admin';
@@ -59,15 +54,14 @@ class _DailyActivityReportViewState
       );
     }
 
-    // Crear filtros basados en la fecha seleccionada
     final filters = DailyActivityFilters(
       startDate: DateTime(selectedDate.year, selectedDate.month, selectedDate.day),
       endDate: DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59),
+      // Para cobradores, filtrar por su ID
+      cobradorId: userRole == 'cobrador' ? usuario.id.toInt() : null,
     );
 
     final reportProvider = dailyActivityReportProvider(filters);
-
-    // Obtener color del tema según el rol
     final themeColor = RoleColors.getPrimaryColor(userRole);
     final roleName = RoleColors.getRoleDisplayName(userRole);
 
@@ -106,9 +100,7 @@ class _DailyActivityReportViewState
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Panel de filtros
             _buildFilterPanel(context, userRole),
-            // Contenido del reporte
             Padding(
               padding: const EdgeInsets.all(16),
               child: ref.watch(reportProvider).when(
@@ -123,7 +115,6 @@ class _DailyActivityReportViewState
                       context,
                       report,
                       userRole,
-                      usuario.id.toString(),
                     ),
                   ),
             ),
@@ -133,7 +124,6 @@ class _DailyActivityReportViewState
     );
   }
 
-  /// Widget para mostrar cuando el acceso es denegado
   Widget _buildAccessDeniedWidget(BuildContext context) {
     return Center(
       child: Padding(
@@ -216,19 +206,8 @@ class _DailyActivityReportViewState
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(_useTableView ? Icons.view_list : Icons.table_chart),
-                onPressed: () {
-                  setState(() {
-                    _useTableView = !_useTableView;
-                  });
-                },
-                tooltip: _useTableView ? 'Vista de lista' : 'Vista de tabla',
-              ),
             ],
           ),
-          // Mostrar información contextual según el rol
           const SizedBox(height: 12),
           if (userRole == 'cobrador')
             Container(
@@ -248,7 +227,7 @@ class _DailyActivityReportViewState
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Visualizando solo tus pagos del día',
+                      'Visualizando solo tu actividad del día',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: RoleColors.cobradorPrimary,
                           ),
@@ -275,7 +254,7 @@ class _DailyActivityReportViewState
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Visualizando pagos de tus cobradores',
+                      'Visualizando actividad de todos los cobradores',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: RoleColors.managerPrimary,
                           ),
@@ -293,16 +272,8 @@ class _DailyActivityReportViewState
     BuildContext context,
     DailyActivityReport report,
     String userRole,
-    String userId,
   ) {
-    // Filtrar items según el rol del usuario
-    final filteredItems = _filterReportItemsByRole(
-      report.items,
-      userRole,
-      userId,
-    );
-
-    if (filteredItems.isEmpty) {
+    if (report.items.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -324,8 +295,8 @@ class _DailyActivityReportViewState
               const SizedBox(height: 8),
               Text(
                 userRole == 'cobrador'
-                    ? 'No hay registros de tus pagos para esta fecha'
-                    : 'No hay registros de pagos para esta fecha',
+                    ? 'No hay registros de tu actividad para esta fecha'
+                    : 'No hay registros de actividad para esta fecha',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.grey,
                     ),
@@ -337,20 +308,22 @@ class _DailyActivityReportViewState
       );
     }
 
-    // Calcular resumen para los items filtrados
-    final filteredSummary = _calculateSummary(filteredItems);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Card de resumen
-        DailyActivitySummaryCard(summary: filteredSummary),
+        // Resumen general del día
+        _buildDaySummaryCard(context, report.summary),
         const SizedBox(height: 24),
 
-        // Resumen por cobrador - Solo mostrar si no es cobrador y hay datos
-        if (userRole != 'cobrador' && filteredSummary.byCobradores.isNotEmpty) ...[
+        // Para cobradores: mostrar su información detallada
+        if (userRole == 'cobrador' && report.items.isNotEmpty) ...[
+          _buildCobradorDetailCard(context, report.items.first),
+        ],
+
+        // Para managers y admins: mostrar resumen de todos los cobradores
+        if (userRole != 'cobrador') ...[
           Text(
-            'Resumen por Cobrador',
+            'Actividad por Cobrador',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -359,116 +332,481 @@ class _DailyActivityReportViewState
           ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: filteredSummary.byCobradores.entries.length,
+            itemCount: report.items.length,
             itemBuilder: (context, index) {
-              final entry = filteredSummary.byCobradores.entries.elementAt(index);
-              final cobradorId = entry.key;
-              final cobradorSummary = entry.value;
-
-              // Encontrar el nombre del cobrador desde los items
-              final cobradorName = filteredItems
-                  .where((item) => item.cobradorId.toString() == cobradorId)
-                  .firstOrNull
-                  ?.cobradorName;
-
+              final cobradorItem = report.items[index];
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: CobradorSummaryCard(
-                  cobradorId: cobradorId,
-                  summary: cobradorSummary,
-                  cobradorName: cobradorName,
-                ),
+                child: _buildCobradorSummaryCard(context, cobradorItem),
               );
             },
-          ),
-          const SizedBox(height: 24),
-        ],
-
-        // Detalle de actividades
-        Text(
-          'Detalle de Pagos',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        const SizedBox(height: 12),
-
-        // Vista de tabla o lista
-        if (_useTableView) ...[
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DailyActivityTable(items: filteredItems),
-          ),
-        ] else ...[
-          DailyActivityListView(
-            items: filteredItems,
-            onItemTap: (item) => _showPaymentDetails(context, item),
           ),
         ],
       ],
     );
   }
 
-  /// Filtra los items del reporte según el rol del usuario
-  List<DailyActivityItem> _filterReportItemsByRole(
-    List<DailyActivityItem> items,
-    String userRole,
-    String userId,
-  ) {
-    if (userRole == 'cobrador') {
-      // El cobrador solo ve sus propios pagos
-      return items.where((item) => item.cobradorId.toString() == userId).toList();
-    } else if (userRole == 'manager') {
-      // El manager vería aquí los pagos de sus cobradores asignados
-      // Por ahora, mostramos todos (el backend debería filtrar según la asignación)
-      return items;
-    } else {
-      // Admin ve todo
-      return items;
-    }
-  }
-
-  /// Calcula el resumen para un conjunto filtrado de items
-  DailyActivitySummary _calculateSummary(List<DailyActivityItem> items) {
-    if (items.isEmpty) {
-      return DailyActivitySummary(
-        totalPayments: 0,
-        totalAmount: 0,
-        totalAmountFormatted: 'Bs 0.00',
-        byCobradores: {},
-      );
-    }
-
-    double totalAmount = 0;
-    final byCobradores = <String, CobradorSummary>{};
-
-    for (final item in items) {
-      totalAmount += item.amount;
-
-      // Agrupar por cobrador
-      final cobradorKey = item.cobradorId.toString();
-      if (!byCobradores.containsKey(cobradorKey)) {
-        byCobradores[cobradorKey] = CobradorSummary(count: 0, amount: 0.0);
-      }
-
-      final existing = byCobradores[cobradorKey]!;
-      byCobradores[cobradorKey] = CobradorSummary(
-        count: existing.count + 1,
-        amount: existing.amount + item.amount,
-      );
-    }
-
+  Widget _buildDaySummaryCard(BuildContext context, DailyActivitySummary summary) {
     final currencyFormat = NumberFormat.currency(
       locale: 'es_BO',
       symbol: 'Bs ',
       decimalDigits: 2,
     );
 
-    return DailyActivitySummary(
-      totalPayments: items.length,
-      totalAmount: totalAmount,
-      totalAmountFormatted: currencyFormat.format(totalAmount),
-      byCobradores: byCobradores,
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).primaryColor.withValues(alpha: 0.8),
+              Theme.of(context).primaryColor.withValues(alpha: 0.5),
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Resumen del Día',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                    ),
+                    Text(
+                      '${summary.dayName}, ${summary.date}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white70,
+                          ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            // Grid de estadísticas
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 2,
+              children: [
+                _buildStatCard(
+                  context,
+                  'Créditos Entregados',
+                  summary.totals.creditsDelivered.toString(),
+                  Icons.add_card,
+                ),
+                _buildStatCard(
+                  context,
+                  'Monto Prestado',
+                  currencyFormat.format(summary.totals.amountLent),
+                  Icons.attach_money,
+                ),
+                _buildStatCard(
+                  context,
+                  'Pagos Cobrados',
+                  summary.totals.paymentsCollected.toString(),
+                  Icons.receipt,
+                ),
+                _buildStatCard(
+                  context,
+                  'Monto Cobrado',
+                  currencyFormat.format(summary.totals.amountCollected),
+                  Icons.money,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Divider(color: Colors.white30),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildCompactStat(
+                  context,
+                  'Pagos Esperados',
+                  summary.totals.expectedPayments.toString(),
+                ),
+                _buildCompactStat(
+                  context,
+                  'Pendientes',
+                  summary.totals.pendingPayments.toString(),
+                ),
+                _buildCompactStat(
+                  context,
+                  'Eficiencia',
+                  summary.overallEfficiencyFormatted,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard(BuildContext context, String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white70,
+                      ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactStat(BuildContext context, String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Colors.white70,
+              ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCobradorDetailCard(BuildContext context, DailyActivityCobradorItem cobrador) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'es_BO',
+      symbol: 'Bs ',
+      decimalDigits: 2,
+    );
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tu Actividad del Día',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 16),
+
+            // Balance de Efectivo
+            _buildSectionCard(
+              context,
+              'Balance de Efectivo',
+              Icons.account_balance_wallet,
+              cobrador.cashBalance.isOpen ? Colors.green : Colors.blue,
+              [
+                _buildInfoRow('Estado', cobrador.cashBalance.isOpen ? 'Abierto' : 'Cerrado'),
+                _buildInfoRow('Inicial', currencyFormat.format(cobrador.cashBalance.initialAmount)),
+                _buildInfoRow('Cobrado', currencyFormat.format(cobrador.cashBalance.collectedAmount)),
+                _buildInfoRow('Prestado', currencyFormat.format(cobrador.cashBalance.lentAmount)),
+                _buildInfoRow('Final', currencyFormat.format(cobrador.cashBalance.finalAmount)),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Créditos Entregados
+            _buildSectionCard(
+              context,
+              'Créditos Entregados',
+              Icons.add_card,
+              Colors.orange,
+              [
+                _buildInfoRow('Total', '${cobrador.creditsDelivered.count}'),
+                if (cobrador.creditsDelivered.details.isNotEmpty)
+                  ...cobrador.creditsDelivered.details.map((detail) =>
+                    _buildDetailRow(
+                      detail.clientName,
+                      currencyFormat.format(detail.amount),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Pagos Cobrados
+            _buildSectionCard(
+              context,
+              'Pagos Cobrados',
+              Icons.receipt,
+              Colors.purple,
+              [
+                _buildInfoRow('Total', '${cobrador.paymentsCollected.count}'),
+                if (cobrador.paymentsCollected.details.isNotEmpty)
+                  ...cobrador.paymentsCollected.details.map((detail) =>
+                    _buildDetailRow(
+                      detail.clientName,
+                      currencyFormat.format(detail.amount),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Pagos Esperados
+            _buildSectionCard(
+              context,
+              'Pagos Esperados',
+              Icons.schedule,
+              Colors.teal,
+              [
+                _buildInfoRow('Total Esperados', '${cobrador.expectedPayments.count}'),
+                _buildInfoRow('Cobrados', '${cobrador.expectedPayments.collected}'),
+                _buildInfoRow('Pendientes', '${cobrador.expectedPayments.pending}'),
+                _buildInfoRow('Eficiencia', cobrador.expectedPayments.efficiencyFormatted),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCobradorSummaryCard(BuildContext context, DailyActivityCobradorItem cobrador) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'es_BO',
+      symbol: 'Bs ',
+      decimalDigits: 2,
+    );
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ExpansionTile(
+        leading: CircleAvatar(
+          backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+          child: Text(
+            cobrador.cobradorName.substring(0, 1),
+            style: TextStyle(
+              color: Theme.of(context).primaryColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        title: Text(
+          cobrador.cobradorName,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text('ID: ${cobrador.cobradorId}'),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildCompactSummaryRow(
+                  context,
+                  'Balance',
+                  cobrador.cashBalance.isOpen ? 'Abierto' : 'Cerrado',
+                  cobrador.cashBalance.isOpen ? Colors.green : Colors.blue,
+                ),
+                _buildCompactSummaryRow(
+                  context,
+                  'Créditos Entregados',
+                  '${cobrador.creditsDelivered.count}',
+                  Colors.orange,
+                ),
+                _buildCompactSummaryRow(
+                  context,
+                  'Pagos Cobrados',
+                  '${cobrador.paymentsCollected.count}',
+                  Colors.purple,
+                ),
+                _buildCompactSummaryRow(
+                  context,
+                  'Monto Cobrado',
+                  currencyFormat.format(cobrador.cashBalance.collectedAmount),
+                  Colors.green,
+                ),
+                _buildCompactSummaryRow(
+                  context,
+                  'Eficiencia',
+                  cobrador.expectedPayments.efficiencyFormatted,
+                  Colors.teal,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionCard(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    List<Widget> children,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: color),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: children,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              '  • $label',
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactSummaryRow(
+    BuildContext context,
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey,
+                ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -521,200 +859,5 @@ class _DailyActivityReportViewState
         selectedDate = picked;
       });
     }
-  }
-
-  void _showPaymentDetails(BuildContext context, DailyActivityItem item) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'es_BO',
-      symbol: 'Bs ',
-      decimalDigits: 2,
-    );
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Detalles del Pago',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      Text(
-                        'Pago #${item.id}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey,
-                            ),
-                      ),
-                    ],
-                  ),
-                  PaymentStatusChip(status: item.status),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Información del cliente
-              _buildDetailSection(
-                context,
-                'Cliente',
-                [
-                  _buildDetailRow(context, 'Nombre', item.clientName),
-                  _buildDetailRow(context, 'Crédito ID', '#${item.creditId}'),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Información del pago
-              _buildDetailSection(
-                context,
-                'Información del Pago',
-                [
-                  _buildDetailRow(
-                    context,
-                    'Monto',
-                    currencyFormat.format(item.amount),
-                    isHighlight: true,
-                  ),
-                  _buildDetailRow(
-                    context,
-                    'Método',
-                    item.paymentMethodDisplay,
-                  ),
-                  _buildDetailRow(
-                    context,
-                    'Cuota',
-                    '${item.installmentNumber}',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Información del cobrador
-              _buildDetailSection(
-                context,
-                'Cobrador',
-                [
-                  _buildDetailRow(context, 'Nombre', item.cobradorName),
-                  _buildDetailRow(context, 'ID', item.cobradorId.toString()),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Fechas
-              _buildDetailSection(
-                context,
-                'Fechas',
-                [
-                  _buildDetailRow(
-                    context,
-                    'Fecha de Pago',
-                    DateFormat('dd/MM/yyyy HH:mm').format(item.paymentDate),
-                  ),
-                  _buildDetailRow(
-                    context,
-                    'Creado',
-                    DateFormat('dd/MM/yyyy HH:mm').format(item.createdAt),
-                  ),
-                ],
-              ),
-
-              // Ubicación si está disponible
-              if (item.latitude != null && item.longitude != null) ...[
-                const SizedBox(height: 16),
-                _buildDetailSection(
-                  context,
-                  'Ubicación',
-                  [
-                    _buildDetailRow(
-                      context,
-                      'Latitud',
-                      item.latitude.toString(),
-                    ),
-                    _buildDetailRow(
-                      context,
-                      'Longitud',
-                      item.longitude.toString(),
-                    ),
-                  ],
-                ),
-              ],
-
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cerrar'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailSection(
-    BuildContext context,
-    String title,
-    List<Widget> children,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        const SizedBox(height: 8),
-        ...children,
-      ],
-    );
-  }
-
-  Widget _buildDetailRow(
-    BuildContext context,
-    String label,
-    String value, {
-    bool isHighlight = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey,
-                ),
-          ),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
-                  color: isHighlight ? Colors.green.shade700 : null,
-                ),
-          ),
-        ],
-      ),
-    );
   }
 }

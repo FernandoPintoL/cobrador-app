@@ -4,6 +4,7 @@ import '../../negocio/providers/reports_provider.dart' as rp;
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/services/report_authorization_service.dart';
 import 'utils/report_state_helper.dart';
+import 'utils/format_labels.dart';
 import 'views/report_view_factory.dart';
 import 'widgets/role_aware_filter_builder.dart';
 import 'services/report_defaults_service.dart';
@@ -29,6 +30,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   int? _quickRangeIndex;
   bool _showFilters = true; // Controla si los filtros están visibles
 
+  // 🎨 Emojis para cada tipo de reporte
+  static const Map<String, String> _reportEmojis = {
+    'credits': '💳',
+    'payments': '💵',
+    'balances': '💰',
+    'overdue': '⏰',
+    'daily-activity': '📅',
+    'users': '👥',
+    'performance': '📊',
+    'portfolio': '💼',
+    'commissions': '💎',
+    'cash-flow-forecast': '📈',
+    'waiting-list': '⏳',
+  };
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -47,7 +63,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 applicationVersion: '',
                 children: const [
                   Text(
-                    'Seleccione un tipo de reporte, configure filtros y genere resultados en JSON, Excel o PDF.',
+                    'Seleccione un tipo de reporte, configure filtros y genere una vista previa o descargue en PDF/Excel.',
                   ),
                 ],
               );
@@ -121,6 +137,31 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 ),
                               ),
                             ),
+                            // 🎯 Badge de conteo de filtros activos
+                            if (_filters.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.primaryContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: cs.primary.withValues(alpha: 0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  '${_filters.length}',
+                                  style: TextStyle(
+                                    color: cs.onPrimaryContainer,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
                             AnimatedRotation(
                               turns: _showFilters ? 0 : 0.5,
                               duration: const Duration(milliseconds: 300),
@@ -133,6 +174,40 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                       ),
                     ),
+                    // 🎯 Chips de filtros activos cuando está colapsado
+                    if (!_showFilters && _filters.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, bottom: 4),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _filters.entries.map((entry) {
+                            final emoji = _getFilterEmoji(entry.key);
+                            final displayValue = _formatFilterValue(entry.key, entry.value);
+
+                            return Chip(
+                              avatar: Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              label: Text(
+                                '${_getFilterLabel(entry.key)}: $displayValue',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              deleteIcon: const Icon(Icons.close, size: 16),
+                              onDeleted: () {
+                                setState(() {
+                                  _filters.remove(entry.key);
+                                });
+                              },
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: cs.secondaryContainer,
+                              labelStyle: TextStyle(color: cs.onSecondaryContainer),
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     // Contenido colapsable
                     AnimatedSize(
                       duration: const Duration(milliseconds: 300),
@@ -194,10 +269,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                                             .symmetric(
                                                       horizontal: 12,
                                                     ),
-                                                    child: Text(
-                                                      e.value['label'] ??
-                                                          e.value['name'] ??
-                                                          e.key,
+                                                    child: Row(
+                                                      children: [
+                                                        Text(
+                                                          _reportEmojis[e.key] ?? '📄',
+                                                          style: const TextStyle(fontSize: 20),
+                                                        ),
+                                                        const SizedBox(width: 10),
+                                                        Expanded(
+                                                          child: Text(
+                                                            e.value['label'] ??
+                                                                e.value['name'] ??
+                                                                e.key,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
                                                 ),
@@ -349,24 +435,40 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                     color: cs.onSurfaceVariant,
                                   ),
                                 ),
-                                DropdownButton<String>(
-                                  value: _format,
-                                  items: ((types[_selectedReport]?['formats']
-                                              as List<dynamic>?) ??
-                                          ['json'])
-                                      .map(
-                                        (f) => DropdownMenuItem(
-                                          value: f as String,
-                                          child: Text(
-                                            f.toString().toUpperCase(),
-                                            style:
-                                                theme.textTheme.bodySmall,
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (v) => setState(
-                                    () => _format = v ?? 'json',
+                                Tooltip(
+                                  message: FormatLabels.getTechnicalHint(_format),
+                                  child: DropdownButton<String>(
+                                    value: _format,
+                                    items: ((types[_selectedReport]?['formats']
+                                                as List<dynamic>?) ??
+                                            ['json'])
+                                        .map(
+                                          (f) {
+                                            final format = f as String;
+                                            return DropdownMenuItem(
+                                              value: format,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    FormatLabels.getIcon(format),
+                                                    size: 18,
+                                                    color: cs.primary,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    FormatLabels.getLabel(format),
+                                                    style: theme.textTheme.bodySmall,
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        )
+                                        .toList(),
+                                    onChanged: (v) => setState(
+                                      () => _format = v ?? 'json',
+                                    ),
                                   ),
                                 ),
                                 OutlinedButton.icon(
@@ -446,12 +548,67 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
+  // 🎨 Obtiene el emoji para un filtro
+  String _getFilterEmoji(String filterKey) {
+    const emojis = {
+      'start_date': '📅',
+      'end_date': '📆',
+      'status': '🏷️',
+      'cobrador_id': '👤',
+      'client_id': '👥',
+      'created_by': '✍️',
+      'delivered_by': '🚚',
+      'amount': '💵',
+      'role': '🎭',
+      'client_category': '⭐',
+    };
+    return emojis[filterKey] ?? '📋';
+  }
+
+  // 📝 Obtiene el label legible para un filtro
+  String _getFilterLabel(String filterKey) {
+    const labels = {
+      'start_date': 'Desde',
+      'end_date': 'Hasta',
+      'status': 'Estado',
+      'cobrador_id': 'Cobrador',
+      'client_id': 'Cliente',
+      'created_by': 'Creado por',
+      'delivered_by': 'Entregado por',
+      'amount': 'Monto',
+      'role': 'Rol',
+      'client_category': 'Categoría',
+    };
+    return labels[filterKey] ?? filterKey;
+  }
+
+  // 🔤 Formatea el valor del filtro para mostrar
+  String _formatFilterValue(String filterKey, dynamic value) {
+    if (value == null) return 'N/A';
+
+    // Fechas
+    if (filterKey.contains('date') && value is DateTime) {
+      return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+    }
+
+    // Valores largos (truncar)
+    final stringValue = value.toString();
+    if (stringValue.length > 15) {
+      return '${stringValue.substring(0, 12)}...';
+    }
+
+    return stringValue;
+  }
+
   void _generateReport() {
     if (!ReportStateHelper.canGenerateReport(_selectedReport)) {
       return;
     }
 
     setState(() {
+      // ⭐ Auto-colapsar filtros al generar para mejor visualización del reporte
+      _showFilters = false;
+
       // Usar el nombre del reporte tal como viene del backend
       // El backend usa 'balances' (plural), 'daily-activity', etc.
       _currentRequest = ReportStateHelper.createReportRequest(

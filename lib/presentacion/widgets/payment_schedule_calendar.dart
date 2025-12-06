@@ -40,6 +40,44 @@ class PaymentScheduleCalendar extends StatelessWidget {
 
     return Column(
       children: [
+        // Header compacto con información clave
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _compactInfoChip(
+                context,
+                'Cuota',
+                'Bs. ${(credit.installmentAmount ?? 0).toStringAsFixed(0)}',
+                Icons.payments,
+                Colors.blue,
+              ),
+              _compactInfoChip(
+                context,
+                'Saldo',
+                'Bs. ${(credit.balance).toStringAsFixed(0)}',
+                Icons.account_balance_wallet,
+                Colors.orange,
+              ),
+              _compactInfoChip(
+                context,
+                'Cuotas',
+                '${credit.paidInstallments}/${credit.totalInstallments}',
+                Icons.check_circle,
+                Colors.green,
+              ),
+            ],
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
           child: Align(
@@ -203,6 +241,43 @@ class PaymentScheduleCalendar extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(fontSize: 11),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactInfoChip(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),

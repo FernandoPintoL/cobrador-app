@@ -18,6 +18,28 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
     Key? key,
   }) : super(key: key);
 
+  // 🎨 Emojis para cada tipo de filtro
+  static const Map<String, String> _filterEmojis = {
+    'start_date': '📅',
+    'end_date': '📆',
+    'date': '📅',
+    'status': '🏷️',
+    'cobrador_id': '👤',
+    'client_id': '👥',
+    'created_by': '✍️',
+    'delivered_by': '🚚',
+    'amount': '💵',
+    'min_amount': '💰',
+    'max_amount': '💰',
+    'role': '🎭',
+    'client_category': '⭐',
+    'min_days_overdue': '⏰',
+    'max_days_overdue': '⏰',
+    'min_overdue_amount': '💸',
+    'with_discrepancies': '⚠️',
+    'manager_id': '👔',
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
@@ -56,10 +78,10 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.1),
+            color: Theme.of(context).colorScheme.primaryContainer,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: Colors.blue.withValues(alpha: 0.3),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
             ),
           ),
           child: Row(
@@ -67,14 +89,14 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
               Icon(
                 Icons.info_outline,
                 size: 18,
-                color: Colors.blue[700],
+                color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   contextDescription,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.blue[700],
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                       ),
                 ),
               ),
@@ -109,9 +131,18 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Label
+          // Label con emoji
           Row(
             children: [
+              // 🎨 Emoji del filtro
+              if (_filterEmojis.containsKey(config.filterKey))
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    _filterEmojis[config.filterKey]!,
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
               Text(
                 config.label,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -121,7 +152,9 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
               if (config.required)
                 Text(
                   ' *',
-                  style: TextStyle(color: Colors.red[600]),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
             ],
           ),
@@ -130,7 +163,7 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
             Text(
               config.description!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],
@@ -231,12 +264,18 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today, size: 18),
+            Icon(
+              Icons.calendar_today,
+              size: 18,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -244,14 +283,20 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
                     ? DateFormat('dd/MM/yyyy').format(dateValue)
                     : 'Seleccionar fecha',
                 style: TextStyle(
-                  color: dateValue != null ? Colors.black : Colors.grey[500],
+                  color: dateValue != null
+                      ? Theme.of(context).colorScheme.onSurface
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
             if (dateValue != null)
               GestureDetector(
                 onTap: () => onChanged(null),
-                child: Icon(Icons.clear, size: 18, color: Colors.grey[500]),
+                child: Icon(
+                  Icons.clear,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
           ],
         ),
@@ -299,7 +344,9 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline,
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: DropdownButton<String?>(
@@ -308,7 +355,9 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
         underline: const SizedBox(),
         hint: Text(
           'Seleccionar ${config.label.toLowerCase()}',
-          style: TextStyle(color: Colors.grey[500]),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         items: [
           if (validValue != null)
@@ -316,7 +365,9 @@ class RoleAwareFilterBuilder extends ConsumerWidget {
               value: null,
               child: Text(
                 'Limpiar filtro',
-                style: TextStyle(color: Colors.red[600]),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ),
             ),
           ...options.entries.map((entry) {

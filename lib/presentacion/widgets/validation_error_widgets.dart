@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 class ValidationErrorDialog extends StatelessWidget {
   final String title;
   final String message;
-  final List<String>? fieldErrors;
+  final Map<String, dynamic>? fieldErrors; // Cambio: Ahora acepta Map del backend
 
   const ValidationErrorDialog({
     super.key,
@@ -13,8 +13,25 @@ class ValidationErrorDialog extends StatelessWidget {
     this.fieldErrors,
   });
 
+  /// Convertir errores de Map a List de mensajes
+  List<String> _getErrorMessages() {
+    if (fieldErrors == null || fieldErrors!.isEmpty) return [];
+
+    final List<String> messages = [];
+    fieldErrors!.forEach((field, errors) {
+      if (errors is List) {
+        messages.addAll(errors.map((e) => e.toString()));
+      } else {
+        messages.add(errors.toString());
+      }
+    });
+    return messages;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final errorMessages = _getErrorMessages();
+
     return AlertDialog(
       title: Row(
         children: [
@@ -36,7 +53,7 @@ class ValidationErrorDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (fieldErrors != null && fieldErrors!.isNotEmpty) ...[
+            if (errorMessages.isNotEmpty) ...[
               Text(
                 'Los siguientes campos tienen errores:',
                 style: TextStyle(
@@ -62,7 +79,7 @@ class ValidationErrorDialog extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: fieldErrors!
+                  children: errorMessages
                       .map(
                         (error) => Padding(
                           padding: const EdgeInsets.only(bottom: 6),
@@ -164,7 +181,7 @@ class ValidationErrorDialog extends StatelessWidget {
     BuildContext context, {
     required String title,
     required String message,
-    List<String>? fieldErrors,
+    Map<String, dynamic>? fieldErrors, // Cambio: Ahora acepta Map
   }) {
     showDialog(
       context: context,
@@ -179,10 +196,25 @@ class ValidationErrorDialog extends StatelessWidget {
 
 /// Widget para mostrar errores en forma de SnackBar mejorado
 class ValidationErrorSnackBar {
+  /// Convertir errores de Map a List de mensajes
+  static List<String> _getErrorMessages(Map<String, dynamic>? fieldErrors) {
+    if (fieldErrors == null || fieldErrors.isEmpty) return [];
+
+    final List<String> messages = [];
+    fieldErrors.forEach((field, errors) {
+      if (errors is List) {
+        messages.addAll(errors.map((e) => e.toString()));
+      } else {
+        messages.add(errors.toString());
+      }
+    });
+    return messages;
+  }
+
   static void show(
     BuildContext context, {
     required String message,
-    List<String>? fieldErrors,
+    Map<String, dynamic>? fieldErrors, // Cambio: Ahora acepta Map
     Duration? duration,
   }) {
     final messenger = ScaffoldMessenger.of(context);
@@ -190,14 +222,15 @@ class ValidationErrorSnackBar {
     // Limpiar SnackBars previos
     messenger.clearSnackBars();
 
+    final errorMessages = _getErrorMessages(fieldErrors);
     String displayMessage = message;
-    if (fieldErrors != null && fieldErrors.isNotEmpty) {
+    if (errorMessages.isNotEmpty) {
       // Mostrar solo el primer error en el SnackBar para que no sea muy largo
-      displayMessage = fieldErrors.first;
+      displayMessage = errorMessages.first;
 
       // Si hay más errores, agregar indicador
-      if (fieldErrors.length > 1) {
-        displayMessage += ' (+${fieldErrors.length - 1} más)';
+      if (errorMessages.length > 1) {
+        displayMessage += ' (+${errorMessages.length - 1} más)';
       }
     }
 
@@ -225,7 +258,7 @@ class ValidationErrorSnackBar {
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        action: fieldErrors != null && fieldErrors.length > 1
+        action: errorMessages.length > 1
             ? SnackBarAction(
                 label: 'Ver todo',
                 textColor: Colors.white,

@@ -72,9 +72,10 @@ class FilterVisibilityService {
           FilterVisibilityConfig(
             filterKey: 'cobrador_id',
             label: 'Cobrador',
-            type: 'select',
+            type: 'search_select',
             description: 'Filtrar por cobrador específico',
             required: false,
+            searchType: 'cobrador',
           ),
           FilterVisibilityConfig(
             filterKey: 'status',
@@ -110,16 +111,18 @@ class FilterVisibilityService {
           FilterVisibilityConfig(
             filterKey: 'cobrador_id',
             label: 'Cobrador',
-            type: 'select',
+            type: 'search_select',
             description: 'Filtrar por cobrador',
             required: false,
+            searchType: 'cobrador',
           ),
           FilterVisibilityConfig(
             filterKey: 'client_id',
             label: 'Cliente',
-            type: 'select',
+            type: 'search_select',
             description: 'Filtrar por cliente',
             required: false,
+            searchType: 'cliente',
           ),
           FilterVisibilityConfig(
             filterKey: 'start_date',
@@ -157,9 +160,10 @@ class FilterVisibilityService {
           FilterVisibilityConfig(
             filterKey: 'cobrador_id',
             label: 'Cobrador',
-            type: 'select',
+            type: 'search_select',
             description: 'Filtrar por cobrador',
             required: false,
+            searchType: 'cobrador',
           ),
           FilterVisibilityConfig(
             filterKey: 'status',
@@ -220,9 +224,10 @@ class FilterVisibilityService {
           FilterVisibilityConfig(
             filterKey: 'cobrador_id',
             label: 'Cobrador',
-            type: 'select',
+            type: 'search_select',
             description: 'Filtrar por cobrador específico',
             required: false,
+            searchType: 'cobrador',
           ),
         ];
 
@@ -243,14 +248,14 @@ class FilterVisibilityService {
     }
   }
 
-  /// Retorna filtros para MANAGER (sin cobrador_id)
+  /// Retorna filtros para MANAGER (puede filtrar por cobrador asignado)
   static List<FilterVisibilityConfig> _getManagerFiltersForReport(String reportType) {
     final allFilters = _getAllFiltersForReport(reportType);
 
-    // Manager no ve el filtro de cobrador_id (Backend filtra sus asignados)
-    // Pero puede ver otros filtros
+    // Manager puede filtrar por cobrador_id (solo sus cobradores asignados)
+    // pero no puede filtrar por client_id
     return allFilters
-        .where((f) => f.filterKey != 'cobrador_id' && f.filterKey != 'client_id')
+        .where((f) => f.filterKey != 'client_id')
         .toList();
   }
 
