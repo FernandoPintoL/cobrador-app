@@ -553,7 +553,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   color: cs.brightness == Brightness.dark
                       ? cs.surface
                       : const Color(0xFFF5F7FB),
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(3),
                   child: _ReportResultView(request: _currentRequest),
                 ),
               ),

@@ -51,6 +51,15 @@ class Credito {
   final bool? backendIsOverdue; // Si tiene cuotas atrasadas desde backend
   final double? overdueAmount; // Monto total atrasado
 
+  // ========================================
+  // NUEVOS CAMPOS CALCULADOS DESDE BACKEND
+  // ========================================
+  final int? backendDaysOverdue; // Días de retraso calculados por backend
+  final String? backendOverdueSeverity; // Severidad: 'none', 'light', 'moderate', 'critical'
+  final String? backendPaymentStatus; // Estado de pago: 'completed', 'on_track', 'at_risk', 'critical'
+  final int? backendOverdueInstallments; // Cuotas atrasadas según backend
+  final bool? backendRequiresAttention; // Flag de atención inmediata
+
   // Relaciones
   final Usuario? client;
   final Usuario? cobrador;
@@ -98,6 +107,12 @@ class Credito {
     this.paidInstallmentsCount,
     this.backendIsOverdue,
     this.overdueAmount,
+    // Nuevos campos calculados desde backend
+    this.backendDaysOverdue,
+    this.backendOverdueSeverity,
+    this.backendPaymentStatus,
+    this.backendOverdueInstallments,
+    this.backendRequiresAttention,
     // Relaciones
     this.client,
     this.cobrador,
@@ -172,6 +187,12 @@ class Credito {
       overdueAmount: json['overdue_amount'] != null
           ? double.tryParse(json['overdue_amount'].toString())
           : null,
+      // Nuevos campos calculados desde backend
+      backendDaysOverdue: json['days_overdue'],
+      backendOverdueSeverity: json['overdue_severity'],
+      backendPaymentStatus: json['payment_status'],
+      backendOverdueInstallments: json['overdue_installments'],
+      backendRequiresAttention: json['requires_attention'] == 1 || json['requires_attention'] == true,
       // Relaciones
       client: json['client'] != null ? Usuario.fromJson(json['client']) : null,
       cobrador: json['cobrador'] != null
@@ -275,14 +296,6 @@ class Credito {
     return DateTime.now().isAfter(endDate) && !isCompleted;
   }
 
-  bool get requiresAttention {
-    if (isOverdue) return true;
-
-    // Próximo a vencer en 7 días
-    final now = DateTime.now();
-    final daysUntilDue = endDate.difference(now).inDays;
-    return daysUntilDue <= 7 && daysUntilDue >= 0 && isActive;
-  }
 
   double get progressPercentage {
     final total = totalAmount ?? amount;
@@ -371,30 +384,105 @@ class Credito {
     }
   }
 
-  /// Calcula cuántos días de retraso tiene el crédito basado en la fecha de vencimiento
-  /// Retorna 0 si no está vencido o si ya está completado
+  // ========================================
+  // GETTERS OPTIMIZADOS - USAN DATOS DEL BACKEND
+  // ========================================
+
+  /// Días de retraso (desde backend, con fallback a cálculo local)
   int get daysOverdue {
+    // Usar valor del backend si está disponible
+    if (backendDaysOverdue != null) {
+      return backendDaysOverdue!;
+    }
+    // Fallback: cálculo local para compatibilidad
     if (isCompleted || !isOverdue) return 0;
     return DateTime.now().difference(endDate).inDays;
   }
 
-  /// Retorna el color de alerta basado en los días de retraso:
-  /// - Verde: Sin retraso (0 días)
-  /// - Amarillo: Retraso de 1-3 días (alerta leve)
-  /// - Rojo: Retraso mayor a 3 días (alerta crítica)
-  Color get overdueColor {
-    final daysOverdueValue = daysOverdue;
-    if (daysOverdueValue == 0) return Colors.green;
-    if (daysOverdueValue <= 3) return Colors.amber;
-    return Colors.red;
+  /// Severidad del retraso (desde backend, con fallback)
+  String get overdueSeverity {
+    // Usar valor del backend si está disponible
+    if (backendOverdueSeverity != null) {
+      return backendOverdueSeverity!;
+    }
+    // Fallback: calcular basado en días
+    final days = daysOverdue;
+    if (days == 0) return 'none';
+    if (days <= 3) return 'light';
+    if (days <= 7) return 'moderate';
+    return 'critical';
   }
 
-  /// Retorna una descripción del estado de retraso
+  /// Color basado en severidad (mapeo UI)
+  Color get overdueColor {
+    switch (overdueSeverity) {
+      case 'none':
+        return Colors.green;
+      case 'light':
+        return Colors.amber;
+      case 'moderate':
+        return Colors.orange;
+      case 'critical':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  /// Icono basado en severidad (mapeo UI)
+  IconData get overdueIcon {
+    switch (overdueSeverity) {
+      case 'none':
+        return Icons.check_circle;
+      case 'light':
+        return Icons.warning_amber;
+      case 'moderate':
+        return Icons.warning;
+      case 'critical':
+        return Icons.error;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  /// Label descriptivo basado en severidad
   String get overdueStatusLabel {
-    final daysOverdueValue = daysOverdue;
-    if (daysOverdueValue == 0) return 'Al día';
-    if (daysOverdueValue == 1) return '$daysOverdueValue día de retraso';
-    return '$daysOverdueValue días de retraso';
+    switch (overdueSeverity) {
+      case 'none':
+        return 'Al día';
+      case 'light':
+        return 'Alerta leve';
+      case 'moderate':
+        return 'Alerta moderada';
+      case 'critical':
+        return 'Crítico';
+      default:
+        final days = daysOverdue;
+        if (days == 0) return 'Al día';
+        if (days == 1) return '$days día de retraso';
+        return '$days días de retraso';
+    }
+  }
+
+  /// Estado de pago (desde backend, con fallback)
+  String get paymentStatus {
+    if (backendPaymentStatus != null) {
+      return backendPaymentStatus!;
+    }
+    // Fallback: calcular basado en cuotas pendientes
+    final pending = backendPendingInstallments ?? 0;
+    if (pending == 0) return 'completed';
+    if (pending <= 3) return 'at_risk';
+    return 'critical';
+  }
+
+  /// Requiere atención inmediata (desde backend, con fallback)
+  bool get requiresAttention {
+    if (backendRequiresAttention != null) {
+      return backendRequiresAttention!;
+    }
+    // Fallback: basado en severidad
+    return overdueSeverity == 'moderate' || overdueSeverity == 'critical';
   }
 
   Credito copyWith({

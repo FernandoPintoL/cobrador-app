@@ -71,7 +71,7 @@ class _DailyActivityReportViewState
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Reporte de Actividad Diaria'),
+            const Text('Reportes de Actividad Diaria'),
             Text(
               'Rol: $roleName',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -102,7 +102,7 @@ class _DailyActivityReportViewState
           children: [
             _buildFilterPanel(context, userRole),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: ref.watch(reportProvider).when(
                     loading: () => const Center(
                       child: Padding(
@@ -368,7 +368,7 @@ class _DailyActivityReportViewState
             ],
           ),
         ),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -379,7 +379,7 @@ class _DailyActivityReportViewState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Resumen del Día',
+                      'Resumenes del Día',
                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: Colors.white,

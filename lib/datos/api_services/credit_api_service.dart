@@ -684,4 +684,31 @@ class CreditApiService extends BaseApiService {
       throw Exception('Error al obtener estado de entrega: $e');
     }
   }
+
+  /// Obtener configuración del formulario de créditos según settings del tenant
+  Future<Map<String, dynamic>> getFormConfig() async {
+    try {
+      final response = await get('/credits/form-config');
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        if (data['success'] == true && data['data'] != null) {
+          return data['data'] as Map<String, dynamic>;
+        } else {
+          throw Exception('Respuesta inválida del servidor');
+        }
+      } else {
+        throw Exception(
+          '❌ Error al obtener configuración del formulario: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener configuración del formulario: $e');
+      // Retornar valores por defecto en caso de error
+      return {
+        'interest': {'can_edit': false, 'default': 20.0},
+        'payment_frequency': {'can_edit': false, 'default': 'diario'},
+      };
+    }
+  }
 }

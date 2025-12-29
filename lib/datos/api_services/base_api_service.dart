@@ -62,10 +62,25 @@ abstract class BaseApiService {
             debugPrint('⏱️ Timeout detectado, continuando con fallback');
           }
 
+          // Manejar 401 - Token inválido o sesión expirada
           if (error.response?.statusCode == 401) {
             debugPrint('🔐 Token inválido, limpiando sesión...');
             await _logout();
           }
+
+          // Manejar 403 - Verificar si es tenant suspendido
+          if (error.response?.statusCode == 403) {
+            final responseData = error.response?.data;
+            if (responseData is Map<String, dynamic>) {
+              final errorCode = responseData['error_code'];
+              if (errorCode == 'TENANT_SUSPENDED') {
+                debugPrint('🚫 Tenant suspendido, cerrando sesión...');
+                debugPrint('📋 Razón: ${responseData['message']}');
+                await _logout();
+              }
+            }
+          }
+
           handler.next(error);
         },
       ),
@@ -346,7 +361,14 @@ abstract class BaseApiService {
           errorMessage = 'Credenciales incorrectas o sesión expirada';
           break;
         case 403:
-          errorMessage = 'No tiene permisos para realizar esta acción';
+          // Verificar si es tenant suspendido
+          if (responseData is Map<String, dynamic> &&
+              responseData['error_code'] == 'TENANT_SUSPENDED') {
+            errorMessage = responseData['message'] ??
+                'Tu empresa ha sido suspendida. Contacta a soporte.';
+          } else if (errorMessage == 'Error de conexión') {
+            errorMessage = 'No tiene permisos para realizar esta acción';
+          }
           break;
         case 422:
           // Ya manejado arriba, pero mantenemos esto como respaldo

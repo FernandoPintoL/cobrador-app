@@ -8,6 +8,7 @@ import '../../negocio/providers/client_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../datos/modelos/usuario.dart';
 import '../../datos/modelos/credito.dart';
+import '../../datos/api_services/credit_api_service.dart';
 import '../cliente/cliente_form_screen.dart';
 import '../cliente/location_picker_screen.dart';
 import '../widgets/client_search_widget.dart';
@@ -74,9 +75,18 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   bool _isLocating =
       false; // Para indicar cuando se está obteniendo la ubicación
 
+  // Configuración del formulario desde el backend
+  bool _canEditInterest = false;
+  bool _canEditFrequency = false;
+  double _defaultInterestRate = 20.0;
+  String _defaultFrequency = 'daily';
+  bool _isLoadingConfig = true;
+  List<Map<String, dynamic>> _availableFrequencies = [];
+
   @override
   void initState() {
     super.initState();
+    _loadFormConfig(); // Cargar configuración del backend PRIMERO
     _initializeForm();
     // Usar addPostFrameCallback para cargar clientes después del build
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -84,6 +94,70 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       // Obtener ubicación automáticamente al abrir la pantalla
       _useCurrentLocation();
     });
+  }
+
+  /// Cargar configuración del formulario desde el backend
+  Future<void> _loadFormConfig() async {
+    try {
+      final creditApi = CreditApiService();
+      final config = await creditApi.getFormConfig();
+
+      final interestConfig = config['interest'] as Map<String, dynamic>?;
+      final frequencyConfig =
+          config['payment_frequency'] as Map<String, dynamic>?;
+
+      // Extraer frecuencias disponibles del backend
+      final frequencies =
+          frequencyConfig?['available_frequencies'] as List<dynamic>?;
+      final availableFrequencies = frequencies
+              ?.map((freq) => Map<String, dynamic>.from(freq as Map))
+              .toList() ??
+          [];
+
+      setState(() {
+        _canEditInterest = interestConfig?['can_edit'] ?? false;
+        _defaultInterestRate =
+            (interestConfig?['default'] as num?)?.toDouble() ?? 20.0;
+        _canEditFrequency = frequencyConfig?['can_edit'] ?? false;
+        _defaultFrequency = (frequencyConfig?['default'] as String?) ?? 'diario';
+        _availableFrequencies = availableFrequencies;
+
+        // Aplicar valores por defecto
+        if (!_canEditInterest) {
+          _interestRateController.text = _defaultInterestRate.toString();
+        }
+
+        // Convertir frecuencia de español a inglés
+        if (!_canEditFrequency) {
+          final frequencyMap = {
+            'diario': 'daily',
+            'semanal': 'weekly',
+            'quincenal': 'biweekly',
+            'mensual': 'monthly',
+          };
+          _selectedFrequency = frequencyMap[_defaultFrequency] ?? 'daily';
+        }
+
+        _isLoadingConfig = false;
+      });
+    } catch (e) {
+      print('❌ Error al cargar configuración del formulario: $e');
+      setState(() {
+        _isLoadingConfig = false;
+        // Usar valores por defecto en caso de error
+        _canEditInterest = false;
+        _canEditFrequency = false;
+        _defaultInterestRate = 20.0;
+        _selectedFrequency = 'daily';
+        _interestRateController.text = '20';
+        _availableFrequencies = [
+          {'value': 'daily', 'label': 'Diario'},
+          {'value': 'weekly', 'label': 'Semanal'},
+          {'value': 'biweekly', 'label': 'Quincenal'},
+          {'value': 'monthly', 'label': 'Mensual'},
+        ];
+      });
+    }
   }
 
   void _initializeForm() {
@@ -1309,37 +1383,86 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                           // Frecuencia de pago y Tasa de interés lado a lado
                           Row(
                             children: [
+                              // Frecuencia de pago - editable si lo permite la config
                               Expanded(
-                                child: TextFormField(
-                                  initialValue: 'Diario',
-                                  decoration: const InputDecoration(
-                                    labelText: 'Frecuencia de Pago',
-                                    border: OutlineInputBorder(),
-                                    prefixIcon: Icon(Icons.schedule),
-                                    helperText:
-                                        'Todos los créditos son diarios',
-                                  ),
-                                  readOnly: true,
-                                ),
+                                child: _canEditFrequency
+                                    ? DropdownButtonFormField<String>(
+                                        value: _selectedFrequency,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Frecuencia de Pago *',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.schedule),
+                                          helperText: 'Frecuencia de las cuotas',
+                                        ),
+                                        items: _availableFrequencies
+                                            .map((freq) => DropdownMenuItem(
+                                                  value: freq['value'] as String,
+                                                  child: Text(
+                                                      freq['label'] as String),
+                                                ))
+                                            .toList(),
+                                        onChanged: (String? value) {
+                                          if (value != null) {
+                                            setState(() {
+                                              _selectedFrequency = value;
+                                            });
+                                            _updateCalculations();
+                                          }
+                                        },
+                                      )
+                                    : TextFormField(
+                                        initialValue: _availableFrequencies
+                                                .firstWhere(
+                                                    (freq) =>
+                                                        freq['value'] ==
+                                                        _selectedFrequency,
+                                                    orElse: () =>
+                                                        {'label': 'Diario'})['label']
+                                            as String,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Frecuencia de Pago',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.schedule),
+                                          helperText:
+                                              'Frecuencia configurada por tu empresa',
+                                        ),
+                                        readOnly: true,
+                                      ),
                               ),
                               const SizedBox(width: 16),
+                              // Tasa de interés - editable si lo permite la config
                               Expanded(
                                 child: TextFormField(
                                   key: _interestRateFieldKey,
                                   controller: _interestRateController,
                                   decoration: InputDecoration(
-                                    labelText: 'Tasa de Interés (%)',
+                                    labelText: _canEditInterest
+                                        ? 'Tasa de Interés (%) *'
+                                        : 'Tasa de Interés (%)',
                                     border: const OutlineInputBorder(),
                                     prefixIcon: const Icon(Icons.percent),
-                                    helperText: 'Tasa configurada por admin',
+                                    helperText: _canEditInterest
+                                        ? 'Puedes personalizar el interés'
+                                        : 'Interés configurado por tu empresa',
                                     errorText: _interestRateError,
                                   ),
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
                                         decimal: true,
                                       ),
-                                  readOnly: true,
+                                  readOnly: !_canEditInterest,
+                                  enabled: _canEditInterest,
+                                  onChanged: _canEditInterest
+                                      ? (value) {
+                                          _clearFieldError('interestRate');
+                                          _updateCalculations();
+                                        }
+                                      : null,
                                   validator: (value) {
+                                    if (_canEditInterest &&
+                                        (value == null || value.isEmpty)) {
+                                      return 'Ingresa la tasa de interés';
+                                    }
                                     if (value != null && value.isNotEmpty) {
                                       final rate = double.tryParse(value);
                                       if (rate == null ||

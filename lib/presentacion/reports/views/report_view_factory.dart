@@ -236,7 +236,7 @@ class _DailyActivityReportView extends BaseReportView {
       // Mostrar el reporte con los datos nuevos
       return SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -282,62 +282,66 @@ class _DailyActivityReportView extends BaseReportView {
     NumberFormat currencyFormat,
   ) {
     return Card(
+      margin: EdgeInsets.zero,
       elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Resumen del Día',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Resumen del Día',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              Text(
+                '${summary.dayName}, ${summary.date}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _buildStatChip(
+                    context,
+                    'Créditos Entregados',
+                    summary.totals.creditsDelivered.toString(),
+                    Icons.add_card,
                   ),
-            ),
-            Text(
-              '${summary.dayName}, ${summary.date}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey,
+                  _buildStatChip(
+                    context,
+                    'Monto Prestado',
+                    currencyFormat.format(summary.totals.amountLent),
+                    Icons.attach_money,
                   ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _buildStatChip(
-                  context,
-                  'Créditos Entregados',
-                  summary.totals.creditsDelivered.toString(),
-                  Icons.add_card,
-                ),
-                _buildStatChip(
-                  context,
-                  'Monto Prestado',
-                  currencyFormat.format(summary.totals.amountLent),
-                  Icons.attach_money,
-                ),
-                _buildStatChip(
-                  context,
-                  'Pagos Cobrados',
-                  summary.totals.paymentsCollected.toString(),
-                  Icons.receipt,
-                ),
-                _buildStatChip(
-                  context,
-                  'Monto Cobrado',
-                  currencyFormat.format(summary.totals.amountCollected),
-                  Icons.money,
-                ),
-                _buildStatChip(
-                  context,
-                  'Eficiencia',
-                  summary.overallEfficiencyFormatted,
-                  Icons.trending_up,
-                ),
-              ],
-            ),
-          ],
+                  _buildStatChip(
+                    context,
+                    'Pagos Cobrados',
+                    summary.totals.paymentsCollected.toString(),
+                    Icons.receipt,
+                  ),
+                  _buildStatChip(
+                    context,
+                    'Monto Cobrado',
+                    currencyFormat.format(summary.totals.amountCollected),
+                    Icons.money,
+                  ),
+                  _buildStatChip(
+                    context,
+                    'Eficiencia',
+                    summary.overallEfficiencyFormatted,
+                    Icons.trending_up,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

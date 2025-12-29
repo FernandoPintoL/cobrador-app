@@ -42,6 +42,13 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    // Listener para detectar cambio de tab y recargar datos filtrados
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        // El tab cambió, recargar datos con el filtro correcto
+        _loadInitialData();
+      }
+    });
     // Listener para búsqueda en tiempo real desactivado (se usará botón de búsqueda u onSubmitted)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
@@ -84,8 +91,27 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     _loadInitialData();
   }
 
+  /// Obtiene el status de filtro según el tab actual
+  String? _getStatusForCurrentTab() {
+    switch (_tabController.index) {
+      case 0: // Tab Activos
+        return 'active';
+      case 1: // Tab Pendientes
+        return 'pending_approval';
+      case 2: // Tab En Espera
+        return 'waiting_delivery';
+      case 3: // Tab Para Entregar
+        // Este tab es especial: combina créditos listos + atrasados
+        // No usamos filtro de status aquí, se manejará de otra forma
+        return null;
+      default:
+        return null;
+    }
+  }
+
   void _loadInitialData() {
     print('📱 CreditTypeScreen: Cargando datos iniciales');
+    print('📱 CreditTypeScreen: Tab actual: ${_tabController.index}');
 
     // Cargar usuarios si es manager (para selector de cobradores)
     if (ref.read(authProvider).isManager) {
@@ -106,13 +132,22 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       );
     }
 
+    // Obtener el status según el tab actual
+    final String? tabStatus = _getStatusForCurrentTab();
+
+    // Si hay un filtro de status manual (_filterState.statusFilter), usarlo
+    // Si no, usar el status del tab actual
+    final String? finalStatus = _filterState.statusFilter ?? tabStatus;
+
     // Verificar estado de filtros
     print('📱 CreditTypeScreen: Filtros activos - ${_filterState.toString()}');
+    print('📱 CreditTypeScreen: Status del tab actual: $tabStatus');
+    print('📱 CreditTypeScreen: Status final a usar: $finalStatus');
 
     ref
         .read(creditProvider.notifier)
         .loadCredits(
-          status: _filterState.statusFilter,
+          status: finalStatus,
           search: _filterState.search.isEmpty ? null : _filterState.search,
           frequencies: _filterState.frequencies.isEmpty
               ? null
@@ -429,16 +464,16 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           .toList(),
                       listType: 'active',
                       clientCategoryFilters: _filterState.clientCategories,
-                      isLoadingMore: creditState.isLoading,
+                      isLoadingMore: creditState.isLoadingMore,
                       hasMore: creditState.totalPages > creditState.currentPage,
                       currentPage: creditState.currentPage,
                       totalPages: creditState.totalPages,
                       onLoadMore: () {
-                        if (!creditState.isLoading &&
+                        if (!creditState.isLoading && !creditState.isLoadingMore &&
                             creditState.totalPages > creditState.currentPage) {
                           ref
                               .read(creditProvider.notifier)
-                              .loadCredits(page: creditState.currentPage + 1);
+                              .loadMoreCredits();
                         }
                       },
                       onCardTap: _navigateToCreditDetail,
@@ -452,19 +487,22 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           .where((c) => c.status == 'pending_approval')
                           .toList(),
                       listType: 'pending_approval',
-                      isLoadingMore: creditState.isLoading,
+                      isLoadingMore: creditState.isLoadingMore,
                       clientCategoryFilters: _filterState.clientCategories,
+                      hasMore: creditState.totalPages > creditState.currentPage,
+                      currentPage: creditState.currentPage,
+                      totalPages: creditState.totalPages,
                       onCardTap: _navigateToCreditDetail,
                       // SOLO managers y admins pueden aprobar/rechazar créditos
                       canApprove:
                           currentUserRole == 'manager' ||
                           currentUserRole == 'admin',
                       onLoadMore: () {
-                        if (!creditState.isLoading &&
+                        if (!creditState.isLoading && !creditState.isLoadingMore &&
                             creditState.totalPages > creditState.currentPage) {
                           ref
                               .read(creditProvider.notifier)
-                              .loadCredits(page: creditState.currentPage + 1);
+                              .loadMoreCredits();
                         }
                       },
                       onApprove:
@@ -489,7 +527,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           .toList(),
                       listType: 'waiting_delivery',
                       clientCategoryFilters: _filterState.clientCategories,
-                      isLoadingMore: creditState.isLoading,
+                      isLoadingMore: creditState.isLoadingMore,
                       hasMore: creditState.totalPages > creditState.currentPage,
                       currentPage: creditState.currentPage,
                       totalPages: creditState.totalPages,
@@ -497,11 +535,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       // NO tiene botón de entregar (aún no es la fecha)
                       canDeliver: false,
                       onLoadMore: () {
-                        if (!creditState.isLoading &&
+                        if (!creditState.isLoading && !creditState.isLoadingMore &&
                             creditState.totalPages > creditState.currentPage) {
                           ref
                               .read(creditProvider.notifier)
-                              .loadCredits(page: creditState.currentPage + 1);
+                              .loadMoreCredits();
                         }
                       },
                       // No se puede entregar todavía (fecha futura)
@@ -517,7 +555,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           .toList(),
                       listType: 'ready_for_delivery',
                       clientCategoryFilters: _filterState.clientCategories,
-                      isLoadingMore: creditState.isLoading,
+                      isLoadingMore: creditState.isLoadingMore,
                       hasMore: creditState.totalPages > creditState.currentPage,
                       currentPage: creditState.currentPage,
                       totalPages: creditState.totalPages,
@@ -527,11 +565,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           currentUserRole == 'cobrador' ||
                           currentUserRole == 'admin',
                       onLoadMore: () {
-                        if (!creditState.isLoading &&
+                        if (!creditState.isLoading && !creditState.isLoadingMore &&
                             creditState.totalPages > creditState.currentPage) {
                           ref
                               .read(creditProvider.notifier)
-                              .loadCredits(page: creditState.currentPage + 1);
+                              .loadMoreCredits();
                         }
                       },
                       onDeliver:

@@ -112,7 +112,7 @@ class CreditsReportView extends BaseReportView {
       bannerIcon = Icons.person;
     } else {
       // Sin filtro: mostrar que se ven créditos de todos los cobradores asignados
-      bannerText = 'Mostrando créditos de todos tus cobradores asignados';
+      bannerText = 'Mostrando créditos de todos tus creditos asignados';
       bannerIcon = Icons.people;
     }
 
@@ -282,6 +282,7 @@ class CreditsReportView extends BaseReportView {
     final isDark = theme.brightness == Brightness.dark;
 
     // Extraer datos
+    final creditId = credit['id']?.toString() ?? 'N/A';
     final clientName = credit['client_name']?.toString() ?? 'N/A';
     final amountValue = ReportFormatters.toDouble(credit['amount'] ?? 0);
     final balanceValue = ReportFormatters.toDouble(credit['balance'] ?? 0);
@@ -322,8 +323,57 @@ class CreditsReportView extends BaseReportView {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            // fila superior: ID del crédito
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Flexible(
+                  child: Text(
+                    'Crédito #$creditId',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                SizedBox(width: 18),
+                // Estado de pago
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: paymentStatusColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getPaymentStatusIcon(paymentStatus),
+                        size: 12,
+                        color: paymentStatusColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        paymentStatusLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: paymentStatusColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              ],
+            ),
+            const SizedBox(height: 8),
             // Fila 0: Estado del crédito (chip pequeño)
             Row(
               children: [
@@ -369,92 +419,53 @@ class CreditsReportView extends BaseReportView {
             const SizedBox(height: 8),
 
             // Fila 1: Cliente + Estado de pago
-            Row(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Cliente + Fecha
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Nombre del cliente
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.person,
-                            size: 16,
-                            color: theme.colorScheme.primary,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              clientName,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                // Nombre del cliente
+                Row(
+                  children: [
+                    Icon(
+                      Icons.person,
+                      size: 16,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        clientName,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      // Fecha de creación (tiempo relativo)
-                      if (createdAtFormatted != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2, left: 22),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.access_time,
-                                size: 10,
-                                color: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.6),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                createdAtFormatted,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 11,
-                                  color: theme.colorScheme.onSurfaceVariant
-                                      .withValues(alpha: 0.7),
-                                ),
-                              ),
-                            ],
+                    ),
+                  ],
+                ),
+                // Fecha de creación (tiempo relativo)
+                if (createdAtFormatted != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, left: 22),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 10,
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.6),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          createdAtFormatted,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.7),
                           ),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-
-                // Estado de pago
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: paymentStatusColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _getPaymentStatusIcon(paymentStatus),
-                        size: 12,
-                        color: paymentStatusColor,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        paymentStatusLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: paymentStatusColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -757,9 +768,9 @@ class CreditsReportView extends BaseReportView {
       case 'ahead':
         return 'Adelantado';
       case 'warning':
-        return overdue > 0 ? '$overdue cuota${overdue > 1 ? 's' : ''}' : 'Retraso';
+        return overdue > 0 ? '$overdue cuota${overdue > 1 ? 's esperadas' : ' esperada'}' : 'Retraso';
       case 'danger':
-        return overdue > 0 ? '$overdue cuota${overdue > 1 ? 's' : ''}' : 'Crítico';
+        return overdue > 0 ? '$overdue cuota${overdue > 1 ? 's esperadas' : ' esperada'}' : 'Crítico';
       default:
         return 'Desconocido';
     }

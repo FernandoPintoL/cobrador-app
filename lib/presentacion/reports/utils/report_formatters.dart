@@ -269,13 +269,66 @@ class ReportFormatters {
 
     switch (status) {
       case 'completado':
-        return Icons.check_circle;
+        return Icons.check_circle;         // ✓ Completado
       case 'alerta_leve':
-        return Icons.warning;
+        return Icons.warning_amber;        // ⚠ Alerta leve (actualizado)
       case 'alerta_critica':
-        return Icons.error;
+        return Icons.error;                // 🚨 Crítico
       default:
         return Icons.help_outline;
+    }
+  }
+
+  // ========================================
+  // NUEVOS MÉTODOS PARA SEVERIDAD (ESTANDARIZADO)
+  // ========================================
+
+  /// Obtiene el icono basado en la severidad del retraso (NUEVO)
+  /// Usa la severidad desde backend: 'none', 'light', 'moderate', 'critical'
+  static IconData getOverdueSeverityIcon(String severity) {
+    switch (severity) {
+      case 'none':
+        return Icons.check_circle;         // ✓ Al día
+      case 'light':
+        return Icons.warning_amber;        // ⚠ Alerta leve
+      case 'moderate':
+        return Icons.warning;              // ⚠ Moderado
+      case 'critical':
+        return Icons.error;                // 🚨 Crítico
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  /// Obtiene el color basado en la severidad del retraso (NUEVO)
+  static Color getOverdueSeverityColor(String severity) {
+    switch (severity) {
+      case 'none':
+        return Colors.green;
+      case 'light':
+        return Colors.amber;
+      case 'moderate':
+        return Colors.orange;
+      case 'critical':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  /// Obtiene el label basado en la severidad del retraso (NUEVO)
+  static String getOverdueSeverityLabel(String severity) {
+    switch (severity) {
+      case 'none':
+        return 'Al día';
+      case 'light':
+        return 'Alerta leve';
+      case 'moderate':
+        return 'Alerta moderada';
+      case 'critical':
+        return 'Crítico';
+      default:
+        return 'Desconocido';
     }
   }
 
