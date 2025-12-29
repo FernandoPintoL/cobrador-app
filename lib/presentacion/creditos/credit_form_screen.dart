@@ -1456,6 +1456,20 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                       ? (value) {
                                           _clearFieldError('interestRate');
                                           _updateCalculations();
+
+                                          // Advertir si el interés es 0
+                                          final rate = double.tryParse(value) ?? 0.0;
+                                          if (rate == 0.0 && value.isNotEmpty) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  '⚠️ Interés en 0% - Este crédito NO generará intereses',
+                                                ),
+                                                backgroundColor: Colors.orange,
+                                                duration: Duration(seconds: 3),
+                                              ),
+                                            );
+                                          }
                                         }
                                       : null,
                                   validator: (value) {
