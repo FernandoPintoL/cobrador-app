@@ -1,9 +1,17 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../modelos/usuario.dart';
 import '../modelos/dashboard_statistics.dart';
 
 class StorageService {
+  // Storage seguro para datos sensibles (token)
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+    ),
+  );
+
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
   static const String _rememberMeKey = 'remember_me';
@@ -11,17 +19,17 @@ class StorageService {
   static const String _savedIdentifierKey = 'saved_identifier';
   static const String _requiresReauthKey = 'requires_reauth'; // Nuevo flag para re-autenticación
   static const String _dashboardStatsKey = 'dashboard_statistics'; // Estadísticas del dashboard
+  static const String _autoLogoutEnabledKey = 'auto_logout_enabled'; // Configuración de auto-logout por tenant
 
-  // Guardar token de autenticación
+  // Guardar token de autenticación (usando almacenamiento seguro)
   Future<void> saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
+    await _secureStorage.write(key: _tokenKey, value: token);
+    print('🔐 Token guardado de forma segura');
   }
 
-  // Obtener token de autenticación
+  // Obtener token de autenticación (desde almacenamiento seguro)
   Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    return await _secureStorage.read(key: _tokenKey);
   }
 
   // Guardar datos del usuario
@@ -163,15 +171,20 @@ class StorageService {
   // Limpiar toda la sesión
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
+
+    // Eliminar token del almacenamiento seguro
+    await _secureStorage.delete(key: _tokenKey);
+
+    // Eliminar datos de SharedPreferences
     await prefs.remove(_userKey);
     await prefs.remove(_lastLoginKey);
     await prefs.remove(_dashboardStatsKey);
+    await prefs.remove(_autoLogoutEnabledKey); // Limpiar configuración de auto-logout
 
     // No limpiar rememberMe para mantener la preferencia del usuario
     // await prefs.remove(_rememberMeKey);
 
-    print('🧹 Sesión limpiada completamente');
+    print('🧹 Sesión limpiada completamente (incluyendo token seguro)');
   }
 
   // Limpiar solo los datos del usuario (para sesiones parciales)
@@ -216,5 +229,19 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_requiresReauthKey);
     print('🔐 Flag requiresReauth eliminado');
+  }
+
+  /// Guardar configuración de auto-logout (configurado por tenant)
+  Future<void> saveAutoLogoutEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_autoLogoutEnabledKey, enabled);
+    print('🔒 Configuración auto-logout guardada: $enabled');
+  }
+
+  /// Obtener configuración de auto-logout
+  /// Retorna true por defecto si no está configurado (seguridad por defecto)
+  Future<bool> getAutoLogoutEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_autoLogoutEnabledKey) ?? true; // Por defecto habilitado
   }
 }

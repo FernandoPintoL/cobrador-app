@@ -83,6 +83,14 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   bool _isLoadingConfig = true;
   List<Map<String, dynamic>> _availableFrequencies = [];
 
+  // ✅ NUEVO: Variables para controlar la edición de campos según frecuencia
+  bool _canEditInstallments = true; // Si se pueden editar las cuotas
+  Map<String, dynamic>?
+  _currentFrequencyConfig; // Configuración de la frecuencia actual
+
+  // ✅ NUEVO: Variable para expandir/colapsar card de ubicación
+  bool _isLocationCardExpanded = false; // Por defecto colapsado
+
   @override
   void initState() {
     super.initState();
@@ -100,48 +108,52 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   Future<void> _loadFormConfig() async {
     try {
       final creditApi = CreditApiService();
-      final config = await creditApi.getFormConfig();
 
+      // ✅ NUEVO: Cargar configuraciones de frecuencias desde loan_frequencies
+      final loanFrequencies = await creditApi.getLoanFrequencies();
+
+      // Cargar configuración antigua (para compatibilidad)
+      final config = await creditApi.getFormConfig();
       final interestConfig = config['interest'] as Map<String, dynamic>?;
       final frequencyConfig =
           config['payment_frequency'] as Map<String, dynamic>?;
 
-      // Extraer frecuencias disponibles del backend
-      final frequencies =
-          frequencyConfig?['available_frequencies'] as List<dynamic>?;
-      final availableFrequencies = frequencies
-              ?.map((freq) => Map<String, dynamic>.from(freq as Map))
-              .toList() ??
-          [];
-
       setState(() {
+        // Configuración de interés
         _canEditInterest = interestConfig?['can_edit'] ?? false;
         _defaultInterestRate =
             (interestConfig?['default'] as num?)?.toDouble() ?? 20.0;
-        _canEditFrequency = frequencyConfig?['can_edit'] ?? false;
-        _defaultFrequency = (frequencyConfig?['default'] as String?) ?? 'diario';
-        _availableFrequencies = availableFrequencies;
+
+        // ✅ NUEVO: Usar loan_frequencies como fuente de verdad
+        _availableFrequencies = loanFrequencies;
+
+        // Determinar si puede editar frecuencia (si tiene más de una opción)
+        _canEditFrequency =
+            loanFrequencies.length > 1 ||
+            (frequencyConfig?['can_edit'] ?? false);
+
+        // Seleccionar frecuencia por defecto (la primera habilitada)
+        if (loanFrequencies.isNotEmpty) {
+          final defaultFreq = loanFrequencies.first;
+          _selectedFrequency = defaultFreq['code'] as String;
+          _defaultFrequency = defaultFreq['name'] as String;
+        } else {
+          _selectedFrequency = 'daily';
+          _defaultFrequency = 'Diario';
+        }
 
         // Aplicar valores por defecto
         if (!_canEditInterest) {
           _interestRateController.text = _defaultInterestRate.toString();
         }
 
-        // Convertir frecuencia de español a inglés
-        if (!_canEditFrequency) {
-          final frequencyMap = {
-            'diario': 'daily',
-            'semanal': 'weekly',
-            'quincenal': 'biweekly',
-            'mensual': 'monthly',
-          };
-          _selectedFrequency = frequencyMap[_defaultFrequency] ?? 'daily';
-        }
-
         _isLoadingConfig = false;
       });
+
+      // ✅ NUEVO: Auto-completar campos después de cargar configuración
+      _updateCalculations();
     } catch (e) {
-      print('❌ Error al cargar configuración del formulario: $e');
+      debugPrint('❌ Error al cargar configuración del formulario: $e');
       setState(() {
         _isLoadingConfig = false;
         // Usar valores por defecto en caso de error
@@ -151,12 +163,20 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         _selectedFrequency = 'daily';
         _interestRateController.text = '20';
         _availableFrequencies = [
-          {'value': 'daily', 'label': 'Diario'},
-          {'value': 'weekly', 'label': 'Semanal'},
-          {'value': 'biweekly', 'label': 'Quincenal'},
-          {'value': 'monthly', 'label': 'Mensual'},
+          {
+            'code': 'daily',
+            'name': 'Diario',
+            'period_days': 1,
+            'is_fixed_duration': true,
+            'fixed_installments': 24,
+            'is_editable': false,
+            'suggested_installments': 24,
+          },
         ];
       });
+
+      // ✅ NUEVO: Auto-completar campos con valores por defecto
+      _updateCalculations();
     }
   }
 
@@ -248,7 +268,62 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   }
 
   void _updateCalculations() {
-    // Calcular monto total con interés y cuota sugerida
+    // ✅ PASO 1: Obtener configuración de la frecuencia seleccionada
+    _currentFrequencyConfig = _availableFrequencies.firstWhere(
+      (freq) => freq['code'] == _selectedFrequency,
+      orElse: () => {
+        'code': 'daily',
+        'name': 'Diario',
+        'is_fixed_duration': true,
+        'fixed_installments': 24,
+        'fixed_duration_days': 28,
+        'period_days': 1,
+        'is_editable': false,
+        'suggested_installments': 24,
+      },
+    );
+
+    // ✅ PASO 2: Determinar si se pueden editar las cuotas
+    final isFixedDuration =
+        _currentFrequencyConfig?['is_fixed_duration'] ?? false;
+    _canEditInstallments = !isFixedDuration;
+
+    // ✅ PASO 3: Auto-completar días de duración según el tipo de frecuencia
+    if (isFixedDuration) {
+      // FRECUENCIA FIJA (Diaria): Usar valor fijo de 28 días / 24 cuotas
+      final fixedDurationDays =
+          _currentFrequencyConfig?['fixed_duration_days'] ?? 28;
+      final fixedInstallments =
+          _currentFrequencyConfig?['fixed_installments'] ?? 24;
+
+      _durationDaysController.text = fixedInstallments.toString();
+
+      // ✅ PASO 4: Calcular fecha fin automáticamente para frecuencia diaria
+      if (_startDate != null) {
+        _endDate = ScheduleUtils.computeDailyEndDate(
+          _startDate!,
+          fixedDurationDays,
+        );
+        _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
+      }
+    } else {
+      // FRECUENCIA FLEXIBLE (Semanal, Quincenal, Mensual)
+      // ℹ️ NO auto-completar aquí - dejar que el usuario escriba libremente
+      // El auto-completado solo ocurre al cambiar de frecuencia (ver onChanged del dropdown)
+
+      // ✅ PASO 5: Calcular fecha fin estimada para frecuencias flexibles
+      final installments = int.tryParse(_durationDaysController.text);
+      final periodDays = _currentFrequencyConfig?['period_days'] ?? 7;
+
+      if (_startDate != null && installments != null && installments > 0) {
+        // Calcular duración estimada: installments * period_days
+        final estimatedDurationDays = (installments * periodDays).toInt();
+        _endDate = _startDate!.add(Duration(days: estimatedDurationDays));
+        _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
+      }
+    }
+
+    // ✅ PASO 6: Calcular monto total con interés y cuota sugerida
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     final interestRate = double.tryParse(_interestRateController.text) ?? 0.0;
 
@@ -258,15 +333,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       // Actualizar el saldo total automáticamente
       _balanceController.text = totalAmount.toStringAsFixed(2);
 
-      // Calcular cuota sugerida basada en la frecuencia y fechas
-      if (_startDate != null && _endDate != null) {
-        int numberOfPayments = _calculateNumberOfPayments();
-        if (numberOfPayments > 0) {
-          final suggestedPayment = totalAmount / numberOfPayments;
-          _installmentAmountController.text = suggestedPayment.toStringAsFixed(
-            2,
-          );
-        }
+      // Calcular cuota sugerida basada en las cuotas (no en las fechas)
+      final numberOfPayments = int.tryParse(_durationDaysController.text) ?? 1;
+      if (numberOfPayments > 0) {
+        final suggestedPayment = totalAmount / numberOfPayments;
+        _installmentAmountController.text = suggestedPayment.toStringAsFixed(2);
       }
     }
   }
@@ -838,6 +909,375 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     }
   }
 
+  // ============================================================================
+  // 🎨 WIDGETS HELPER PARA NUEVA ESTRUCTURA UI
+  // ============================================================================
+
+  /// Widget para títulos de sección
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16, top: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 24, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Widget para card de ubicación
+  Widget _buildLocationCard() {
+    final hasLocation =
+        _latitudeController.text.isNotEmpty &&
+        _longitudeController.text.isNotEmpty;
+
+    return Card(
+      elevation: 0,
+      color: hasLocation ? Colors.green.shade50 : Colors.grey.shade100,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: hasLocation ? Colors.green.shade200 : Colors.grey.shade300,
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  hasLocation ? Icons.location_on : Icons.location_off,
+                  color: hasLocation
+                      ? Colors.green.shade700
+                      : Colors.grey.shade600,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        hasLocation ? 'Ubicación registrada' : 'Sin ubicación',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: hasLocation
+                              ? Colors.green.shade900
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                      // Mostrar detalles solo cuando está expandido
+                      if (_isLocationCardExpanded) ...[
+                        if (_addressController.text.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _addressController.text,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade700,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        if (hasLocation)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              'Lat: ${double.tryParse(_latitudeController.text)?.toStringAsFixed(6) ?? ""}, '
+                              'Lng: ${double.tryParse(_longitudeController.text)?.toStringAsFixed(6) ?? ""}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+                // Botón para expandir/colapsar
+                IconButton(
+                  icon: Icon(
+                    _isLocationCardExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.grey.shade600,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isLocationCardExpanded = !_isLocationCardExpanded;
+                    });
+                  },
+                  tooltip: _isLocationCardExpanded ? 'Ocultar detalles' : 'Ver detalles',
+                ),
+                // Botón para refrescar ubicación
+                IconButton(
+                  icon: Icon(
+                    _isLocating ? Icons.hourglass_empty : Icons.my_location,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  onPressed: _isLocating ? null : _useCurrentLocation,
+                  tooltip: 'Obtener ubicación actual',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Widget para card de fecha fin (calculada)
+  Widget _buildEndDateCard() {
+    return Card(
+      elevation: 0,
+      color: Colors.blue.shade50,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.blue.shade200, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.event_available, color: Colors.blue.shade700, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Fecha estimada de finalización',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _endDate != null
+                        ? DateFormat(
+                            'EEEE, dd \'de\' MMMM \'de\' yyyy',
+                            'es',
+                          ).format(_endDate!)
+                        : 'Selecciona fecha de inicio y cuotas',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: _endDate != null
+                          ? Colors.blue.shade900
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Widget para una fila del resumen financiero
+  Widget _buildSummaryRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Widget compacto para mostrar fechas (versión más pequeña)
+  Widget _buildCompactDateRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Widget para el resumen financiero completo con todas las fechas
+  Widget _buildFinancialSummary() {
+    final amount = double.tryParse(_amountController.text) ?? 0.0;
+    final balance = double.tryParse(_balanceController.text) ?? 0.0;
+    final installmentAmount =
+        double.tryParse(_installmentAmountController.text) ?? 0.0;
+    final installments = int.tryParse(_durationDaysController.text) ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.orange.shade50, Colors.orange.shade100],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.assessment, color: Colors.orange.shade700, size: 28),
+              const SizedBox(width: 8),
+              Text(
+                '📊 Resumen del Crédito',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange.shade900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ============================================================
+          // FECHAS CENTRALIZADAS (Formato Compacto)
+          // ============================================================
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Column(
+              children: [
+                _buildCompactDateRow(
+                  icon: Icons.event_note,
+                  label: 'Inicio:',
+                  value: _startDate != null
+                      ? DateFormat('dd/MM/yyyy').format(_startDate!)
+                      : 'No seleccionada',
+                  color: Colors.blue.shade700,
+                ),
+                _buildCompactDateRow(
+                  icon: Icons.event_available,
+                  label: 'Finalización:',
+                  value: _endDate != null
+                      ? DateFormat('dd/MM/yyyy').format(_endDate!)
+                      : 'Pendiente',
+                  color: Colors.blue.shade700,
+                ),
+                if (_scheduledDeliveryDate != null)
+                  _buildCompactDateRow(
+                    icon: Icons.local_shipping,
+                    label: 'Entrega:',
+                    value: DateFormat(
+                      'dd/MM/yyyy',
+                    ).format(_scheduledDeliveryDate!),
+                    color: Colors.purple.shade700,
+                  ),
+              ],
+            ),
+          ),
+
+          // ============================================================
+          // VALORES FINANCIEROS
+          // ============================================================
+          Divider(color: Colors.orange.shade300, thickness: 2),
+          _buildSummaryRow(
+            icon: Icons.account_balance_wallet,
+            label: 'Saldo Total a Pagar',
+            value: balance > 0
+                ? 'Bs. ${balance.toStringAsFixed(2)}'
+                : 'Bs. 0.00',
+            color: Colors.orange,
+          ),
+          Divider(color: Colors.orange.shade300),
+          _buildSummaryRow(
+            icon: Icons.payments,
+            label: 'Cuota Sugerida ($installments cuotas)',
+            value: installmentAmount > 0
+                ? 'Bs. ${installmentAmount.toStringAsFixed(2)}'
+                : 'Bs. 0.00',
+            color: Colors.green,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final clientState = ref.watch(clientProvider);
@@ -849,7 +1289,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           next.errorMessage != null) {
         print('🔥 DEBUG: Nuevo error detectado, procesando...');
         _setFieldErrorsFromMessage(next.errorMessage!);
-        ScaffoldMessenger.of(context).showSnackBar(
+        final scaffoldMessenger = ScaffoldMessenger.of(context);
+        final notifier = ref.read(creditProvider.notifier);
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(next.errorMessage!),
             backgroundColor: Colors.red,
@@ -858,8 +1300,8 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
               label: 'Cerrar',
               textColor: Colors.white,
               onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ref.read(creditProvider.notifier).clearError();
+                scaffoldMessenger.hideCurrentSnackBar();
+                notifier.clearError();
               },
             ),
           ),
@@ -884,7 +1326,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           _locationError = null;
           _fieldErrors.clear();
         });
-        ScaffoldMessenger.of(context).showSnackBar(
+        final scaffoldMessenger = ScaffoldMessenger.of(context);
+        final notifier = ref.read(creditProvider.notifier);
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(next.successMessage!),
             backgroundColor: Colors.green,
@@ -893,8 +1337,8 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
               label: 'Cerrar',
               textColor: Colors.white,
               onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ref.read(creditProvider.notifier).clearSuccess();
+                scaffoldMessenger.hideCurrentSnackBar();
+                notifier.clearSuccess();
               },
             ),
           ),
@@ -948,7 +1392,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                   const SizedBox(width: 12),
                   // Geolocalización opcional
                   // Estado de ubicación
-                  Container(
+                  /*Container(
                     key: _locationFieldKey,
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                     decoration: BoxDecoration(
@@ -1009,7 +1453,15 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                         ),
                       ],
                     ),
-                  ),
+                  ),*/
+                  // ============================================================
+                  // 📍 SECCIÓN: UBICACIÓN DEL CRÉDITO
+                  // ============================================================
+                  /*_buildSectionHeader(
+                    'Ubicación del Crédito',
+                    Icons.location_on,
+                  ),*/
+                  _buildLocationCard(),
                   const SizedBox(height: 16),
                   if (widget.credit != null &&
                       widget.credit!.status != 'pending_approval')
@@ -1174,17 +1626,21 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                       isRequired: true,
                                       errorText: _clientError,
                                       allowCreate: true,
-                                      onCreateClient: (String searchText) async {
-                                        final result = await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => ClienteFormScreen(
-                                              initialName: searchText,
-                                            ),
-                                          ),
-                                        );
-                                        await _handleClientCreationResult(result);
-                                      },
+                                      onCreateClient:
+                                          (String searchText) async {
+                                            final result = await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    ClienteFormScreen(
+                                                      initialName: searchText,
+                                                    ),
+                                              ),
+                                            );
+                                            await _handleClientCreationResult(
+                                              result,
+                                            );
+                                          },
                                       allowClear: false,
                                       showClientDetails: true,
                                     ),
@@ -1304,130 +1760,217 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                               _updateCalculations();
                             },
                           ),
-                          const SizedBox(width: 16),
-                          // Saldo actual (Total con interés) - Calculado automáticamente
-                          TextFormField(
-                            key: _balanceFieldKey,
-                            controller: _balanceController,
-                            decoration: InputDecoration(
-                              labelText: 'Saldo Total a Pagar *',
-                              border: const OutlineInputBorder(),
-                              prefixIcon: const Icon(
-                                Icons.account_balance_wallet,
-                              ),
-                              prefixText: 'Bs. ',
-                              helperText:
-                                  'Calculado automáticamente (monto + intereses)',
-                              suffixIcon: const Icon(
-                                Icons.calculate,
-                                color: Colors.green,
-                              ),
-                              errorText: _balanceError,
-                            ),
-                            readOnly:
-                                true, // Solo lectura, se calcula automáticamente
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'El saldo se calcula automáticamente';
-                              }
-                              final balance = double.tryParse(value);
-                              if (balance == null || balance < 0) {
-                                return 'Error en el cálculo automático';
-                              }
-                              return null;
-                            },
-                          ),
+
                           const SizedBox(height: 16),
+                          // Frecuencia de pago - editable si lo permite la config
+                          if (_canEditFrequency)
+                            DropdownButtonFormField<String>(
+                              value: _selectedFrequency,
+                              decoration: const InputDecoration(
+                                labelText: 'Frecuencia de Pago *',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.schedule),
+                                helperText:
+                                    'Selecciona la frecuencia de las cuotas',
+                              ),
+                              items: _availableFrequencies
+                                  .map(
+                                    (freq) => DropdownMenuItem(
+                                      value:
+                                          freq['code']
+                                              as String, // ✅ Usar 'code'
+                                      child: Text(
+                                        freq['name'] as String,
+                                      ), // ✅ Usar 'name'
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (String? value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedFrequency = value;
+
+                                    // ✅ Auto-completar número de cuotas cuando cambia la frecuencia
+                                    final newFreqConfig = _availableFrequencies
+                                        .firstWhere(
+                                          (freq) => freq['code'] == value,
+                                          orElse: () => {},
+                                        );
+
+                                    // Si la nueva frecuencia es fija, usar el valor fijo
+                                    if (newFreqConfig['is_fixed_duration'] ==
+                                        true) {
+                                      _durationDaysController.text =
+                                          (newFreqConfig['fixed_installments'] ??
+                                                  24)
+                                              .toString();
+                                    } else {
+                                      // Para frecuencias flexibles, usar el valor sugerido
+                                      final suggested =
+                                          newFreqConfig['suggested_installments'] ??
+                                          newFreqConfig['default_installments'] ??
+                                          12;
+                                      _durationDaysController.text = suggested
+                                          .toString();
+                                    }
+                                  });
+                                  _updateCalculations();
+                                }
+                              },
+                            )
+                          else
+                            TextFormField(
+                              initialValue:
+                                  _availableFrequencies.firstWhere(
+                                        (freq) =>
+                                            freq['code'] ==
+                                            _selectedFrequency, // ✅ Usar 'code'
+                                        orElse: () => {
+                                          'name': 'Diario',
+                                        }, // ✅ Usar 'name'
+                                      )['name']
+                                      as String, // ✅ Usar 'name'
+                              decoration: const InputDecoration(
+                                labelText: 'Frecuencia de Pago',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.schedule),
+                                helperText:
+                                    'Frecuencia configurada por tu empresa',
+                              ),
+                              readOnly: true,
+                            ),
+
+                          // ✅ NUEVO: Información de la frecuencia seleccionada
+                          if (_currentFrequencyConfig != null)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: 12.0,
+                                left: 4.0,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Información del período
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        size: 16,
+                                        color: Colors.blue.shade600,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Pagos cada ${_currentFrequencyConfig!['period_days']} día${_currentFrequencyConfig!['period_days'] == 1 ? '' : 's'}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.blue.shade700,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  // Información de rango de cuotas (solo para frecuencias flexibles)
+                                  if (_currentFrequencyConfig!['is_editable'] ==
+                                      true)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4.0),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.tune,
+                                            size: 16,
+                                            color: Colors.green.shade600,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Rango sugerido: ${_currentFrequencyConfig!['min_installments']} - ${_currentFrequencyConfig!['max_installments']} cuotas',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.green.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                  // Duración estimada total
+                                  if (_durationDaysController.text.isNotEmpty &&
+                                      int.tryParse(
+                                            _durationDaysController.text,
+                                          ) !=
+                                          null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4.0),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.calendar_today,
+                                            size: 16,
+                                            color: Colors.orange.shade600,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Duración estimada: ${int.parse(_durationDaysController.text) * (_currentFrequencyConfig!['period_days'] as int)} días',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.orange.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+
                           // dias de duracion
-                          TextFormField(
-                            key: _durationFieldKey,
-                            controller: _durationDaysController,
-                            decoration: InputDecoration(
-                              labelText: 'Días de duración (cuotas diarias) *',
-                              border: const OutlineInputBorder(),
-                              prefixIcon: const Icon(Icons.timelapse),
-                              helperText:
-                                  'Cuenta solo lunes a sábado (se salta domingos) para calcular la fecha de fin',
-                              errorText: _durationError,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: false,
-                              signed: false,
-                            ),
-                            validator: (value) {
-                              final v = int.tryParse(value ?? '');
-                              if (v == null || v <= 0)
-                                return 'Ingresa un número de días válido';
-                              return null;
-                            },
-                            onChanged: (value) {
-                              final v = int.tryParse(value) ?? 24;
-                              if (_startDate != null) {
-                                setState(() {
-                                  _endDate = ScheduleUtils.computeDailyEndDate(
-                                    _startDate!,
-                                    v,
-                                  );
-                                  _endDateController.text = DateFormat(
-                                    'dd/MM/yyyy',
-                                  ).format(_endDate!);
-                                  _clearFieldError('duration');
-                                });
-                              } else {
-                                _clearFieldError('duration');
-                              }
-                              _updateCalculations();
-                            },
-                          ),
                           const SizedBox(height: 16),
                           // Frecuencia de pago y Tasa de interés lado a lado
                           Row(
                             children: [
-                              // Frecuencia de pago - editable si lo permite la config
                               Expanded(
-                                child: _canEditFrequency
-                                    ? DropdownButtonFormField<String>(
-                                        value: _selectedFrequency,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Frecuencia de Pago *',
-                                          border: OutlineInputBorder(),
-                                          prefixIcon: Icon(Icons.schedule),
-                                          helperText: 'Frecuencia de las cuotas',
-                                        ),
-                                        items: _availableFrequencies
-                                            .map((freq) => DropdownMenuItem(
-                                                  value: freq['value'] as String,
-                                                  child: Text(
-                                                      freq['label'] as String),
-                                                ))
-                                            .toList(),
-                                        onChanged: (String? value) {
-                                          if (value != null) {
-                                            setState(() {
-                                              _selectedFrequency = value;
-                                            });
-                                            _updateCalculations();
-                                          }
-                                        },
-                                      )
-                                    : TextFormField(
-                                        initialValue: _availableFrequencies
-                                                .firstWhere(
-                                                    (freq) =>
-                                                        freq['value'] ==
-                                                        _selectedFrequency,
-                                                    orElse: () =>
-                                                        {'label': 'Diario'})['label']
-                                            as String,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Frecuencia de Pago',
-                                          border: OutlineInputBorder(),
-                                          prefixIcon: Icon(Icons.schedule),
-                                          helperText:
-                                              'Frecuencia configurada por tu empresa',
-                                        ),
-                                        readOnly: true,
+                                child: TextFormField(
+                                  key: _durationFieldKey,
+                                  controller: _durationDaysController,
+                                  decoration: InputDecoration(
+                                    labelText: _canEditInstallments
+                                        ? 'Número de Cuotas *'
+                                        : 'Número de Cuotas (fijo)',
+                                    border: const OutlineInputBorder(),
+                                    prefixIcon: const Icon(Icons.timelapse),
+                                    helperText: _canEditInstallments
+                                        ? 'Ingresa el número de cuotas para este crédito'
+                                        : 'Cantidad de cuotas configurada automáticamente',
+                                    errorText: _durationError,
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: false,
+                                        signed: false,
                                       ),
+                                  readOnly: !_canEditInstallments,
+                                  enabled: _canEditInstallments,
+                                  validator: (value) {
+                                    final v = int.tryParse(value ?? '');
+                                    if (v == null || v <= 0) {
+                                      return 'Ingresa un número de cuotas válido';
+                                    }
+
+                                    // ℹ️ Los rangos son solo referenciales, no obligatorios
+                                    // El usuario puede elegir libremente el número de cuotas
+
+                                    return null;
+                                  },
+                                  onChanged: _canEditInstallments
+                                      ? (value) {
+                                          _clearFieldError('duration');
+                                          _updateCalculations();
+                                        }
+                                      : null,
+                                ),
                               ),
                               const SizedBox(width: 16),
                               // Tasa de interés - editable si lo permite la config
@@ -1458,9 +2001,12 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                           _updateCalculations();
 
                                           // Advertir si el interés es 0
-                                          final rate = double.tryParse(value) ?? 0.0;
+                                          final rate =
+                                              double.tryParse(value) ?? 0.0;
                                           if (rate == 0.0 && value.isNotEmpty) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
                                               const SnackBar(
                                                 content: Text(
                                                   '⚠️ Interés en 0% - Este crédito NO generará intereses',
@@ -1491,6 +2037,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                               ),
                             ],
                           ),
+
                           // Estado (solo para edición cuando está pendiente)
                           if (widget.credit != null &&
                               widget.credit!.status == 'pending_approval') ...[
@@ -1529,9 +2076,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  // const SizedBox(height: 16),
                   // Fechas
-                  Card(
+                  /*Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -1567,79 +2114,12 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                   },
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: TextFormField(
-                                  key: _endDateFieldKey,
-                                  controller: _endDateController,
-                                  decoration: InputDecoration(
-                                    labelText: 'Fecha de Vencimiento *',
-                                    border: const OutlineInputBorder(),
-                                    prefixIcon: const Icon(Icons.event),
-                                    errorText: _endDateError,
-                                  ),
-                                  enabled: false,
-                                  readOnly: true,
-                                  validator: (value) {
-                                    if (_endDate == null) {
-                                      return 'Selecciona la fecha de vencimiento';
-                                    }
-                                    if (_startDate != null &&
-                                        _endDate!.isBefore(_startDate!)) {
-                                      return 'Debe ser posterior al inicio';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ),
                             ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Información de duración del crédito
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primaryContainer
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.access_time,
-                                  color: Theme.of(context).colorScheme.primary,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _getDurationInfo(),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
                         ],
                       ),
                     ),
-                  ),
+                  ),*/
                   const SizedBox(height: 16),
                   // Entrega programada - Solo para managers
                   Builder(
@@ -1763,61 +2243,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  // Información adicional
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Información Adicional',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Dirección capturada (solo lectura)
-                          TextFormField(
-                            controller: _addressController,
-                            readOnly: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Dirección',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.location_on),
-                              helperText:
-                                  'Dirección actual registrada para el crédito',
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Monto de cuota sugerido - Calculado automáticamente
-                          TextFormField(
-                            controller: _installmentAmountController,
-                            decoration: const InputDecoration(
-                              labelText: 'Monto de Cuota Sugerido',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.payment),
-                              prefixText: 'Bs. ',
-                              helperText:
-                                  'Calculado automáticamente según frecuencia y fechas',
-                              suffixIcon: Icon(
-                                Icons.auto_awesome,
-                                color: Colors.blue,
-                              ),
-                            ),
-                            readOnly:
-                                true, // Solo lectura, se calcula automáticamente
-                            validator: (value) {
-                              // No es obligatorio que tenga valor
-                              return null;
-                            },
-                          ),
-                          // const SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
-                  ),
+                  // ============================================================
+                  // 📊 SECCIÓN: RESUMEN DEL CRÉDITO
+                  // ============================================================
+                  _buildSectionHeader('Resumen del Crédito', Icons.assessment),
+                  _buildFinancialSummary(),
                   const SizedBox(height: 24),
                   // Botón temporal para probar scroll automático
                   /* SizedBox(

@@ -38,7 +38,7 @@ class Usuario {
   factory Usuario.fromJson(Map<String, dynamic> json) {
     try {
       // Debug: imprimir el JSON recibido
-      // print('🔍 DEBUG: Parsing usuario JSON: $json');
+      print('🔍 DEBUG: Parsing usuario JSON: $json');
 
       // Manejar diferentes formatos de ID
       BigInt id;

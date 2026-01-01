@@ -156,8 +156,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
               textColor: Colors.white,
               onPressed: () {
                 scaffoldMessenger.hideCurrentSnackBar();
-                ref.read(authProvider.notifier).clearError();
-                _lastShownError = null;
+                if (mounted) {
+                  ref.read(authProvider.notifier).clearError();
+                  _lastShownError = null;
+                }
               },
             ),
           ),

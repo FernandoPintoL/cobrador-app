@@ -64,6 +64,10 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
       // Inicializar servicio de auto-logout inmediatamente
       _autoLogoutService = ref.read(autoLogoutServiceProvider);
+
+      // Inicializar la configuración del auto-logout desde el tenant
+      _autoLogoutService?.initialize();
+
       _navigatorObserver = AutoLogoutNavigatorObserver(
         (routeName) => _autoLogoutService?.onScreenChanged(routeName),
       );
@@ -177,12 +181,18 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
         if (currentRoute != '/login' && !_navigatingToLogin) {
           _navigatingToLogin = true;
+
+          // Solo mostrar mensaje de "sesión expirada" si el usuario ESTABA autenticado antes
+          final wasAuthenticated = previous?.isAuthenticated ?? false;
+
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final nav = MyApp.navigatorKey.currentState;
             final ctx = MyApp.navigatorKey.currentContext;
             if (nav != null) {
               nav.pushNamedAndRemoveUntil('/login', (route) => false);
-              if (ctx != null) {
+
+              // Solo mostrar snackbar si fue una expiración real de sesión
+              if (ctx != null && wasAuthenticated) {
                 ScaffoldMessenger.of(ctx).clearSnackBars();
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(

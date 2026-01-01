@@ -711,4 +711,95 @@ class CreditApiService extends BaseApiService {
       };
     }
   }
+
+  /// Obtiene las frecuencias de pago configuradas para el tenant actual
+  ///
+  /// Endpoint: GET /api/loan-frequencies
+  ///
+  /// Retorna la configuración de frecuencias que incluye:
+  /// - code: Código de la frecuencia (daily, weekly, biweekly, monthly)
+  /// - name: Nombre legible (Diario, Semanal, Quincenal, Mensual)
+  /// - is_fixed_duration: Si tiene duración fija (true para diaria)
+  /// - fixed_installments: Cuotas fijas (24 para diaria)
+  /// - fixed_duration_days: Días fijos (28 para diaria)
+  /// - default_installments: Cuotas sugeridas por defecto
+  /// - min_installments: Mínimo de cuotas permitidas
+  /// - max_installments: Máximo de cuotas permitidas
+  /// - period_days: Días por período (1, 7, 15, 30)
+  /// - interest_rate: Tasa de interés específica (si varía por frecuencia)
+  /// - is_editable: Si el usuario puede editar el número de cuotas
+  /// - suggested_installments: Número de cuotas sugerido
+  Future<List<Map<String, dynamic>>> getLoanFrequencies() async {
+    try {
+      final response = await get('/loan-frequencies');
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        if (data['success'] == true && data['data'] != null) {
+          final frequencies = data['data'] as List<dynamic>;
+          return frequencies
+              .map((freq) => Map<String, dynamic>.from(freq as Map))
+              .toList();
+        } else {
+          throw Exception('Respuesta inválida del servidor');
+        }
+      } else {
+        throw Exception(
+          '❌ Error al obtener frecuencias de pago: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('❌ Error al obtener frecuencias de pago: $e');
+      // Retornar valores por defecto en caso de error
+      return [
+        {
+          'code': 'daily',
+          'name': 'Diario',
+          'period_days': 1,
+          'is_fixed_duration': true,
+          'fixed_installments': 24,
+          'fixed_duration_days': 28,
+          'is_editable': false,
+          'suggested_installments': 24,
+          'interest_rate': '20.00',
+        },
+        {
+          'code': 'weekly',
+          'name': 'Semanal',
+          'period_days': 7,
+          'is_fixed_duration': false,
+          'default_installments': 12,
+          'min_installments': 4,
+          'max_installments': 24,
+          'is_editable': true,
+          'suggested_installments': 12,
+          'interest_rate': '15.00',
+        },
+        {
+          'code': 'biweekly',
+          'name': 'Quincenal',
+          'period_days': 15,
+          'is_fixed_duration': false,
+          'default_installments': 6,
+          'min_installments': 2,
+          'max_installments': 12,
+          'is_editable': true,
+          'suggested_installments': 6,
+          'interest_rate': '12.00',
+        },
+        {
+          'code': 'monthly',
+          'name': 'Mensual',
+          'period_days': 30,
+          'is_fixed_duration': false,
+          'default_installments': 3,
+          'min_installments': 1,
+          'max_installments': 6,
+          'is_editable': true,
+          'suggested_installments': 3,
+          'interest_rate': '10.00',
+        },
+      ];
+    }
+  }
 }

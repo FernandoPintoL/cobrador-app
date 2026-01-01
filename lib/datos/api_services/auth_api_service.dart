@@ -66,6 +66,18 @@ class AuthApiService extends BaseApiService {
             debugPrint('ℹ️ No se recibieron estadísticas del dashboard');
           }
 
+          // Guardar configuración de seguridad (auto-logout) del tenant
+          if (responseData['security_settings'] != null) {
+            debugPrint('🔒 Configuración de seguridad recibida');
+            final securitySettings = responseData['security_settings'] as Map<String, dynamic>;
+            final autoLogoutEnabled = securitySettings['auto_logout_enabled'] as bool? ?? true;
+            debugPrint('🔒 Auto-logout habilitado: $autoLogoutEnabled');
+            await storageService.saveAutoLogoutEnabled(autoLogoutEnabled);
+          } else {
+            debugPrint('ℹ️ No se recibió configuración de seguridad, usando valor por defecto (habilitado)');
+            await storageService.saveAutoLogoutEnabled(true); // Por defecto habilitado
+          }
+
           return data;
         } else {
           debugPrint('❌ Estructura de respuesta inesperada: $data');
@@ -78,7 +90,7 @@ class AuthApiService extends BaseApiService {
         throw Exception('Error en el login: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('💥 Error de conexión: $e');
+      debugPrint('💥 Error en login: $e');
       debugPrint('🔍 Stack trace: ${StackTrace.current}');
 
       // Extraer mensaje de error específico del servidor
@@ -86,7 +98,7 @@ class AuthApiService extends BaseApiService {
         throw Exception(handleDioError(e));
       }
 
-      throw Exception('Error de conexión: $e');
+      throw Exception(e.toString());
     }
   }
 

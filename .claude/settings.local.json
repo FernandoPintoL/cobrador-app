@@ -51,7 +51,11 @@
       "Bash(php create_test_data.php:*)",
       "Bash(psql:*)",
       "Bash(php create_test_clients.php:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(kill:*)",
+      "Bash(./gradlew:*)",
+      "Bash(ping:*)"
     ],
     "deny": [],
     "ask": []

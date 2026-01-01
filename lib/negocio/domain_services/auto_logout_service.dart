@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
 import '../providers/auth_provider.dart';
+import '../../datos/api_services/storage_service.dart';
 
 /// Observer para detectar cambios de rutas/pantallas
 class AutoLogoutNavigatorObserver extends NavigatorObserver {
@@ -76,6 +77,18 @@ class AutoLogoutService extends WidgetsBindingObserver {
   AutoLogoutService(this.ref) {
     WidgetsBinding.instance.addObserver(this);
     debugPrint('🔐 AutoLogoutService inicializado con logout inmediato');
+  }
+
+  /// Inicializar el servicio leyendo la configuración del tenant desde storage
+  Future<void> initialize() async {
+    try {
+      final storageService = StorageService();
+      _isEnabled = await storageService.getAutoLogoutEnabled();
+      debugPrint('🔐 AutoLogoutService configurado desde tenant - Enabled: $_isEnabled');
+    } catch (e) {
+      debugPrint('⚠️ Error al leer configuración de auto-logout: $e');
+      _isEnabled = true; // Por defecto habilitado si falla la lectura
+    }
   }
 
   void dispose() {
