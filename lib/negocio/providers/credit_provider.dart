@@ -1966,6 +1966,90 @@ class CreditNotifier extends StateNotifier<CreditState> {
       return false;
     }
   }
+
+  /// Carga los créditos de todos los estados en paralelo para poblar los badges de los tabs
+  Future<void> loadAllTabCounts({
+    int? clientId,
+    int? cobradorId,
+    String? search,
+  }) async {
+    try {
+      print('🔄 Cargando contadores de todos los tabs en paralelo...');
+
+      // Hacer requests en paralelo para cada estado
+      final futures = await Future.wait([
+        _creditApiService.getCredits(
+          clientId: clientId,
+          cobradorId: cobradorId,
+          status: 'active',
+          search: search,
+          page: 1,
+          perPage: 100, // Cargar suficientes para contar
+        ),
+        _creditApiService.getCredits(
+          clientId: clientId,
+          cobradorId: cobradorId,
+          status: 'pending_approval',
+          search: search,
+          page: 1,
+          perPage: 100,
+        ),
+        _creditApiService.getCredits(
+          clientId: clientId,
+          cobradorId: cobradorId,
+          status: 'waiting_delivery',
+          search: search,
+          page: 1,
+          perPage: 100,
+        ),
+      ]);
+
+      // Procesar respuestas
+      final activeCredits = _parseCreditsFromResponse(futures[0]);
+      final pendingCredits = _parseCreditsFromResponse(futures[1]);
+      final waitingCredits = _parseCreditsFromResponse(futures[2]);
+
+      // Actualizar state con las listas específicas
+      state = state.copyWith(
+        pendingApprovalCredits: pendingCredits,
+        waitingDeliveryCredits: waitingCredits,
+        readyForDeliveryCredits: waitingCredits
+            .where((c) => c.isReadyForDelivery)
+            .toList(),
+        overdueDeliveryCredits: waitingCredits
+            .where((c) => c.isOverdueForDelivery)
+            .toList(),
+      );
+
+      print('✅ Contadores cargados:');
+      print('  - Activos: ${activeCredits.length}');
+      print('  - Pendientes: ${pendingCredits.length}');
+      print('  - En Espera: ${waitingCredits.length}');
+      print('  - Para Entregar: ${waitingCredits.where((c) => c.isReadyForDelivery || c.isOverdueForDelivery).length}');
+    } catch (e) {
+      print('❌ Error al cargar contadores de tabs: $e');
+    }
+  }
+
+  /// Helper para parsear créditos de una respuesta del API
+  List<Credito> _parseCreditsFromResponse(Map<String, dynamic> response) {
+    if (response['success'] != true) return [];
+
+    final data = response['data'];
+    final creditsData = data['data'] as List? ?? [];
+
+    return creditsData
+        .map((json) {
+          try {
+            return Credito.fromJson(json as Map<String, dynamic>);
+          } catch (e) {
+            print('❌ Error al parsear crédito: $e');
+            return null;
+          }
+        })
+        .whereType<Credito>()
+        .toList();
+  }
 }
 
 // Provider para gestionar créditos

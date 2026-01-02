@@ -132,6 +132,12 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       );
     }
 
+    // ✅ CARGAR CONTADORES DE TODOS LOS TABS en paralelo (para badges)
+    ref.read(creditProvider.notifier).loadAllTabCounts(
+          search: _filterState.search.isEmpty ? null : _filterState.search,
+          cobradorId: _filterState.selectedCobradorId,
+        );
+
     // Obtener el status según el tab actual
     final String? tabStatus = _getStatusForCurrentTab();
 
@@ -373,7 +379,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Pendientes (${creditState.credits.where((c) => c.status == 'pending_approval').length})',
+                          'Pendientes (${creditState.pendingApprovalCredits.length})',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -389,7 +395,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'En Espera (${creditState.credits.where((c) => c.status == 'waiting_delivery' && !c.isReadyForDelivery && !c.isOverdueForDelivery).length})',
+                          'En Espera (${creditState.waitingDeliveryCredits.where((c) => !c.isReadyForDelivery && !c.isOverdueForDelivery).length})',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -405,7 +411,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Para Entregar (${creditState.credits.where((c) => c.isReadyForDelivery || c.isOverdueForDelivery).length})',
+                          'Para Entregar (${creditState.readyForDeliveryCredits.length + creditState.overdueDeliveryCredits.length})',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
