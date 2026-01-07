@@ -38,6 +38,24 @@
 	<string>Necesitamos acceso a tus fotos para que puedas seleccionar una imagen de perfil.</string>
 	<key>GOOGLE_MAPS_API_KEY</key>
 	<string>$(GOOGLE_MAPS_API_KEY_IOS)</string>
+
+	<!-- ✅ Esquemas de URL para abrir apps externas (WhatsApp, Maps, etc.) -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+		<string>whatsapp-business</string>
+		<string>tel</string>
+		<string>telprompt</string>
+		<string>mailto</string>
+		<string>sms</string>
+		<string>http</string>
+		<string>https</string>
+		<string>comgooglemaps</string>
+		<string>googlemaps</string>
+		<string>waze</string>
+		<string>maps</string>
+	</array>
+
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

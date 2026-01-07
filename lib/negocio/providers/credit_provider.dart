@@ -428,6 +428,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
     double? latitude,
     double? longitude,
     DateTime? scheduledDeliveryDate,
+    // ✅ NUEVO: Parámetros para crédito antiguo
+    bool? isLegacyCredit,
+    int? paidInstallmentsCount,
   }) async {
     try {
       state = state.copyWith(
@@ -482,6 +485,13 @@ class CreditNotifier extends StateNotifier<CreditState> {
       }
       if (longitude != null) {
         creditData['longitude'] = longitude;
+      }
+      // ✅ NUEVO: Agregar parámetros para crédito antiguo
+      if (isLegacyCredit != null && isLegacyCredit) {
+        creditData['is_legacy_credit'] = true;
+        if (paidInstallmentsCount != null) {
+          creditData['paid_installments_count'] = paidInstallmentsCount;
+        }
       }
 
       print('🚀 Enviando datos al servidor: $creditData');

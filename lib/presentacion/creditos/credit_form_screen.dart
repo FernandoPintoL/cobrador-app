@@ -91,6 +91,12 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   // ✅ NUEVO: Variable para expandir/colapsar card de ubicación
   bool _isLocationCardExpanded = false; // Por defecto colapsado
 
+  // ✅ NUEVO: Variables para crédito antiguo
+  bool _isLegacyCredit = false; // Modo crédito antiguo
+  final _paidInstallmentsController = TextEditingController(); // Cuotas pagadas
+  String? _paidInstallmentsError; // Error de validación
+  final _paidInstallmentsFieldKey = GlobalKey(); // Key para scroll automático
+
   @override
   void initState() {
     super.initState();
@@ -391,11 +397,29 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   }
 
   Future<void> _selectStartDate() async {
+    // ✅ NUEVO: Para créditos antiguos, permitir fechas pasadas
+    final DateTime initialDate;
+    final DateTime firstDate;
+    final DateTime lastDate;
+
+    if (_isLegacyCredit) {
+      // Modo legacy: permitir fechas desde hace 2 años hasta hoy
+      initialDate =
+          _startDate ?? DateTime.now().subtract(const Duration(days: 30));
+      firstDate = DateTime(2020); // Permitir fechas muy antiguas
+      lastDate = DateTime.now(); // Hasta hoy
+    } else {
+      // Modo normal: fechas desde hace 1 año hasta 1 año futuro
+      initialDate = _startDate ?? DateTime.now();
+      firstDate = DateTime.now().subtract(const Duration(days: 365));
+      lastDate = DateTime.now().add(const Duration(days: 365));
+    }
+
     final date = await showDatePicker(
       context: context,
-      initialDate: _startDate ?? DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
     );
 
     if (date != null) {
@@ -607,6 +631,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
             longitude: longitude,
           );
     } else {
+      // ✅ NUEVO: Preparar parámetros para crédito antiguo
+      final int? paidInstallmentsCount = _isLegacyCredit
+          ? int.tryParse(_paidInstallmentsController.text)
+          : null;
+
       success = await ref
           .read(creditProvider.notifier)
           .createCredit(
@@ -623,6 +652,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
             latitude: latitude,
             longitude: longitude,
             scheduledDeliveryDate: _scheduledDeliveryDate,
+            // ✅ NUEVO: Parámetros para crédito antiguo
+            isLegacyCredit: _isLegacyCredit,
+            paidInstallmentsCount: paidInstallmentsCount,
           );
     }
     setState(() {
@@ -651,6 +683,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     _longitudeController.dispose();
     _addressController.dispose();
     _scheduledDeliveryDateController.dispose();
+    _paidInstallmentsController.dispose(); // ✅ NUEVO
     super.dispose();
   }
 
@@ -1012,7 +1045,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                 // Botón para expandir/colapsar
                 IconButton(
                   icon: Icon(
-                    _isLocationCardExpanded ? Icons.expand_less : Icons.expand_more,
+                    _isLocationCardExpanded
+                        ? Icons.expand_less
+                        : Icons.expand_more,
                     color: Colors.grey.shade600,
                     size: 20,
                   ),
@@ -1021,7 +1056,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                       _isLocationCardExpanded = !_isLocationCardExpanded;
                     });
                   },
-                  tooltip: _isLocationCardExpanded ? 'Ocultar detalles' : 'Ver detalles',
+                  tooltip: _isLocationCardExpanded
+                      ? 'Ocultar detalles'
+                      : 'Ver detalles',
                 ),
                 // Botón para refrescar ubicación
                 IconButton(
@@ -2120,6 +2157,198 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                       ),
                     ),
                   ),*/
+                  const SizedBox(height: 16),
+                  // ============================================================
+                  // ✅ NUEVO: SECCIÓN CRÉDITO ANTIGUO
+                  // ============================================================
+                  if (widget.credit == null) // Solo en modo creación
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.history,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Crédito Antiguo',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            CheckboxListTile(
+                              title: const Text('Registrar crédito antiguo'),
+                              subtitle: const Text(
+                                'Activar para registrar créditos con pagos anteriores',
+                              ),
+                              value: _isLegacyCredit,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _isLegacyCredit = value ?? false;
+                                  if (_isLegacyCredit) {
+                                    // ✅ Al activar legacy, establecer fecha pasada por defecto
+                                    _startDate = DateTime.now().subtract(
+                                      const Duration(days: 30),
+                                    );
+                                    _startDateController.text = DateFormat(
+                                      'dd/MM/yyyy',
+                                    ).format(_startDate!);
+                                    // Recalcular fecha fin
+                                    final durationDays =
+                                        int.tryParse(
+                                          _durationDaysController.text,
+                                        ) ??
+                                        24;
+                                    _endDate =
+                                        ScheduleUtils.computeDailyEndDate(
+                                          _startDate!,
+                                          durationDays,
+                                        );
+                                    _endDateController.text = DateFormat(
+                                      'dd/MM/yyyy',
+                                    ).format(_endDate!);
+                                  } else {
+                                    // Limpiar campos cuando se desactiva
+                                    _paidInstallmentsController.clear();
+                                    _paidInstallmentsError = null;
+                                    // Restaurar fecha de inicio a hoy
+                                    _startDate = DateTime.now();
+                                    _startDateController.text = DateFormat(
+                                      'dd/MM/yyyy',
+                                    ).format(_startDate!);
+                                    // Recalcular fecha fin
+                                    final durationDays =
+                                        int.tryParse(
+                                          _durationDaysController.text,
+                                        ) ??
+                                        24;
+                                    _endDate =
+                                        ScheduleUtils.computeDailyEndDate(
+                                          _startDate!,
+                                          durationDays,
+                                        );
+                                    _endDateController.text = DateFormat(
+                                      'dd/MM/yyyy',
+                                    ).format(_endDate!);
+                                  }
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            if (_isLegacyCredit) ...[
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.blue.shade200,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      color: Colors.blue.shade700,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'En modo crédito antiguo, especifica la fecha de inicio pasada y el número de cuotas ya pagadas.',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.blue.shade900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              // Campo de fecha de inicio (ya existente se modificará arriba)
+                              TextFormField(
+                                controller: _startDateController,
+                                decoration: InputDecoration(
+                                  labelText: 'Fecha de Inicio del Crédito *',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.calendar_today),
+                                  helperText:
+                                      'Selecciona la fecha en que inició el crédito',
+                                  errorText: _startDateError,
+                                ),
+                                readOnly: true,
+                                onTap: _selectStartDate,
+                                validator: (value) {
+                                  if (_startDate == null) {
+                                    return 'Selecciona la fecha de inicio';
+                                  }
+                                  // Validar que sea fecha pasada para legacy
+                                  if (_isLegacyCredit &&
+                                      _startDate!.isAfter(DateTime.now())) {
+                                    return 'Para créditos antiguos, la fecha debe ser pasada';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              // Campo de cuotas pagadas
+                              TextFormField(
+                                key: _paidInstallmentsFieldKey,
+                                controller: _paidInstallmentsController,
+                                decoration: InputDecoration(
+                                  labelText: 'Cuotas Ya Pagadas *',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.check_circle),
+                                  helperText:
+                                      'Número de cuotas que el cliente ya pagó',
+                                  errorText: _paidInstallmentsError,
+                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: false,
+                                    ),
+                                validator: (value) {
+                                  if (_isLegacyCredit) {
+                                    // Permitir 0 o null para créditos antiguos sin pagos
+                                    if (value == null || value.isEmpty) {
+                                      return null;
+                                    }
+
+                                    final paidCount =
+                                        int.tryParse(value.toString()) ?? 0;
+                                    final totalInstallments =
+                                        int.tryParse(
+                                          _durationDaysController.text,
+                                        ) ??
+                                        0;
+
+                                    // Solo validar si hay un total de cuotas definido
+                                    if (totalInstallments > 0 && paidCount >= totalInstallments) {
+                                      return 'Las cuotas pagadas deben ser menores al total';
+                                    }
+                                  }
+                                  return null;
+                                },
+                                onChanged: (value) {
+                                  setState(() {
+                                    _paidInstallmentsError = null;
+                                  });
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 16),
                   // Entrega programada - Solo para managers
                   Builder(
