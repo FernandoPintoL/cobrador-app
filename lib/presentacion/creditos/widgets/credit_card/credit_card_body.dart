@@ -37,19 +37,28 @@ class _CreditCardBodyState extends State<CreditCardBody> {
                 children: [
                   // Monto principal con diseño destacado
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                          Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
+                          Theme.of(
+                            context,
+                          ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                          Theme.of(
+                            context,
+                          ).colorScheme.primaryContainer.withValues(alpha: 0.1),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.2),
                         width: 1,
                       ),
                     ),
@@ -89,7 +98,9 @@ class _CreditCardBodyState extends State<CreditCardBody> {
                             widget.credit.creator!.nombre,
                             style: TextStyle(
                               fontSize: 11,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w500,
                             ),
                             maxLines: 1,
@@ -114,44 +125,79 @@ class _CreditCardBodyState extends State<CreditCardBody> {
         _buildListTypeSpecificInfo(context),
 
         // Información esencial visible siempre (solo 3 chips principales compactos)
+        // En tab "Para Entregar", ocultar información de cuotas porque el crédito aún no se entrega
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _CompactInfoChip(
-                icon: Icons.account_balance_wallet_outlined,
-                label: 'Saldo',
-                value: 'Bs. ${NumberFormat('#,##0').format(widget.credit.balance)}',
-                color: widget.credit.balance > 0
-                    ? Colors.orange.shade50
-                    : Colors.green.shade50,
-                textColor: widget.credit.balance > 0
-                    ? Colors.orange.shade700
-                    : Colors.green.shade700,
+        if (widget.listType != 'ready_for_delivery' &&
+            widget.listType != 'overdue_delivery')
+          Row(
+            children: [
+              Expanded(
+                child: _CompactInfoChip(
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Saldo',
+                  value:
+                      'Bs. ${NumberFormat('#,##0').format(widget.credit.balance)}',
+                  color: widget.credit.balance > 0
+                      ? Colors.orange.shade50
+                      : Colors.green.shade50,
+                  textColor: widget.credit.balance > 0
+                      ? Colors.orange.shade700
+                      : Colors.green.shade700,
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _CompactInfoChip(
-                icon: Icons.payments_outlined,
-                label: 'Cuotas',
-                value: '${widget.credit.completedPaymentsCount ?? widget.credit.paidInstallments}/${widget.credit.backendTotalInstallments ?? widget.credit.totalInstallments}',
-                color: Colors.blue.shade50,
-                textColor: Colors.blue.shade700,
+              const SizedBox(width: 6),
+              Expanded(
+                child: _CompactInfoChip(
+                  icon: Icons.payments_outlined,
+                  label: 'Cuotas',
+                  value:
+                      '${widget.credit.completedPaymentsCount ?? widget.credit.paidInstallments}/${widget.credit.backendTotalInstallments ?? widget.credit.totalInstallments}',
+                  color: Colors.blue.shade50,
+                  textColor: Colors.blue.shade700,
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _CompactInfoChip(
-                icon: Icons.calendar_today_outlined,
-                label: 'Frecuencia',
-                value: widget.credit.frequencyLabel,
-                color: Colors.purple.shade50,
-                textColor: Colors.purple.shade700,
+              const SizedBox(width: 6),
+              Expanded(
+                child: _CompactInfoChip(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Frecuencia',
+                  value: widget.credit.frequencyLabel,
+                  color: Colors.purple.shade50,
+                  textColor: Colors.purple.shade700,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        if (widget.listType == 'ready_for_delivery' ||
+            widget.listType == 'overdue_delivery')
+          Row(
+            children: [
+              Expanded(
+                child: _CompactInfoChip(
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Saldo',
+                  value:
+                      'Bs. ${NumberFormat('#,##0').format(widget.credit.balance)}',
+                  color: widget.credit.balance > 0
+                      ? Colors.orange.shade50
+                      : Colors.green.shade50,
+                  textColor: widget.credit.balance > 0
+                      ? Colors.orange.shade700
+                      : Colors.green.shade700,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _CompactInfoChip(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Frecuencia',
+                  value: widget.credit.frequencyLabel,
+                  color: Colors.purple.shade50,
+                  textColor: Colors.purple.shade700,
+                ),
+              ),
+            ],
+          ),
 
         // Botón para expandir/colapsar detalles
         const SizedBox(height: 8),
@@ -165,10 +211,14 @@ class _CreditCardBodyState extends State<CreditCardBody> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.5),
               ),
             ),
             child: Row(
@@ -194,8 +244,10 @@ class _CreditCardBodyState extends State<CreditCardBody> {
           ),
         ),
 
-        // Detalles expandibles
-        if (_showDetails) ...[
+        // Detalles expandibles - Ocultar información de cuotas en tab "Para Entregar"
+        if (_showDetails &&
+            widget.listType != 'ready_for_delivery' &&
+            widget.listType != 'overdue_delivery') ...[
           const SizedBox(height: 8),
           // Chips adicionales
           Wrap(
@@ -204,16 +256,19 @@ class _CreditCardBodyState extends State<CreditCardBody> {
             children: [
               CreditInfoChip(
                 label: 'Pagado',
-                value: 'Bs. ${NumberFormat('#,##0.00').format(widget.credit.totalPaid ?? ((widget.credit.totalAmount ?? widget.credit.amount) - widget.credit.balance))}',
+                value:
+                    'Bs. ${NumberFormat('#,##0.00').format(widget.credit.totalPaid ?? ((widget.credit.totalAmount ?? widget.credit.amount) - widget.credit.balance))}',
               ),
               if (widget.credit.installmentAmount != null)
                 CreditInfoChip(
                   label: 'Cuota',
-                  value: 'Bs. ${NumberFormat('#,##0.00').format(widget.credit.installmentAmount)}',
+                  value:
+                      'Bs. ${NumberFormat('#,##0.00').format(widget.credit.installmentAmount)}',
                 ),
               CreditInfoChip(
                 label: 'Por pagar',
-                value: '${widget.credit.backendPendingInstallments ?? widget.credit.pendingInstallments}',
+                value:
+                    '${widget.credit.backendPendingInstallments ?? widget.credit.pendingInstallments}',
               ),
             ],
           ),
@@ -225,7 +280,7 @@ class _CreditCardBodyState extends State<CreditCardBody> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Flexible(child: OverduePaymentsIndicator(credit: widget.credit)),
+                OverduePaymentsIndicator(credit: widget.credit),
                 const SizedBox(width: 6),
                 OverdueAmountChip(credit: widget.credit),
               ],
@@ -259,7 +314,9 @@ class _CreditCardBodyState extends State<CreditCardBody> {
           decoration: BoxDecoration(
             color: Colors.amberAccent.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.77)),
+            border: Border.all(
+              color: Colors.orangeAccent.withValues(alpha: 0.77),
+            ),
           ),
           child: const Row(
             children: [
@@ -330,7 +387,8 @@ class _CreditCardBodyState extends State<CreditCardBody> {
         borderColor = Colors.red;
         textColor = Colors.red;
         icon = Icons.warning;
-        message = 'ENTREGA ATRASADA (${widget.credit.daysOverdueForDelivery} días)';
+        message =
+            'ENTREGA ATRASADA (${widget.credit.daysOverdueForDelivery} días)';
       } else if (isImmediate) {
         bgColor = Colors.orange.withValues(alpha: 0.15);
         borderColor = Colors.orange;
@@ -693,19 +751,12 @@ class _CompactInfoChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: textColor.withValues(alpha: 0.2),
-          width: 1,
-        ),
+        border: Border.all(color: textColor.withValues(alpha: 0.2), width: 1),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 18,
-            color: textColor,
-          ),
+          Icon(icon, size: 18, color: textColor),
           const SizedBox(height: 4),
           Text(
             label,

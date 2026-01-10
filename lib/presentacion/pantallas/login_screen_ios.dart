@@ -499,6 +499,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
   }
 
   void _handleLogin() async {
+    // ✅ FIX: Limpiar error anterior antes de intentar nuevo login
+    if (mounted) {
+      ref.read(authProvider.notifier).clearError();
+      _lastShownError = null;
+    }
+
     if (_savedIdentifier == null &&
         !(_formKey.currentState?.validate() ?? false)) {
       return;
@@ -509,6 +515,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
         const SnackBar(
           content: Text('Por favor ingresa tu contraseña'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
       return;

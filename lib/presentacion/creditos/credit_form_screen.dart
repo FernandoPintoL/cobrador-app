@@ -497,6 +497,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
               content: Text(
                 'Permisos de ubicación denegados. Habilítalos en ajustes.',
               ),
+              duration: Duration(seconds: 4),
             ),
           );
         }
@@ -536,7 +537,10 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo obtener la ubicación actual: $e')),
+          SnackBar(
+            content: Text('No se pudo obtener la ubicación actual: $e'),
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     } finally {
@@ -579,6 +583,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No se pudo abrir el selector de ubicación: $e'),
+            duration: const Duration(seconds: 4),
           ),
         );
       }

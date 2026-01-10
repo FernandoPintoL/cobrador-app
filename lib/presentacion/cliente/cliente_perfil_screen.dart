@@ -21,7 +21,8 @@ class ClientePerfilScreen extends ConsumerStatefulWidget {
   const ClientePerfilScreen({super.key, required this.cliente});
 
   @override
-  ConsumerState<ClientePerfilScreen> createState() => _ClientePerfilScreenState();
+  ConsumerState<ClientePerfilScreen> createState() =>
+      _ClientePerfilScreenState();
 }
 
 class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
@@ -30,7 +31,9 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
     super.initState();
     // Cargar créditos del cliente para mostrar estadísticas
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(creditProvider.notifier).loadClientCredits(widget.cliente.id.toInt());
+      ref
+          .read(creditProvider.notifier)
+          .loadClientCredits(widget.cliente.id.toInt());
     });
   }
 
@@ -107,10 +110,12 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
             const SizedBox(height: 16),
 
             // Mapa de ubicación
-            if (widget.cliente.latitud != null && widget.cliente.longitud != null)
+            if (widget.cliente.latitud != null &&
+                widget.cliente.longitud != null)
               _buildMapPreview(theme, isDark),
 
-            if (widget.cliente.latitud != null && widget.cliente.longitud != null)
+            if (widget.cliente.latitud != null &&
+                widget.cliente.longitud != null)
               const SizedBox(height: 16),
 
             // Fotos de CI registradas
@@ -198,11 +203,7 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            categoryIcon,
-            color: categoryColor,
-            size: 18,
-          ),
+          Icon(categoryIcon, color: categoryColor, size: 18),
           const SizedBox(width: 6),
           Text(
             '${widget.cliente.clientCategory ?? 'B'} - ${widget.cliente.clientCategoryName}',
@@ -217,7 +218,12 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
     );
   }
 
-  Widget _buildQuickStats(ThemeData theme, bool isDark, int activeCredits, int totalCredits) {
+  Widget _buildQuickStats(
+    ThemeData theme,
+    bool isDark,
+    int activeCredits,
+    int totalCredits,
+  ) {
     return Wrap(
       spacing: 20,
       runSpacing: 16,
@@ -256,10 +262,7 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
       decoration: BoxDecoration(
         color: color.withValues(alpha: isDark ? 0.2 : 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -280,9 +283,7 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
               ),
               Text(
                 label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontSize: 11,
-                ),
+                style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
               ),
             ],
           ),
@@ -299,11 +300,7 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.flash_on,
-                color: theme.colorScheme.primary,
-                size: 22,
-              ),
+              Icon(Icons.flash_on, color: theme.colorScheme.primary, size: 22),
               const SizedBox(width: 8),
               Text(
                 'Acciones Rápidas',
@@ -415,11 +412,7 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
                   color: color.withValues(alpha: isDark ? 0.3 : 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 24,
-                ),
+                child: Icon(icon, color: color, size: 24),
               ),
               const SizedBox(height: 8),
               Flexible(
@@ -438,9 +431,7 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
               Flexible(
                 child: Text(
                   subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
-                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -476,6 +467,7 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
                     'Información de Contacto',
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -491,6 +483,19 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
                 value: widget.cliente.email,
                 color: Colors.blue,
               ),
+
+              // CI
+              if (widget.cliente.ci.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  theme,
+                  isDark,
+                  icon: Icons.badge_outlined,
+                  label: 'CI',
+                  value: widget.cliente.ci,
+                  color: Colors.purple,
+                ),
+              ],
 
               // Teléfono
               if (widget.cliente.telefono.isNotEmpty) ...[
@@ -587,11 +592,7 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.location_on,
-                    color: Colors.red,
-                    size: 22,
-                  ),
+                  Icon(Icons.location_on, color: Colors.red, size: 22),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -648,7 +649,8 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
                       ),
                       infoWindow: InfoWindow(
                         title: widget.cliente.nombre,
-                        snippet: 'Cliente ${widget.cliente.clientCategory ?? 'B'}',
+                        snippet:
+                            'Cliente ${widget.cliente.clientCategory ?? 'B'}',
                       ),
                       icon: BitmapDescriptor.defaultMarkerWithHue(
                         BitmapDescriptor.hueRed,
@@ -775,7 +777,9 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
     );
 
     if (selected != null && selected != current) {
-      final resp = await ref.read(userManagementProvider.notifier).updateClientCategoryApi(
+      final resp = await ref
+          .read(userManagementProvider.notifier)
+          .updateClientCategoryApi(
             clientId: widget.cliente.id,
             category: selected!,
           );
@@ -839,15 +843,11 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
                       color: isSelected ? color : null,
                     ),
                   ),
-                  Text(
-                    description,
-                    style: theme.textTheme.bodySmall,
-                  ),
+                  Text(description, style: theme.textTheme.bodySmall),
                 ],
               ),
             ),
-            if (isSelected)
-              Icon(Icons.check_circle, color: color, size: 24),
+            if (isSelected) Icon(Icons.check_circle, color: color, size: 24),
           ],
         ),
       ),
@@ -870,7 +870,8 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
         position: LatLng(widget.cliente.latitud!, widget.cliente.longitud!),
         infoWindow: InfoWindow(
           title: widget.cliente.nombre,
-          snippet: 'Cliente ${widget.cliente.clientCategory ?? 'B'} - ${widget.cliente.telefono}',
+          snippet:
+              'Cliente ${widget.cliente.clientCategory ?? 'B'} - ${widget.cliente.telefono}',
         ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
       );
@@ -937,7 +938,9 @@ class _ClientIdPhotosSection extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(
@@ -966,7 +969,9 @@ class _ClientIdPhotosSection extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(
@@ -987,13 +992,22 @@ class _ClientIdPhotosSection extends StatelessWidget {
         }
 
         final photos = (snapshot.data ?? []);
-        List<Map<String, dynamic>> ciPhotos = photos.where((p) {
-          final type = (p['type'] ?? p['category'] ?? p['tag'] ?? '').toString().toLowerCase();
-          return type.contains('id') || type.contains('ci') || type.contains('carnet');
-        }).map((e) => Map<String, dynamic>.from(e)).toList();
+        List<Map<String, dynamic>> ciPhotos = photos
+            .where((p) {
+              final type = (p['type'] ?? p['category'] ?? p['tag'] ?? '')
+                  .toString()
+                  .toLowerCase();
+              return type.contains('id') ||
+                  type.contains('ci') ||
+                  type.contains('carnet');
+            })
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
 
         if (ciPhotos.isEmpty && photos.isNotEmpty) {
-          ciPhotos = photos.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          ciPhotos = photos
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
         }
 
         if (ciPhotos.isEmpty) {
@@ -1004,7 +1018,9 @@ class _ClientIdPhotosSection extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -1014,10 +1030,14 @@ class _ClientIdPhotosSection extends StatelessWidget {
                     children: [
                       Icon(Icons.badge, color: Colors.teal, size: 22),
                       const SizedBox(width: 8),
-                      Text(
-                        'Documentos de Identidad',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Text(
+                          'Documentos de Identidad',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -1042,14 +1062,23 @@ class _ClientIdPhotosSection extends StatelessWidget {
                         itemBuilder: (context, index) {
                           final item = ciPhotos[index];
                           final url = _resolvePhotoUrl(item);
-                          final label = (item['type'] ?? '').toString().toLowerCase();
-                          final pretty = label.contains('front') || label.contains('anverso')
+                          final label = (item['type'] ?? '')
+                              .toString()
+                              .toLowerCase();
+                          final pretty =
+                              label.contains('front') ||
+                                  label.contains('anverso')
                               ? 'Anverso'
-                              : (label.contains('back') || label.contains('reverso'))
-                                  ? 'Reverso'
-                                  : 'Documento';
+                              : (label.contains('back') ||
+                                    label.contains('reverso'))
+                              ? 'Reverso'
+                              : 'Documento';
 
-                          return _IdPhotoTile(url: url, label: pretty, theme: theme);
+                          return _IdPhotoTile(
+                            url: url,
+                            label: pretty,
+                            theme: theme,
+                          );
                         },
                       );
                     },
@@ -1068,10 +1097,16 @@ class _ClientIdPhotosSection extends StatelessWidget {
     if (directUrl is String && directUrl.startsWith('http')) {
       return directUrl;
     }
-    final String? path = (item['path'] ?? item['file_path'] ?? item['image'])?.toString();
-    if (path == null || path.isEmpty) return UserApiService().getProfileImageUrl('');
+    final String? path = (item['path'] ?? item['file_path'] ?? item['image'])
+        ?.toString();
+    if (path == null || path.isEmpty) {
+      return UserApiService().getProfileImageUrl('');
+    }
 
-    final serverUrl = BaseApiService.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+    final serverUrl = BaseApiService.baseUrl.replaceFirst(
+      RegExp(r'/api/?$'),
+      '',
+    );
     if (path.startsWith('http')) return path;
     if (path.startsWith('/')) {
       return '$serverUrl$path';
@@ -1116,7 +1151,10 @@ class _IdPhotoTile extends StatelessWidget {
               ),
               errorWidget: (context, url, error) => Container(
                 color: theme.colorScheme.errorContainer,
-                child: Icon(Icons.error_outline, color: theme.colorScheme.error),
+                child: Icon(
+                  Icons.error_outline,
+                  color: theme.colorScheme.error,
+                ),
               ),
             ),
             Align(
@@ -1184,7 +1222,10 @@ class _IdPhotoTile extends StatelessWidget {
               top: 16,
               left: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(20),

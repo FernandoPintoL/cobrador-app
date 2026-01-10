@@ -166,7 +166,7 @@ class PaymentProgressBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(
+              Expanded(
                 child: Text(
                   'Progreso de Pagos',
                   style: TextStyle(
@@ -177,15 +177,12 @@ class PaymentProgressBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Flexible(
-                child: Text(
-                  '$completedPayments de $expectedPayments cuotas',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: progressColor,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+              Text(
+                '$completedPayments de $expectedPayments cuotas',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: progressColor,
                 ),
               ),
             ],
@@ -209,7 +206,7 @@ class PaymentProgressBar extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Flexible(
+                Expanded(
                   child: Text(
                     'Monto vencido: Bs. ${NumberFormat('#,##0.00').format(credit.overdueAmount)}',
                     style: TextStyle(
@@ -217,16 +214,16 @@ class PaymentProgressBar extends StatelessWidget {
                       color: progressColor,
                       fontWeight: FontWeight.w500,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Flexible(
-                  child: Text(
-                    credit.overdueStatusLabel,
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: progressColor,
-                      fontWeight: FontWeight.w600,
-                    ),
+                const SizedBox(width: 8),
+                Text(
+                  credit.overdueStatusLabel,
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: progressColor,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],

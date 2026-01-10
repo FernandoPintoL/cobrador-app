@@ -124,7 +124,10 @@ class CreditCardWidget extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Banner de cuotas pendientes en la parte superior
-                if (pendingInstallments > 0)
+                // Ocultar en tabs "Para Entregar" porque el crédito aún no se ha entregado
+                if (pendingInstallments > 0 &&
+                    listType != 'ready_for_delivery' &&
+                    listType != 'overdue_delivery')
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(

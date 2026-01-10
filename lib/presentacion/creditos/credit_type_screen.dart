@@ -101,9 +101,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       case 2: // Tab En Espera
         return 'waiting_delivery';
       case 3: // Tab Para Entregar
-        // Este tab es especial: combina créditos listos + atrasados
-        // No usamos filtro de status aquí, se manejará de otra forma
-        return null;
+        // Usar status waiting_delivery y luego filtrar por isReadyForDelivery || isOverdueForDelivery en la pantalla
+        return 'waiting_delivery';
       default:
         return null;
     }
@@ -133,7 +132,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     }
 
     // ✅ CARGAR CONTADORES DE TODOS LOS TABS en paralelo (para badges)
-    ref.read(creditProvider.notifier).loadAllTabCounts(
+    ref
+        .read(creditProvider.notifier)
+        .loadAllTabCounts(
           search: _filterState.search.isEmpty ? null : _filterState.search,
           cobradorId: _filterState.selectedCobradorId,
         );
@@ -318,6 +319,39 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
             onPressed: _loadInitialData,
             tooltip: 'Actualizar',
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 120),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white.withValues(alpha: 0.2),
+                ),
+                child: TextButton.icon(
+                  onPressed: _checkCashBalanceAndNavigateToForm,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                  icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                  label: const Flexible(
+                    child: Text(
+                      'Nuevo',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
@@ -411,7 +445,14 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Para Entregar (${creditState.readyForDeliveryCredits.length + creditState.overdueDeliveryCredits.length})',
+                          'Para Entregar (${() {
+                            // ✅ FIX: Usar Set para eliminar duplicados (créditos que están en ambas listas)
+                            final allDeliveryIds = {
+                              ...creditState.readyForDeliveryCredits.map((c) => c.id),
+                              ...creditState.overdueDeliveryCredits.map((c) => c.id),
+                            };
+                            return allDeliveryIds.length;
+                          }()})',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -475,11 +516,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       currentPage: creditState.currentPage,
                       totalPages: creditState.totalPages,
                       onLoadMore: () {
-                        if (!creditState.isLoading && !creditState.isLoadingMore &&
+                        if (!creditState.isLoading &&
+                            !creditState.isLoadingMore &&
                             creditState.totalPages > creditState.currentPage) {
-                          ref
-                              .read(creditProvider.notifier)
-                              .loadMoreCredits();
+                          ref.read(creditProvider.notifier).loadMoreCredits();
                         }
                       },
                       onCardTap: _navigateToCreditDetail,
@@ -504,11 +544,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           currentUserRole == 'manager' ||
                           currentUserRole == 'admin',
                       onLoadMore: () {
-                        if (!creditState.isLoading && !creditState.isLoadingMore &&
+                        if (!creditState.isLoading &&
+                            !creditState.isLoadingMore &&
                             creditState.totalPages > creditState.currentPage) {
-                          ref
-                              .read(creditProvider.notifier)
-                              .loadMoreCredits();
+                          ref.read(creditProvider.notifier).loadMoreCredits();
                         }
                       },
                       onApprove:
@@ -541,11 +580,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       // NO tiene botón de entregar (aún no es la fecha)
                       canDeliver: false,
                       onLoadMore: () {
-                        if (!creditState.isLoading && !creditState.isLoadingMore &&
+                        if (!creditState.isLoading &&
+                            !creditState.isLoadingMore &&
                             creditState.totalPages > creditState.currentPage) {
-                          ref
-                              .read(creditProvider.notifier)
-                              .loadMoreCredits();
+                          ref.read(creditProvider.notifier).loadMoreCredits();
                         }
                       },
                       // No se puede entregar todavía (fecha futura)
@@ -571,11 +609,10 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           currentUserRole == 'cobrador' ||
                           currentUserRole == 'admin',
                       onLoadMore: () {
-                        if (!creditState.isLoading && !creditState.isLoadingMore &&
+                        if (!creditState.isLoading &&
+                            !creditState.isLoadingMore &&
                             creditState.totalPages > creditState.currentPage) {
-                          ref
-                              .read(creditProvider.notifier)
-                              .loadMoreCredits();
+                          ref.read(creditProvider.notifier).loadMoreCredits();
                         }
                       },
                       onDeliver:
@@ -595,45 +632,6 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               message: 'Cargando créditos...',
             ),
         ],
-      ),
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              RoleColors.getPrimaryColor(currentUserRole),
-              RoleColors.getPrimaryColor(
-                currentUserRole,
-              ).withValues(alpha: 0.8),
-            ],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: RoleColors.getPrimaryColor(
-                currentUserRole,
-              ).withValues(alpha: 0.4),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: FloatingActionButton.extended(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          onPressed: _checkCashBalanceAndNavigateToForm,
-          icon: const Icon(Icons.add, color: Colors.white, size: 24),
-          label: const Text(
-            'Nuevo Crédito',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -693,6 +691,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                 style: TextStyle(color: Colors.white),
               ),
               backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
             ),
           );
         }
@@ -715,6 +714,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
               content: Text(
                 message ?? 'Pago registrado. Actualizando créditos...',
               ),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -724,7 +724,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         final message = result['message'] as String?;
         if (message != null && message.isNotEmpty && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(message), backgroundColor: Colors.red),
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
           );
         }
       }
@@ -737,6 +741,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
           SnackBar(
             content: Text('Error al cargar detalles: $e'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -940,6 +945,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                   const SnackBar(
                     content: Text('Debe proporcionar un motivo'),
                     backgroundColor: Colors.red,
+                    duration: Duration(seconds: 3),
                   ),
                 );
                 return;

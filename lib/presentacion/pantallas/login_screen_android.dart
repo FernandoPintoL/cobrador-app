@@ -69,6 +69,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ FIX: Capturar referencias antes del async gap para evitar errores de widget desmontado
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     // Escuchar cambios en AuthState para actualizar errores y el estado de savedIdentifier
     ref.listen<AuthState>(authProvider, (previous, next) async {
       // Si el usuario se autenticó, navegar al dashboard correspondiente según su rol
@@ -79,7 +83,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         final roles = next.usuario!.roles;
         final destination = _getDestinationForRoles(roles);
         // Reemplazar la pila para evitar volver al login
-        Navigator.of(context).pushAndRemoveUntil(
+        navigator.pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => destination),
           (route) => false,
         );
@@ -105,7 +109,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (next.error != null && next.error != _lastShownError && mounted) {
         _lastShownError = next.error;
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
               next.error!,
@@ -117,9 +121,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               label: 'Cerrar',
               textColor: Colors.white,
               onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ref.read(authProvider.notifier).clearError();
-                _lastShownError = null;
+                scaffoldMessenger.hideCurrentSnackBar();
+                if (mounted) {
+                  ref.read(authProvider.notifier).clearError();
+                  _lastShownError = null;
+                }
               },
             ),
           ),
@@ -373,6 +379,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _handleLogin() async {
+    // ✅ FIX: Limpiar error anterior antes de intentar nuevo login
+    if (mounted) {
+      ref.read(authProvider.notifier).clearError();
+      _lastShownError = null;
+    }
+
     if (_savedIdentifier == null &&
         !(_formKey.currentState?.validate() ?? false)) {
       return;
@@ -383,6 +395,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SnackBar(
           content: Text('Por favor ingresa tu contraseña'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
       return;
