@@ -165,6 +165,13 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         debugPrint(
           '🔌 Usuario autenticado, WebSocket se conectará automáticamente...',
         );
+
+        // Reinicializar AutoLogoutService para leer la configuración del tenant
+        // que se guardó durante el login
+        _autoLogoutService?.initialize().then((_) {
+          debugPrint('🔐 AutoLogoutService reinicializado con configuración del tenant');
+        });
+
         return;
       }
 

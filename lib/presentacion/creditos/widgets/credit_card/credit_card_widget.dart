@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../../datos/modelos/credito.dart';
-import '../../../reports/utils/report_formatters.dart';
 import 'credit_card_header.dart';
 import 'credit_card_body.dart';
 import 'credit_card_footer.dart';
@@ -37,38 +36,46 @@ class CreditCardWidget extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Obtener estado de pago basado en cuotas (prioridad sobre fechas)
-    final totalInstallments = credit.backendTotalInstallments;
-    final paidInstallments = credit.paidInstallmentsCount;
-    final paymentStatusColor = ReportFormatters.colorForPaymentStatus(
-      totalInstallments,
-      paidInstallments,
-    );
-    final paymentStatusIcon = ReportFormatters.getPaymentStatusIcon(
-      totalInstallments,
-      paidInstallments,
-    );
+    // Obtener cuotas atrasadas del backend (las que ya vencieron sin pagar)
+    final overdueInstallments = credit.backendOverdueInstallments ?? 0;
 
-    // Determinar cuotas pendientes
-    final pendingInstallments = ReportFormatters.calculatePendingInstallments(
-      totalInstallments,
-      paidInstallments,
-    );
+    // Color basado en severidad del backend
+    final overdueSeverity = credit.backendOverdueSeverity ?? 'none';
+    late Color overdueColor;
+    late IconData overdueIcon;
 
-    // Solo mostrar indicadores de cuotas para créditos activos
+    switch (overdueSeverity) {
+      case 'light':
+        overdueColor = Colors.amber;
+        overdueIcon = Icons.warning_amber;
+        break;
+      case 'moderate':
+        overdueColor = Colors.orange;
+        overdueIcon = Icons.warning;
+        break;
+      case 'critical':
+        overdueColor = Colors.red;
+        overdueIcon = Icons.error;
+        break;
+      default: // 'none'
+        overdueColor = Colors.green;
+        overdueIcon = Icons.check_circle;
+    }
+
+    // Solo mostrar indicadores para créditos activos CON cuotas atrasadas
     final isActiveCredit = credit.status == 'active';
-    final showPaymentIndicators = isActiveCredit && pendingInstallments > 0;
+    final showOverdueIndicators = isActiveCredit && overdueInstallments > 0;
 
-    // Colores para borde - Solo el borde indica el estado
+    // Colores para borde - Solo el borde indica el estado de mora
     late Color borderColor;
     late double borderWidth;
 
-    if (showPaymentIndicators) {
-      // Crédito activo con cuotas pendientes: borde con color del estado
-      borderColor = paymentStatusColor;
+    if (showOverdueIndicators) {
+      // Crédito activo con cuotas atrasadas: borde con color de severidad
+      borderColor = overdueColor;
       borderWidth = 2.5;
     } else {
-      // Crédito no activo o sin cuotas pendientes: borde neutro
+      // Crédito sin cuotas atrasadas: borde neutro
       borderColor = isDarkMode
           ? colorScheme.outline.withValues(alpha: 0.3)
           : Colors.grey.withValues(alpha: 0.25);
@@ -79,9 +86,6 @@ class CreditCardWidget extends StatelessWidget {
     final backgroundColor = isDarkMode
         ? colorScheme.surface
         : Colors.white;
-
-    // Icono diferencial para el estado de pago
-    final statusBadgeIcon = paymentStatusIcon;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -99,7 +103,7 @@ class CreditCardWidget extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: showPaymentIndicators
+                color: showOverdueIndicators
                     ? borderColor.withValues(alpha: isDarkMode ? 0.4 : 0.25)
                     : (isDarkMode
                         ? Colors.black.withValues(alpha: 0.3)
@@ -116,9 +120,9 @@ class CreditCardWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Banner de cuotas pendientes en la parte superior
-                // Solo mostrar para créditos activos (no pending_approval, waiting_delivery, etc.)
-                if (showPaymentIndicators &&
+                // Banner de cuotas ATRASADAS en la parte superior
+                // Solo mostrar para créditos activos con cuotas vencidas sin pagar
+                if (showOverdueIndicators &&
                     listType != 'ready_for_delivery' &&
                     listType != 'overdue_delivery')
                   Container(
@@ -127,13 +131,13 @@ class CreditCardWidget extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          paymentStatusColor,
-                          paymentStatusColor.withValues(alpha: 0.85),
+                          overdueColor,
+                          overdueColor.withValues(alpha: 0.85),
                         ],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: paymentStatusColor.withValues(alpha: 0.3),
+                          color: overdueColor.withValues(alpha: 0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -146,10 +150,10 @@ class CreditCardWidget extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(statusBadgeIcon, size: 18, color: Colors.white),
+                        Icon(overdueIcon, size: 18, color: Colors.white),
                         const SizedBox(width: 8),
                         Text(
-                          '$pendingInstallments cuota${pendingInstallments > 1 ? 's' : ''} pendiente${pendingInstallments > 1 ? 's' : ''}',
+                          '$overdueInstallments cuota${overdueInstallments > 1 ? 's' : ''} atrasada${overdueInstallments > 1 ? 's' : ''}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13,

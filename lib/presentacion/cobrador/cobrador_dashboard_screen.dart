@@ -471,7 +471,7 @@ class _CobradorDashboardScreenState
                         2,
                         (_) => SizedBox(
                           width: itemWidth,
-                          height: 160,
+                          height: 110,
                           child: const ModernStatCardSkeleton(),
                         ),
                       ),
@@ -484,7 +484,7 @@ class _CobradorDashboardScreenState
                     children: [
                       SizedBox(
                         width: itemWidth,
-                        height: 160,
+                        height: 110,
                         child: ModernStatCard(
                           title: 'Clientes',
                           value: '${dash?.totalClientes ?? creditState.stats?.totalCredits ?? 0}',
@@ -495,7 +495,7 @@ class _CobradorDashboardScreenState
                       ),
                       SizedBox(
                         width: itemWidth,
-                        height: 160,
+                        height: 110,
                         child: ModernStatCard(
                           title: 'Créditos Activos',
                           value: '${dash?.creditosActivos ?? creditState.stats?.activeCredits ?? 0}',
