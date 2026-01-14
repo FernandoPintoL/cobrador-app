@@ -14,6 +14,7 @@ import '../cliente/location_picker_screen.dart';
 import '../widgets/client_search_widget.dart';
 import '../../ui/widgets/loading_overlay.dart';
 import '../../negocio/utils/schedule_utils.dart';
+import '../widgets/top_notification_service.dart';
 
 class CreditFormScreen extends ConsumerStatefulWidget {
   final Credito? credit; // Para edición
@@ -234,7 +235,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       _startDateController.text = DateFormat('dd/MM/yyyy').format(_startDate!);
       _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
 
-      // Programar entrega por defecto para mañana (día siguiente a la creación)
+      // ✅ Fecha de entrega por defecto: MAÑANA
+      // Aplica tanto para créditos nuevos como antiguos
+      // El manager puede cambiar manualmente a HOY o cualquier fecha futura
       _scheduledDeliveryDate = DateTime.now().add(const Duration(days: 1));
       _scheduledDeliveryDateController.text = DateFormat(
         'dd/MM/yyyy',
@@ -436,6 +439,14 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           _endDate = date.add(const Duration(days: 30));
           _endDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
         }
+
+        // ✅ NUEVO: Si es crédito antiguo, actualizar fecha de entrega
+        if (_isLegacyCredit) {
+          _scheduledDeliveryDate = date.add(const Duration(days: 1));
+          _scheduledDeliveryDateController.text = DateFormat(
+            'dd/MM/yyyy',
+          ).format(_scheduledDeliveryDate!);
+        }
       });
       // Recalcular automáticamente después de cambiar las fechas
       _updateCalculations();
@@ -462,13 +473,29 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
 
   Future<void> _selectScheduledDeliveryDate() async {
     final now = DateTime.now();
-    final initial = _scheduledDeliveryDate ?? now;
+
+    // ✅ NUEVO: Para créditos antiguos, permitir desde fecha de inicio
+    // Para créditos normales, desde hoy
+    final DateTime firstAllowedDate;
+    if (_isLegacyCredit && _startDate != null) {
+      // Crédito antiguo: desde la fecha de inicio
+      firstAllowedDate = _startDate!;
+    } else {
+      // Crédito normal: desde hoy
+      firstAllowedDate = DateTime(now.year, now.month, now.day);
+    }
+
+    final initial = _scheduledDeliveryDate ?? firstAllowedDate;
+
     final date = await showDatePicker(
       context: context,
-      initialDate: initial.isBefore(now) ? now : initial,
-      firstDate: DateTime(now.year, now.month, now.day), // hoy o futuro
+      initialDate: initial.isBefore(firstAllowedDate)
+          ? firstAllowedDate
+          : initial,
+      firstDate: firstAllowedDate,
       lastDate: now.add(const Duration(days: 365)),
     );
+
     if (date != null) {
       setState(() {
         _scheduledDeliveryDate = date;
@@ -492,13 +519,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Permisos de ubicación denegados. Habilítalos en ajustes.',
-              ),
-              duration: Duration(seconds: 4),
-            ),
+          TopNotificationService.showError(
+            context,
+            'Permisos de ubicación denegados. Habilítalos en ajustes.',
           );
         }
         return;
@@ -536,11 +559,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       } catch (_) {}
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No se pudo obtener la ubicación actual: $e'),
-            duration: const Duration(seconds: 4),
-          ),
+        TopNotificationService.showError(
+          context,
+          'No se pudo obtener la ubicación actual: $e',
         );
       }
     } finally {
@@ -580,11 +601,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No se pudo abrir el selector de ubicación: $e'),
-            duration: const Duration(seconds: 4),
-          ),
+        TopNotificationService.showError(
+          context,
+          'No se pudo abrir el selector de ubicación: $e',
         );
       }
     }
@@ -1331,25 +1350,12 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           next.errorMessage != null) {
         print('🔥 DEBUG: Nuevo error detectado, procesando...');
         _setFieldErrorsFromMessage(next.errorMessage!);
-        final scaffoldMessenger = ScaffoldMessenger.of(context);
-        final notifier = ref.read(creditProvider.notifier);
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 6),
-            action: SnackBarAction(
-              label: 'Cerrar',
-              textColor: Colors.white,
-              onPressed: () {
-                scaffoldMessenger.hideCurrentSnackBar();
-                notifier.clearError();
-              },
-            ),
-          ),
-        );
+        /*TopNotificationService.showError(
+          context,
+          next.errorMessage!,
+        );*/
         print(
-          '🍞 DEBUG: SnackBar mostrado, scroll debería ejecutarse pronto...',
+          '🍞 DEBUG: Notificación mostrada, scroll debería ejecutarse pronto...',
         );
       }
 
@@ -1368,23 +1374,10 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           _locationError = null;
           _fieldErrors.clear();
         });
-        final scaffoldMessenger = ScaffoldMessenger.of(context);
-        final notifier = ref.read(creditProvider.notifier);
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(next.successMessage!),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Cerrar',
-              textColor: Colors.white,
-              onPressed: () {
-                scaffoldMessenger.hideCurrentSnackBar();
-                notifier.clearSuccess();
-              },
-            ),
-          ),
-        );
+        /*TopNotificationService.showSuccess(
+          context,
+          next.successMessage!,
+        );*/
       }
     });
 
@@ -2046,15 +2039,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                           final rate =
                                               double.tryParse(value) ?? 0.0;
                                           if (rate == 0.0 && value.isNotEmpty) {
-                                            ScaffoldMessenger.of(
+                                            TopNotificationService.showWarning(
                                               context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  '⚠️ Interés en 0% - Este crédito NO generará intereses',
-                                                ),
-                                                backgroundColor: Colors.orange,
-                                                duration: Duration(seconds: 3),
+                                              '⚠️ Interés en 0% - Este crédito NO generará intereses',
+                                              duration: const Duration(
+                                                seconds: 3,
                                               ),
                                             );
                                           }
@@ -2219,6 +2208,15 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                     _endDateController.text = DateFormat(
                                       'dd/MM/yyyy',
                                     ).format(_endDate!);
+
+                                    // ✅ NUEVO: Fecha de entrega = 1 día después de la fecha de inicio
+                                    _scheduledDeliveryDate = _startDate!.add(
+                                      const Duration(days: 1),
+                                    );
+                                    _scheduledDeliveryDateController.text =
+                                        DateFormat(
+                                          'dd/MM/yyyy',
+                                        ).format(_scheduledDeliveryDate!);
                                   } else {
                                     // Limpiar campos cuando se desactiva
                                     _paidInstallmentsController.clear();
@@ -2228,6 +2226,15 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                     _startDateController.text = DateFormat(
                                       'dd/MM/yyyy',
                                     ).format(_startDate!);
+
+                                    // ✅ NUEVO: Restaurar fecha de entrega a mañana
+                                    _scheduledDeliveryDate = DateTime.now().add(
+                                      const Duration(days: 1),
+                                    );
+                                    _scheduledDeliveryDateController.text =
+                                        DateFormat(
+                                          'dd/MM/yyyy',
+                                        ).format(_scheduledDeliveryDate!);
                                     // Recalcular fecha fin
                                     final durationDays =
                                         int.tryParse(
@@ -2337,7 +2344,8 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                         0;
 
                                     // Solo validar si hay un total de cuotas definido
-                                    if (totalInstallments > 0 && paidCount >= totalInstallments) {
+                                    if (totalInstallments > 0 &&
+                                        paidCount >= totalInstallments) {
                                       return 'Las cuotas pagadas deben ser menores al total';
                                     }
                                   }
@@ -2418,7 +2426,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          'Fast‑track: Eres manager del cliente directo. Este crédito irá a espera de entrega sin aprobación. Puedes programar entrega hoy o una fecha futura.',
+                                          'Fast-track: Como manager del cliente, este crédito irá directo a lista de entrega.',
                                           style: TextStyle(
                                             color: Colors.green[800],
                                           ),
@@ -2429,30 +2437,49 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                 )
                               else
                                 Text(
-                                  'La entrega se programa al aprobar el crédito. Por defecto es al día siguiente. Los managers pueden permitir entrega el mismo día.',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  'La entrega se programa al aprobar el crédito',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: Colors.grey.shade600),
                                 ),
                               const SizedBox(height: 12),
                               TextFormField(
                                 key: _scheduledDeliveryDateFieldKey,
                                 controller: _scheduledDeliveryDateController,
                                 decoration: InputDecoration(
-                                  labelText:
-                                      'Fecha de entrega (por defecto: mañana)',
+                                  labelText: 'Fecha de entrega programada',
                                   border: const OutlineInputBorder(),
-                                  prefixIcon: const Icon(Icons.event_note),
-                                  helperText:
-                                      'Puedes ajustar a una fecha futura. Por defecto se programa al día siguiente.',
+                                  prefixIcon: const Icon(
+                                    Icons.local_shipping_rounded,
+                                  ),
+                                  suffixIcon: const Icon(Icons.calendar_today),
+                                  helperText: _isLegacyCredit
+                                      ? 'Por defecto: 1 día después del inicio. Puedes cambiar desde la fecha de inicio'
+                                      : 'Por defecto: mañana. Puedes cambiar a hoy o cualquier fecha futura',
+                                  helperMaxLines: 2,
                                   errorText: _scheduledDeliveryDateError,
                                 ),
                                 readOnly: true,
                                 onTap: _selectScheduledDeliveryDate,
                                 validator: (value) {
-                                  // opcional; si está, debe ser >= hoy
-                                  if (value == null || value.isEmpty)
-                                    return null;
-                                  final now = DateTime.now();
-                                  if (_scheduledDeliveryDate != null) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Selecciona la fecha de entrega';
+                                  }
+                                  if (_scheduledDeliveryDate == null) {
+                                    return 'Selecciona la fecha de entrega';
+                                  }
+
+                                  // Validar según el modo
+                                  if (_isLegacyCredit) {
+                                    // Crédito antiguo: debe ser >= fecha de inicio
+                                    if (_startDate != null &&
+                                        _scheduledDeliveryDate!.isBefore(
+                                          _startDate!,
+                                        )) {
+                                      return 'Debe ser posterior o igual a la fecha de inicio';
+                                    }
+                                  } else {
+                                    // Crédito normal: debe ser >= hoy
+                                    final now = DateTime.now();
                                     final today = DateTime(
                                       now.year,
                                       now.month,

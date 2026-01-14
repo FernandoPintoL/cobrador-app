@@ -104,7 +104,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
   @override
   Widget build(BuildContext context) {
     // Capturar referencias antes del async gap
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     // Escuchar cambios en AuthState para actualizar errores y el estado de savedIdentifier
@@ -140,37 +139,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
         }
       }
 
+      // Actualizar el estado del error para mostrar en la UI
       if (next.error != null && next.error != _lastShownError && mounted) {
         _lastShownError = next.error;
-
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              next.error!,
-              style: const TextStyle(color: Colors.white),
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Cerrar',
-              textColor: Colors.white,
-              onPressed: () {
-                scaffoldMessenger.hideCurrentSnackBar();
-                if (mounted) {
-                  ref.read(authProvider.notifier).clearError();
-                  _lastShownError = null;
-                }
-              },
-            ),
-          ),
-        );
-
-        Future.delayed(const Duration(seconds: 4), () {
-          if (mounted && ref.read(authProvider).error == next.error) {
-            ref.read(authProvider.notifier).clearError();
-            _lastShownError = null;
-          }
-        });
       } else if (next.error == null) {
         _lastShownError = null;
       }
@@ -413,6 +384,70 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
                                       },
                                     ),
                                   ),
+                                  const SizedBox(height: 20),
+
+                                  // Mensaje de error persistente
+                                  Consumer(
+                                    builder: (context, ref, child) {
+                                      final authState = ref.watch(authProvider);
+                                      if (authState.error == null) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      return AnimatedContainer(
+                                        duration: const Duration(milliseconds: 300),
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? colorScheme.errorContainer.withValues(alpha: 0.3)
+                                              : colorScheme.errorContainer.withValues(alpha: 0.2),
+                                          border: Border.all(
+                                            color: colorScheme.error.withValues(alpha: 0.5),
+                                            width: 1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Icon(
+                                              Icons.error_outline_rounded,
+                                              color: colorScheme.error,
+                                              size: 22,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                authState.error!,
+                                                style: TextStyle(
+                                                  color: colorScheme.onErrorContainer,
+                                                  fontSize: 14,
+                                                  height: 1.4,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            InkWell(
+                                              onTap: () {
+                                                ref.read(authProvider.notifier).clearError();
+                                                _lastShownError = null;
+                                              },
+                                              borderRadius: BorderRadius.circular(20),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(4),
+                                                child: Icon(
+                                                  Icons.close_rounded,
+                                                  color: colorScheme.error,
+                                                  size: 20,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ],
                               ),
                             ),
@@ -511,13 +546,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     }
 
     if (_passwordController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor ingresa tu contraseña'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
       return;
     }
 

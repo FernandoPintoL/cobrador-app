@@ -14,7 +14,8 @@ class Usuario {
   final DateTime fechaActualizacion;
   final List<String> roles;
   final String? clientCategory; // 'A', 'B', or 'C'
-  final int? assignedClientsCount; // Número de clientes asignados (para cobradores)
+  final int?
+  assignedClientsCount; // Número de clientes asignados (para cobradores)
 
   Usuario({
     required this.id,
@@ -38,7 +39,7 @@ class Usuario {
   factory Usuario.fromJson(Map<String, dynamic> json) {
     try {
       // Debug: imprimir el JSON recibido
-      print('🔍 DEBUG: Parsing usuario JSON: $json');
+      //print('🔍 DEBUG: Parsing usuario JSON: $json');
 
       // Manejar diferentes formatos de ID
       BigInt id;
@@ -141,8 +142,8 @@ class Usuario {
         assignedClientsCount: json['assigned_clients_count'] is int
             ? json['assigned_clients_count']
             : (json['assigned_clients_count'] != null
-                ? int.tryParse(json['assigned_clients_count'].toString())
-                : null),
+                  ? int.tryParse(json['assigned_clients_count'].toString())
+                  : null),
       );
     } catch (e) {
       print('❌ ERROR parsing Usuario.fromJson: $e');

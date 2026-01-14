@@ -201,7 +201,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         throw Exception('No se pudo obtener información del usuario');
       }
     } catch (e) {
-      debugPrint('Error en el provider login: $e');
+      debugPrint('❌ Error en el provider login: $e');
       // Extraer solo el mensaje de la excepción, no toda la información de stack
       String errorMessage = 'Error desconocido';
 
@@ -213,7 +213,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         errorMessage = e.toString();
       }
 
+      debugPrint('📝 Mensaje de error que se mostrará al usuario: "$errorMessage"');
       state = state.copyWith(isLoading: false, error: errorMessage);
+      debugPrint('✅ Estado actualizado con error. isLoading: false, error: "$errorMessage"');
     }
   }
 

@@ -463,11 +463,13 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
                     size: 22,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Información de Contacto',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      overflow: TextOverflow.ellipsis,
+                  Flexible(
+                    child: Text(
+                      'Información de Contacto',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ],
@@ -560,6 +562,8 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w500,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
               Text(

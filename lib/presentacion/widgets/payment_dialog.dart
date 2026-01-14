@@ -458,10 +458,10 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
               border: OutlineInputBorder(),
             ),
             items: const [
-              DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
-              DropdownMenuItem(value: 'transfer', child: Text('Transferencia')),
-              DropdownMenuItem(value: 'check', child: Text('Cheque')),
-              DropdownMenuItem(value: 'other', child: Text('Otro')),
+              DropdownMenuItem(value: 'cash', child: Text('💵 Efectivo')),
+              DropdownMenuItem(value: 'transfer', child: Text('📲 Transferencia')),
+              DropdownMenuItem(value: 'check', child: Text('🧾 Cheque')),
+              DropdownMenuItem(value: 'other', child: Text('📋 Otro')),
             ],
             onChanged: (value) {
               if (value != null) {

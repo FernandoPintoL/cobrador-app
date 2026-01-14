@@ -41,7 +41,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     // Listener para detectar cambio de tab y recargar datos filtrados
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
@@ -98,10 +98,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
         return 'active';
       case 1: // Tab Pendientes
         return 'pending_approval';
-      case 2: // Tab En Espera
-        return 'waiting_delivery';
-      case 3: // Tab Para Entregar
-        // Usar status waiting_delivery y luego filtrar por isReadyForDelivery || isOverdueForDelivery en la pantalla
+      case 2: // Tab Para Entregar - status waiting_delivery pero se filtran los ready
         return 'waiting_delivery';
       default:
         return null;
@@ -109,8 +106,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   }
 
   void _loadInitialData() {
-    print('📱 CreditTypeScreen: Cargando datos iniciales');
-    print('📱 CreditTypeScreen: Tab actual: ${_tabController.index}');
+    debugPrint('📱 CreditTypeScreen: Cargando datos iniciales');
+    debugPrint('📱 CreditTypeScreen: Tab actual: ${_tabController.index}');
 
     // Cargar usuarios si es manager (para selector de cobradores)
     if (ref.read(authProvider).isManager) {
@@ -337,15 +334,13 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                     ),
                   ),
                   icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                  label: const Flexible(
-                    child: Text(
-                      'Nuevo',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  label: const Text(
+                    'Nuevo',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
@@ -421,7 +416,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                     ],
                   ),
                 ),
-                Tab(
+                /*Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -436,7 +431,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       ),
                     ],
                   ),
-                ),
+                ),*/
                 Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -445,14 +440,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Para Entregar (${() {
-                            // ✅ FIX: Usar Set para eliminar duplicados (créditos que están en ambas listas)
-                            final allDeliveryIds = {
-                              ...creditState.readyForDeliveryCredits.map((c) => c.id),
-                              ...creditState.overdueDeliveryCredits.map((c) => c.id),
-                            };
-                            return allDeliveryIds.length;
-                          }()})',
+                          // Mostrar todos los créditos waiting_delivery
+                          'Para Entregar (${creditState.waitingDeliveryCredits.length})',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -561,42 +550,21 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                           ? _showQuickRejectionDialog
                           : null,
                     ),
+                    // Tab "Para Entregar": muestra TODOS los créditos waiting_delivery
                     CreditsListWidget(
-                      credits: creditState.credits
-                          .where(
-                            (c) =>
-                                c.status == 'waiting_delivery' &&
-                                !c.isReadyForDelivery &&
-                                !c.isOverdueForDelivery,
-                          )
-                          .toList(),
-                      listType: 'waiting_delivery',
-                      clientCategoryFilters: _filterState.clientCategories,
-                      isLoadingMore: creditState.isLoadingMore,
-                      hasMore: creditState.totalPages > creditState.currentPage,
-                      currentPage: creditState.currentPage,
-                      totalPages: creditState.totalPages,
-                      onCardTap: _navigateToCreditDetail,
-                      // NO tiene botón de entregar (aún no es la fecha)
-                      canDeliver: false,
-                      onLoadMore: () {
-                        if (!creditState.isLoading &&
-                            !creditState.isLoadingMore &&
-                            creditState.totalPages > creditState.currentPage) {
-                          ref.read(creditProvider.notifier).loadMoreCredits();
+                      credits: () {
+                        final credits = creditState.waitingDeliveryCredits;
+
+                        print('🔍 DEBUG Tab Para Entregar:');
+                        print('  - waitingDeliveryCredits: ${credits.length}');
+                        if (credits.isNotEmpty) {
+                          print(
+                            '  - Primer crédito ID: ${credits.first.id}, scheduledDate: ${credits.first.scheduledDeliveryDate}',
+                          );
                         }
-                      },
-                      // No se puede entregar todavía (fecha futura)
-                      onDeliver: null,
-                    ),
-                    // Tab "Para Entregar": combina listos hoy + atrasados
-                    CreditsListWidget(
-                      credits: creditState.credits
-                          .where(
-                            (c) =>
-                                c.isReadyForDelivery || c.isOverdueForDelivery,
-                          )
-                          .toList(),
+
+                        return credits;
+                      }(),
                       listType: 'ready_for_delivery',
                       clientCategoryFilters: _filterState.clientCategories,
                       isLoadingMore: creditState.isLoadingMore,
@@ -604,8 +572,9 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       currentPage: creditState.currentPage,
                       totalPages: creditState.totalPages,
                       onCardTap: _navigateToCreditDetail,
-                      // Solo cobradores y admins pueden entregar créditos
+                      // Managers, cobradores y admins pueden entregar créditos
                       canDeliver:
+                          currentUserRole == 'manager' ||
                           currentUserRole == 'cobrador' ||
                           currentUserRole == 'admin',
                       onLoadMore: () {
@@ -616,7 +585,8 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                         }
                       },
                       onDeliver:
-                          currentUserRole == 'cobrador' ||
+                          currentUserRole == 'manager' ||
+                              currentUserRole == 'cobrador' ||
                               currentUserRole == 'admin'
                           ? _showQuickDeliveryDialog
                           : null,

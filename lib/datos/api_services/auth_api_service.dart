@@ -90,14 +90,16 @@ class AuthApiService extends BaseApiService {
         throw Exception('Error en el login: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('💥 Error en login: $e');
-      debugPrint('🔍 Stack trace: ${StackTrace.current}');
-
       // Extraer mensaje de error específico del servidor
       if (e is DioException) {
-        throw Exception(handleDioError(e));
+        final errorMessage = handleDioError(e);
+        debugPrint('❌ Error de login: $errorMessage');
+        throw Exception(errorMessage);
       }
 
+      // Para errores inesperados, sí mostrar el stack trace
+      debugPrint('💥 Error inesperado en login: $e');
+      debugPrint('🔍 Stack trace: ${StackTrace.current}');
       throw Exception(e.toString());
     }
   }

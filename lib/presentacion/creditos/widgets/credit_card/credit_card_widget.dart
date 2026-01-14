@@ -49,33 +49,36 @@ class CreditCardWidget extends StatelessWidget {
       paidInstallments,
     );
 
-    // Determinar severidad basada en estado de pago
+    // Determinar cuotas pendientes
     final pendingInstallments = ReportFormatters.calculatePendingInstallments(
       totalInstallments,
       paidInstallments,
     );
-    final isCriticalPayment = pendingInstallments > 3;
 
-    // Colores para fondo y borde - Diseño modernizado con gradientes
+    // Solo mostrar indicadores de cuotas para créditos activos
+    final isActiveCredit = credit.status == 'active';
+    final showPaymentIndicators = isActiveCredit && pendingInstallments > 0;
+
+    // Colores para borde - Solo el borde indica el estado
     late Color borderColor;
-    late List<Color> gradientColors;
+    late double borderWidth;
 
-    if (pendingInstallments > 0) {
-      // Con cuotas pendientes: usar gradiente basado en estado de pago
-      borderColor = paymentStatusColor.withValues(alpha: 0.3);
-      gradientColors = [
-        paymentStatusColor.withValues(alpha: 0.12),
-        paymentStatusColor.withValues(alpha: 0.04),
-      ];
+    if (showPaymentIndicators) {
+      // Crédito activo con cuotas pendientes: borde con color del estado
+      borderColor = paymentStatusColor;
+      borderWidth = 2.5;
     } else {
-      // Todas las cuotas pagadas: gradiente neutro elegante
+      // Crédito no activo o sin cuotas pendientes: borde neutro
       borderColor = isDarkMode
-          ? colorScheme.outline.withValues(alpha: 0.15)
-          : Colors.grey.withValues(alpha: 0.15);
-      gradientColors = isDarkMode
-          ? [colorScheme.surface, colorScheme.surface.withValues(alpha: 0.95)]
-          : [Colors.white, Colors.grey.withValues(alpha: 0.02)];
+          ? colorScheme.outline.withValues(alpha: 0.3)
+          : Colors.grey.withValues(alpha: 0.25);
+      borderWidth = 1.5;
     }
+
+    // Fondo neutro adaptado al modo oscuro
+    final backgroundColor = isDarkMode
+        ? colorScheme.surface
+        : Colors.white;
 
     // Icono diferencial para el estado de pago
     final statusBadgeIcon = paymentStatusIcon;
@@ -88,33 +91,23 @@ class CreditCardWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: gradientColors,
-            ),
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: borderColor,
-              width: pendingInstallments > 0 ? 2 : 1.5,
+              width: borderWidth,
             ),
             boxShadow: [
               BoxShadow(
-                color: pendingInstallments > 0
-                    ? paymentStatusColor.withValues(alpha: 0.15)
+                color: showPaymentIndicators
+                    ? borderColor.withValues(alpha: isDarkMode ? 0.4 : 0.25)
                     : (isDarkMode
-                          ? Colors.black.withValues(alpha: 0.3)
-                          : Colors.grey.withValues(alpha: 0.08)),
-                blurRadius: isCriticalPayment ? 20 : 12,
-                offset: const Offset(0, 6),
-                spreadRadius: isCriticalPayment ? 2 : 0,
+                        ? Colors.black.withValues(alpha: 0.3)
+                        : Colors.grey.withValues(alpha: 0.1)),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+                spreadRadius: 0,
               ),
-              if (!isDarkMode)
-                BoxShadow(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  blurRadius: 1,
-                  offset: const Offset(-1, -1),
-                ),
             ],
           ),
           child: ClipRRect(
@@ -124,8 +117,8 @@ class CreditCardWidget extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Banner de cuotas pendientes en la parte superior
-                // Ocultar en tabs "Para Entregar" porque el crédito aún no se ha entregado
-                if (pendingInstallments > 0 &&
+                // Solo mostrar para créditos activos (no pending_approval, waiting_delivery, etc.)
+                if (showPaymentIndicators &&
                     listType != 'ready_for_delivery' &&
                     listType != 'overdue_delivery')
                   Container(
@@ -168,85 +161,63 @@ class CreditCardWidget extends StatelessWidget {
                     ),
                   ),
 
-                // Contenido principal con Stack para patrón de fondo
-                Stack(
-                  children: [
-                    // Patrón de fondo sutil
-                    if (pendingInstallments > 0)
-                      Positioned(
-                        right: -30,
-                        bottom: -30,
-                        child: Opacity(
-                          opacity: 0.03,
-                          child: Icon(
-                            statusBadgeIcon,
-                            size: 120,
-                            color: paymentStatusColor,
+                // Contenido principal con InkWell para ripple effect
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(20),
+                    splashColor: borderColor.withValues(alpha: 0.1),
+                    highlightColor: borderColor.withValues(alpha: 0.05),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header con cliente y estado
+                          CreditCardHeader(credit: credit),
+
+                          const SizedBox(height: 16),
+
+                          // Divider sutil
+                          Container(
+                            height: 1,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  (isDarkMode ? Colors.white : Colors.black)
+                                      .withValues(alpha: 0.1),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
 
-                    // Contenido principal con InkWell para ripple effect
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: onTap,
-                        borderRadius: BorderRadius.circular(20),
-                        splashColor: paymentStatusColor.withValues(alpha: 0.1),
-                        highlightColor: paymentStatusColor.withValues(
-                          alpha: 0.05,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Header con cliente y estado
-                              CreditCardHeader(credit: credit),
+                          const SizedBox(height: 16),
 
-                              const SizedBox(height: 16),
-
-                              // Divider sutil
-                              Container(
-                                height: 1,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.transparent,
-                                      (isDarkMode ? Colors.white : Colors.black)
-                                          .withValues(alpha: 0.1),
-                                      Colors.transparent,
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Body con información del crédito
-                              CreditCardBody(
-                                credit: credit,
-                                listType: listType,
-                              ),
-
-                              // Footer con botones de acción
-                              const SizedBox(height: 16),
-                              CreditCardFooter(
-                                credit: credit,
-                                listType: listType,
-                                canApprove: canApprove,
-                                canDeliver: canDeliver,
-                                onApprove: onApprove,
-                                onReject: onReject,
-                                onDeliver: onDeliver,
-                                onPayment: onPayment,
-                              ),
-                            ],
+                          // Body con información del crédito
+                          CreditCardBody(
+                            credit: credit,
+                            listType: listType,
                           ),
-                        ),
+
+                          // Footer con botones de acción
+                          const SizedBox(height: 16),
+                          CreditCardFooter(
+                            credit: credit,
+                            listType: listType,
+                            canApprove: canApprove,
+                            canDeliver: canDeliver,
+                            onApprove: onApprove,
+                            onReject: onReject,
+                            onDeliver: onDeliver,
+                            onPayment: onPayment,
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),

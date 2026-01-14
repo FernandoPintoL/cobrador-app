@@ -44,9 +44,8 @@ class ApiException implements Exception {
 
   @override
   String toString() {
-    if (statusCode != null) {
-      return '$message (Código: $statusCode)';
-    }
+    // No incluir el código de estado en el mensaje para el usuario final
+    // El código técnico es útil para debugging pero confuso para usuarios
     return message;
   }
 }

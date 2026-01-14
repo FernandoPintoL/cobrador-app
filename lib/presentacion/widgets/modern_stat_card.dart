@@ -108,144 +108,168 @@ class _ModernStatCardState extends State<ModernStatCard>
                   top: -20,
                   child: Opacity(
                     opacity: 0.05,
-                    child: Icon(
-                      widget.icon,
-                      size: 100,
-                      color: widget.color,
-                    ),
+                    child: Icon(widget.icon, size: 100, color: widget.color),
                   ),
                 ),
 
                 // Content
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Icon and trend
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  padding: const EdgeInsets.all(12.0),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Adaptar tamaños según el espacio disponible
+                      final isCompact = constraints.maxHeight < 140;
+                      final iconSize = isCompact ? 20.0 : 24.0;
+                      final iconPadding = isCompact ? 8.0 : 10.0;
+                      final valueSize = isCompact ? 18.0 : 24.0;
+                      final titleSize = isCompact ? 10.0 : 12.0;
+                      final spacing = isCompact ? 6.0 : 10.0;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: widget.color.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              widget.icon,
-                              color: widget.color,
-                              size: 24,
-                            ),
-                          ),
-                          if (widget.trend != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
+                          // Icon and trend
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(iconPadding),
+                                decoration: BoxDecoration(
+                                  color: widget.color.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  widget.icon,
+                                  color: widget.color,
+                                  size: iconSize,
+                                ),
                               ),
-                              decoration: BoxDecoration(
-                                color: widget.isIncreasing
-                                    ? Colors.green.withValues(alpha: 0.1)
-                                    : Colors.red.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    widget.isIncreasing
-                                        ? Icons.trending_up
-                                        : Icons.trending_down,
-                                    size: 14,
-                                    color: widget.isIncreasing
-                                        ? Colors.green
-                                        : Colors.red,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    widget.trend!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
+                              if (widget.trend != null)
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color: widget.isIncreasing
-                                          ? Colors.green
-                                          : Colors.red,
+                                          ? Colors.green.withValues(alpha: 0.1)
+                                          : Colors.red.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          widget.isIncreasing
+                                              ? Icons.trending_up
+                                              : Icons.trending_down,
+                                          size: 12,
+                                          color: widget.isIncreasing
+                                              ? Colors.green
+                                              : Colors.red,
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Flexible(
+                                          child: Text(
+                                            widget.trend!,
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: widget.isIncreasing
+                                                  ? Colors.green
+                                                  : Colors.red,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
+                                ),
+                            ],
+                          ),
+
+                          SizedBox(height: spacing),
+
+                          // Value - con FittedBox para adaptarse
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                widget.value,
+                                style: TextStyle(
+                                  fontSize: valueSize,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                  letterSpacing: -0.5,
+                                ),
+                                maxLines: 1,
                               ),
                             ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Value
-                      Text(
-                        widget.value,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black87,
-                          letterSpacing: -0.5,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      // Title
-                      Text(
-                        widget.title,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      // Progress bar
-                      if (widget.progress != null) ...[
-                        const SizedBox(height: 12),
-                        AnimatedBuilder(
-                          animation: _progressAnimation,
-                          builder: (context, child) {
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: LinearProgressIndicator(
-                                value: widget.progress! * _progressAnimation.value,
-                                backgroundColor: isDark
-                                    ? Colors.grey[800]
-                                    : Colors.grey[200],
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  widget.color,
-                                ),
-                                minHeight: 6,
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-
-                      // Subtitle
-                      if (widget.subtitle != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          widget.subtitle!,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isDark ? Colors.grey[500] : Colors.grey[500],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
+
+                          SizedBox(height: spacing * 0.4),
+
+                          // Title
+                          Text(
+                            widget.title,
+                            style: TextStyle(
+                              fontSize: titleSize,
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: isCompact ? 1 : 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+
+                          // Progress bar
+                          if (widget.progress != null && !isCompact) ...[
+                            SizedBox(height: spacing),
+                            AnimatedBuilder(
+                              animation: _progressAnimation,
+                              builder: (context, child) {
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: LinearProgressIndicator(
+                                    value:
+                                        widget.progress! *
+                                        _progressAnimation.value,
+                                    backgroundColor: isDark
+                                        ? Colors.grey[800]
+                                        : Colors.grey[200],
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      widget.color,
+                                    ),
+                                    minHeight: 5,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+
+                          // Subtitle
+                          if (widget.subtitle != null && !isCompact) ...[
+                            SizedBox(height: spacing * 0.6),
+                            Text(
+                              widget.subtitle!,
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: isDark
+                                    ? Colors.grey[500]
+                                    : Colors.grey[500],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -298,51 +322,49 @@ class _ModernStatCardSkeletonState extends State<ModernStatCardSkeleton>
               begin: Alignment(-1.0 - _shimmerController.value * 2, 0),
               end: Alignment(1.0 - _shimmerController.value * 2, 0),
               colors: isDark
-                  ? [
-                      Colors.grey[800]!,
-                      Colors.grey[700]!,
-                      Colors.grey[800]!,
-                    ]
-                  : [
-                      Colors.grey[300]!,
-                      Colors.grey[200]!,
-                      Colors.grey[300]!,
-                    ],
+                  ? [Colors.grey[800]!, Colors.grey[700]!, Colors.grey[800]!]
+                  : [Colors.grey[300]!, Colors.grey[200]!, Colors.grey[300]!],
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[700] : Colors.grey[200],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isCompact = constraints.maxHeight < 100;
+              return Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: isCompact ? 32 : 40,
+                      height: isCompact ? 32 : 40,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[700] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    SizedBox(height: isCompact ? 8 : 12),
+                    Container(
+                      width: isCompact ? 60 : 80,
+                      height: isCompact ? 18 : 24,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[700] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    SizedBox(height: isCompact ? 4 : 8),
+                    Container(
+                      width: isCompact ? 90 : 120,
+                      height: isCompact ? 8 : 12,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[700] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  width: 80,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[700] : Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: 120,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[700] : Colors.grey[200],
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         );
       },

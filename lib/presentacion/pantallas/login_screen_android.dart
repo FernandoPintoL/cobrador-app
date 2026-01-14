@@ -70,7 +70,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     // ✅ FIX: Capturar referencias antes del async gap para evitar errores de widget desmontado
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     // Escuchar cambios en AuthState para actualizar errores y el estado de savedIdentifier
@@ -106,37 +105,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
       }
 
+      // Actualizar el estado del error para mostrar en la UI
       if (next.error != null && next.error != _lastShownError && mounted) {
         _lastShownError = next.error;
-
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              next.error!,
-              style: const TextStyle(color: Colors.white),
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Cerrar',
-              textColor: Colors.white,
-              onPressed: () {
-                scaffoldMessenger.hideCurrentSnackBar();
-                if (mounted) {
-                  ref.read(authProvider.notifier).clearError();
-                  _lastShownError = null;
-                }
-              },
-            ),
-          ),
-        );
-
-        Future.delayed(const Duration(seconds: 4), () {
-          if (mounted && ref.read(authProvider).error == next.error) {
-            ref.read(authProvider.notifier).clearError();
-            _lastShownError = null;
-          }
-        });
       } else if (next.error == null) {
         _lastShownError = null;
       }
@@ -364,6 +335,63 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 },
                               ),
                             ),
+                            const SizedBox(height: 16),
+
+                            // Mensaje de error persistente
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final authState = ref.watch(authProvider);
+                                if (authState.error == null) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    border: Border.all(
+                                      color: Colors.red.shade300,
+                                      width: 1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        Icons.error_outline,
+                                        color: Colors.red.shade700,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          authState.error!,
+                                          style: TextStyle(
+                                            color: Colors.red.shade900,
+                                            fontSize: 13,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      InkWell(
+                                        onTap: () {
+                                          ref.read(authProvider.notifier).clearError();
+                                          _lastShownError = null;
+                                        },
+                                        child: Icon(
+                                          Icons.close,
+                                          color: Colors.red.shade700,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -391,13 +419,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
 
     if (_passwordController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor ingresa tu contraseña'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
       return;
     }
 

@@ -348,7 +348,7 @@ class _ManagerDashboardScreenState
                         3,
                         (_) => SizedBox(
                           width: itemWidth,
-                          height: 160,
+                          height: 110,
                           child: const ModernStatCardSkeleton(),
                         ),
                       ),
@@ -361,7 +361,7 @@ class _ManagerDashboardScreenState
                     children: [
                       SizedBox(
                         width: itemWidth,
-                        height: 160,
+                        height: 110,
                         child: ModernStatCard(
                           title: 'Cobradores Activos',
                           value:
@@ -373,7 +373,7 @@ class _ManagerDashboardScreenState
                       ),
                       SizedBox(
                         width: itemWidth,
-                        height: 160,
+                        height: 110,
                         child: ModernStatCard(
                           title: 'Clientes Asignados',
                           value:
@@ -385,7 +385,7 @@ class _ManagerDashboardScreenState
                       ),
                       SizedBox(
                         width: itemWidth,
-                        height: 160,
+                        height: 110,
                         child: ModernStatCard(
                           title: 'Préstamos Activos',
                           value:

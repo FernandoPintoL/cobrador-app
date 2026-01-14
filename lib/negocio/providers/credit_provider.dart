@@ -246,6 +246,26 @@ class CreditNotifier extends StateNotifier<CreditState> {
             .whereType<Credito>() // Filtrar nulos
             .toList();
 
+        // Si se cargó waiting_delivery, actualizar también las listas filtradas
+        List<Credito>? readyForDelivery;
+        List<Credito>? overdueDelivery;
+        if (status == 'waiting_delivery') {
+          print('🔍 Analizando ${credits.length} créditos waiting_delivery:');
+          for (var c in credits) {
+            print('  - Crédito ID ${c.id}: scheduledDate=${c.scheduledDeliveryDate}, isReady=${c.isReadyForDelivery}, isOverdue=${c.isOverdueForDelivery}');
+          }
+
+          // NOTA: readyForDelivery ahora incluye TODOS los créditos waiting_delivery
+          // para mostrarlos en el tab "Para Entregar" sin filtrar por fecha
+          readyForDelivery = credits; // Todos los waiting_delivery
+          overdueDelivery = credits
+              .where((c) => c.isOverdueForDelivery)
+              .toList();
+          print('🔍 Filtrado waiting_delivery:');
+          print('  - Para entregar (todos): ${readyForDelivery.length}');
+          print('  - Atrasados: ${overdueDelivery.length}');
+        }
+
         state = state.copyWith(
           credits: credits,
           isLoading: false,
@@ -253,6 +273,8 @@ class CreditNotifier extends StateNotifier<CreditState> {
           currentPage: data['current_page'] ?? 1,
           totalPages: data['last_page'] ?? 1,
           totalItems: data['total'] ?? 0,
+          readyForDeliveryCredits: readyForDelivery,
+          overdueDeliveryCredits: overdueDelivery,
         );
 
         print('✅ ${credits.length} créditos cargados exitosamente');
@@ -2020,12 +2042,12 @@ class CreditNotifier extends StateNotifier<CreditState> {
       final waitingCredits = _parseCreditsFromResponse(futures[2]);
 
       // Actualizar state con las listas específicas
+      // NOTA: readyForDeliveryCredits ahora incluye TODOS los créditos waiting_delivery
+      // para mostrarlos en el tab "Para Entregar" sin filtrar por fecha
       state = state.copyWith(
         pendingApprovalCredits: pendingCredits,
         waitingDeliveryCredits: waitingCredits,
-        readyForDeliveryCredits: waitingCredits
-            .where((c) => c.isReadyForDelivery)
-            .toList(),
+        readyForDeliveryCredits: waitingCredits, // Todos los waiting_delivery
         overdueDeliveryCredits: waitingCredits
             .where((c) => c.isOverdueForDelivery)
             .toList(),
@@ -2035,7 +2057,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
       print('  - Activos: ${activeCredits.length}');
       print('  - Pendientes: ${pendingCredits.length}');
       print('  - En Espera: ${waitingCredits.length}');
-      print('  - Para Entregar: ${waitingCredits.where((c) => c.isReadyForDelivery || c.isOverdueForDelivery).length}');
+      print('  - Para Entregar: ${waitingCredits.length}');
     } catch (e) {
       print('❌ Error al cargar contadores de tabs: $e');
     }
