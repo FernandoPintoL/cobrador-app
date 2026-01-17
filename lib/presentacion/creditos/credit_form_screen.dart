@@ -98,6 +98,16 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   String? _paidInstallmentsError; // Error de validación
   final _paidInstallmentsFieldKey = GlobalKey(); // Key para scroll automático
 
+  // ✅ NUEVO: Variables para modo personalizado
+  bool _isCustomCredit = false; // Modo crédito personalizado
+  final _descriptionController =
+      TextEditingController(); // Descripción/concepto
+  final _downPaymentController = TextEditingController(text: '0'); // Anticipo
+  String? _descriptionError;
+  String? _downPaymentError;
+  final _descriptionFieldKey = GlobalKey();
+  final _downPaymentFieldKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -336,8 +346,18 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     final interestRate = double.tryParse(_interestRateController.text) ?? 0.0;
 
+    // ✅ NUEVO: Considerar anticipo en modo personalizado
+    final downPayment = _isCustomCredit
+        ? (double.tryParse(_downPaymentController.text) ?? 0.0)
+        : 0.0;
+
     if (amount > 0 && interestRate >= 0) {
-      final totalAmount = amount + (amount * interestRate / 100);
+      // Monto financiado = precio - anticipo
+      final financedAmount = amount - downPayment;
+
+      // Total con interés se calcula sobre el monto financiado
+      final totalAmount =
+          financedAmount + (financedAmount * interestRate / 100);
 
       // Actualizar el saldo total automáticamente
       _balanceController.text = totalAmount.toStringAsFixed(2);
@@ -660,6 +680,15 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           ? int.tryParse(_paidInstallmentsController.text)
           : null;
 
+      // ✅ NUEVO: Preparar parámetros para modo personalizado
+      final String? description =
+          _isCustomCredit && _descriptionController.text.isNotEmpty
+          ? _descriptionController.text
+          : null;
+      final double? downPayment = _isCustomCredit
+          ? (double.tryParse(_downPaymentController.text) ?? 0.0)
+          : null;
+
       success = await ref
           .read(creditProvider.notifier)
           .createCredit(
@@ -679,6 +708,10 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
             // ✅ NUEVO: Parámetros para crédito antiguo
             isLegacyCredit: _isLegacyCredit,
             paidInstallmentsCount: paidInstallmentsCount,
+            // ✅ NUEVO: Parámetros para modo personalizado
+            description: description,
+            downPayment: downPayment,
+            isCustomCredit: _isCustomCredit,
           );
     }
     setState(() {
@@ -708,6 +741,8 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     _addressController.dispose();
     _scheduledDeliveryDateController.dispose();
     _paidInstallmentsController.dispose(); // ✅ NUEVO
+    _descriptionController.dispose(); // ✅ NUEVO: Modo personalizado
+    _downPaymentController.dispose(); // ✅ NUEVO: Modo personalizado
     super.dispose();
   }
 
@@ -1391,21 +1426,43 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         // foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // Botón de ubicación GPS
-          IconButton(
-            onPressed: _isLoading || _isLocating ? null : _useCurrentLocation,
-            icon: _isLocating
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.my_location),
-            tooltip: _isLocating ? 'Obteniendo ubicación...' : 'Mi Ubicación',
-          ),
+          // ✅ NUEVO: Botón de modo personalizado
+          if (widget.credit == null) // Solo en modo creación
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _isCustomCredit = !_isCustomCredit;
+                  if (_isCustomCredit) {
+                    // ✅ Fecha de entrega = fecha de inicio (entrega inmediata)
+                    if (_startDate != null) {
+                      _scheduledDeliveryDate = _startDate;
+                      _scheduledDeliveryDateController.text = DateFormat(
+                        'dd/MM/yyyy',
+                      ).format(_scheduledDeliveryDate!);
+                    }
+                  } else {
+                    // Limpiar campos al desactivar
+                    _descriptionController.clear();
+                    _downPaymentController.text = '0';
+                    // Restaurar fecha de entrega por defecto
+                    _scheduledDeliveryDate = DateTime.now().add(
+                      const Duration(days: 1),
+                    );
+                    _scheduledDeliveryDateController.text = DateFormat(
+                      'dd/MM/yyyy',
+                    ).format(_scheduledDeliveryDate!);
+                  }
+                  _updateCalculations();
+                });
+              },
+              icon: Icon(
+                _isCustomCredit ? Icons.tune : Icons.tune_outlined,
+                color: _isCustomCredit ? Colors.purple : null,
+              ),
+              tooltip: _isCustomCredit
+                  ? 'Modo personalizado activo'
+                  : 'Activar modo personalizado',
+            ),
           // Botón de mapa
           IconButton(
             onPressed: _isLoading ? null : _openLocationPicker,
@@ -1745,17 +1802,120 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                             ),
                           ],
                           const SizedBox(height: 16),
+
+                          // ============================================================
+                          // ✅ MODO PERSONALIZADO (campos condicionales - switch en AppBar)
+                          // ============================================================
+                          if (_isCustomCredit) ...[
+                            Card(
+                              elevation: 0,
+                              color: Colors.purple.shade50,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: Colors.purple.shade200,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.tune,
+                                          color: Colors.purple.shade700,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Modo Personalizado',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.purple.shade900,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Campo de descripción/concepto
+                                    TextFormField(
+                                      key: _descriptionFieldKey,
+                                      controller: _descriptionController,
+                                      decoration: InputDecoration(
+                                        labelText: 'Descripción / Concepto *',
+                                        border: const OutlineInputBorder(),
+                                        prefixIcon: const Icon(
+                                          Icons.description,
+                                        ),
+                                        hintText:
+                                            'Ej: Colchón 2 plazas, Celular Samsung...',
+                                        helperText:
+                                            'Describe el producto o servicio',
+                                        errorText: _descriptionError,
+                                      ),
+                                      validator: (value) {
+                                        if (_isCustomCredit &&
+                                            (value == null || value.isEmpty)) {
+                                          return 'Ingresa una descripción';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Info box explicativo
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple.shade100,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(
+                                            Icons.info_outline,
+                                            color: Colors.purple.shade700,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'El anticipo se resta del monto ANTES de aplicar intereses.',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.purple.shade900,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
                           // Monto del crédito
                           TextFormField(
                             key: _amountFieldKey,
                             controller: _amountController,
                             decoration: InputDecoration(
-                              labelText: 'Monto del Crédito *',
+                              labelText: _isCustomCredit
+                                  ? 'Precio Total del Producto *'
+                                  : 'Monto del Crédito *',
                               border: const OutlineInputBorder(),
                               prefixIcon: const Icon(Icons.attach_money),
                               prefixText: 'Bs. ',
-                              helperText:
-                                  'Monto principal del crédito sin intereses',
+                              helperText: _isCustomCredit
+                                  ? 'Precio completo (antes de restar anticipo)'
+                                  : 'Monto principal del crédito sin intereses',
                               errorText: _amountError,
                             ),
                             keyboardType: const TextInputType.numberWithOptions(
@@ -1795,6 +1955,178 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                               _updateCalculations();
                             },
                           ),
+
+                          // ✅ NUEVO: Campo de anticipo (solo en modo personalizado)
+                          if (_isCustomCredit) ...[
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              key: _downPaymentFieldKey,
+                              controller: _downPaymentController,
+                              decoration: InputDecoration(
+                                labelText: 'Anticipo del Cliente',
+                                border: const OutlineInputBorder(),
+                                prefixIcon: const Icon(Icons.payments_outlined),
+                                prefixText: 'Bs. ',
+                                helperText:
+                                    'Monto que el cliente paga por adelantado (puede ser 0)',
+                                errorText: _downPaymentError,
+                                suffixIcon: IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _downPaymentController.text = '0';
+                                    _updateCalculations();
+                                  },
+                                  tooltip: 'Limpiar anticipo',
+                                ),
+                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              validator: (value) {
+                                if (!_isCustomCredit) return null;
+                                final downPayment =
+                                    double.tryParse(value ?? '0') ?? 0;
+                                final amount =
+                                    double.tryParse(_amountController.text) ??
+                                    0;
+                                if (downPayment < 0) {
+                                  return 'El anticipo no puede ser negativo';
+                                }
+                                if (downPayment >= amount && amount > 0) {
+                                  return 'El anticipo debe ser menor al monto total';
+                                }
+                                return null;
+                              },
+                              onChanged: (value) {
+                                _updateCalculations();
+                              },
+                            ),
+                            // Mostrar cálculo del monto financiado
+                            Builder(
+                              builder: (context) {
+                                final amount =
+                                    double.tryParse(_amountController.text) ??
+                                    0;
+                                final downPayment =
+                                    double.tryParse(
+                                      _downPaymentController.text,
+                                    ) ??
+                                    0;
+                                final financedAmount = amount - downPayment;
+                                final interestRate =
+                                    double.tryParse(
+                                      _interestRateController.text,
+                                    ) ??
+                                    0;
+                                final totalWithInterest =
+                                    financedAmount * (1 + interestRate / 100);
+
+                                if (amount > 0 && downPayment > 0) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(top: 8),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.green.shade200,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Precio total:',
+                                              style: TextStyle(
+                                                color: Colors.grey.shade700,
+                                              ),
+                                            ),
+                                            Text(
+                                              'Bs. ${amount.toStringAsFixed(2)}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Anticipo:',
+                                              style: TextStyle(
+                                                color: Colors.grey.shade700,
+                                              ),
+                                            ),
+                                            Text(
+                                              '- Bs. ${downPayment.toStringAsFixed(2)}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.red.shade700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const Divider(height: 16),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Monto a financiar:',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.green.shade800,
+                                              ),
+                                            ),
+                                            Text(
+                                              'Bs. ${financedAmount.toStringAsFixed(2)}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.green.shade800,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (interestRate > 0) ...[
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'Total con ${interestRate.toStringAsFixed(0)}% interés:',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey.shade600,
+                                                ),
+                                              ),
+                                              Text(
+                                                'Bs. ${totalWithInterest.toStringAsFixed(2)}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey.shade600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ],
 
                           const SizedBox(height: 16),
                           // Frecuencia de pago - editable si lo permite la config
@@ -2363,9 +2695,14 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                       ),
                     ),
                   const SizedBox(height: 16),
-                  // Entrega programada - Solo para managers
+                  // Entrega programada - Solo para managers (y no en modo personalizado)
                   Builder(
                     builder: (context) {
+                      // ✅ Créditos personalizados: entrega inmediata, no necesita programar
+                      if (_isCustomCredit) {
+                        return const SizedBox.shrink();
+                      }
+
                       final authState = ref.watch(authProvider);
                       final currentUser = authState.usuario;
                       final isManager = currentUser?.esManager() ?? false;

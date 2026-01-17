@@ -14,6 +14,7 @@ import 'cliente_creditos_screen.dart';
 import 'location_picker_screen.dart';
 import '../../datos/api_services/base_api_service.dart';
 import '../../datos/api_services/user_api_service.dart';
+import '../widgets/credit_limits_card.dart';
 
 class ClientePerfilScreen extends ConsumerStatefulWidget {
   final Usuario cliente;
@@ -101,6 +102,18 @@ class _ClientePerfilScreenState extends ConsumerState<ClientePerfilScreen> {
 
             // Grid de Acciones Rápidas (2x2)
             _buildActionsGrid(theme, isDark),
+
+            const SizedBox(height: 16),
+
+            // Límites de Crédito (solo para managers)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CreditLimitsCard(
+                clientId: widget.cliente.id,
+                clientName: widget.cliente.nombre,
+                isManager: true, // En esta pantalla siempre es manager
+              ),
+            ),
 
             const SizedBox(height: 16),
 

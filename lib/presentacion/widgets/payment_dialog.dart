@@ -6,6 +6,7 @@ import '../../datos/modelos/credito.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/pago_provider.dart';
 import 'error_handler.dart';
+import 'payment_success_dialog.dart';
 
 class PaymentDialog extends ConsumerStatefulWidget {
   final Credito credit;
@@ -237,9 +238,37 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
       }
 
       if (success) {
+        // Extraer datos del resultado para el diálogo de éxito
+        int? paymentId;
+        String? receiptUrl;
+        if (mapResult != null && mapResult['data'] != null) {
+          final data = mapResult['data'];
+          if (data is Map<String, dynamic>) {
+            // Extraer receipt_url
+            receiptUrl = data['receipt_url'] as String?;
+
+            // Extraer paymentId
+            final payments = data['payments'];
+            if (payments is List && payments.isNotEmpty) {
+              final firstPayment = payments.first;
+              if (firstPayment is Map<String, dynamic>) {
+                paymentId = firstPayment['id'] as int?;
+              }
+            }
+          }
+        }
+
         // No mostrar Snackbar de éxito aquí: la pantalla padre será la
         // responsable de mostrar el mensaje final y recargar los datos.
-        widget.onFinished?.call({'success': true, 'message': null});
+        widget.onFinished?.call({
+          'success': true,
+          'message': null,
+          'payment_data': {
+            'payment_id': paymentId ?? 0,
+            'amount': amount,
+            'receipt_url': receiptUrl,
+          },
+        });
         return;
       } else {
         final errorMessage =
@@ -557,9 +586,42 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
               Navigator.of(context).pop({'success': false, 'message': null});
             }
           },
-          onFinished: (result) {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop(result);
+          onFinished: (result) async {
+            final success = result['success'] == true;
+
+            if (success) {
+              // Extraer datos del pago para el diálogo de éxito
+              final paymentData = result['payment_data'] as Map<String, dynamic>?;
+              final paymentId = paymentData?['payment_id'] as int? ?? 0;
+              final amount = paymentData?['amount'] as double? ?? 0.0;
+              final receiptUrl = paymentData?['receipt_url'] as String?;
+
+              // Cerrar el diálogo de pago primero
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop(result);
+              }
+
+              // Mostrar diálogo de éxito con opciones de recibo
+              if (paymentId > 0 && context.mounted) {
+                await PaymentSuccessDialog.show(
+                  context,
+                  ref,
+                  paymentId: paymentId,
+                  amount: amount,
+                  clientName: widget.credit.client?.nombre,
+                  creditId: widget.credit.id,
+                  receiptUrl: receiptUrl,
+                  onClose: widget.onPaymentSuccess,
+                );
+              } else {
+                // Si no tenemos paymentId, solo llamar al callback de éxito
+                widget.onPaymentSuccess?.call();
+              }
+            } else {
+              // Para errores, cerrar normalmente
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop(result);
+              }
             }
           },
         ),

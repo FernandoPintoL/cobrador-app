@@ -6,7 +6,9 @@ class Credito {
   final int id;
   final int clientId;
   final int? createdBy;
-  final double amount; // Monto original
+  final String? description; // NUEVO: Concepto/descripción del crédito
+  final double amount; // Monto original (precio del producto)
+  final double? downPayment; // NUEVO: Anticipo del cliente
   final double balance; // Balance actual pendiente
   final double? interestRate; // Porcentaje de interés (ej: 20.00 para 20%)
   final double? totalAmount; // Monto total con interés incluido
@@ -18,6 +20,8 @@ class Credito {
   final DateTime endDate;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool? isCustomCredit; // NUEVO: Flag de modo personalizado
+  final double? financedAmount; // NUEVO: Monto financiado (amount - downPayment)
   // (no agregar installmentNumber en Credito)
 
   // Nuevos campos para lista de espera
@@ -72,7 +76,9 @@ class Credito {
     required this.id,
     required this.clientId,
     this.createdBy,
+    this.description, // NUEVO
     required this.amount,
+    this.downPayment, // NUEVO
     required this.balance,
     this.interestRate,
     this.totalAmount,
@@ -83,6 +89,8 @@ class Credito {
     required this.endDate,
     required this.createdAt,
     required this.updatedAt,
+    this.isCustomCredit, // NUEVO
+    this.financedAmount, // NUEVO
     // Nuevos campos para lista de espera
     this.scheduledDeliveryDate,
     this.approvedBy,
@@ -129,7 +137,11 @@ class Credito {
       createdBy: json['created_by'] is Map
           ? json['created_by']['id']
           : json['created_by'],
+      description: json['description'], // NUEVO
       amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      downPayment: json['down_payment'] != null // NUEVO
+          ? double.tryParse(json['down_payment'].toString())
+          : null,
       balance: double.tryParse(json['balance'].toString()) ?? 0.0,
       interestRate: json['interest_rate'] != null
           ? double.tryParse(json['interest_rate'].toString())
@@ -146,6 +158,10 @@ class Credito {
       endDate: DateTime.tryParse(json['end_date'] ?? '') ?? DateTime.now(),
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+      isCustomCredit: json['is_custom_credit'] == 1 || json['is_custom_credit'] == true, // NUEVO
+      financedAmount: json['financed_amount'] != null // NUEVO
+          ? double.tryParse(json['financed_amount'].toString())
+          : null,
       // Nuevos campos para lista de espera
       scheduledDeliveryDate: json['scheduled_delivery_date'] != null
           ? DateTime.tryParse(json['scheduled_delivery_date'])
@@ -220,7 +236,9 @@ class Credito {
       'id': id,
       'client_id': clientId,
       'created_by': createdBy,
+      'description': description, // NUEVO
       'amount': amount,
+      'down_payment': downPayment, // NUEVO
       'balance': balance,
       'interest_rate': interestRate,
       'total_amount': totalAmount,
@@ -231,6 +249,7 @@ class Credito {
       'end_date': endDate.toIso8601String().split('T')[0],
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'is_custom_credit': isCustomCredit, // NUEVO
       // Nuevos campos para lista de espera
       'scheduled_delivery_date': scheduledDeliveryDate?.toIso8601String(),
       'approved_by': approvedBy,

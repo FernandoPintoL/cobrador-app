@@ -143,12 +143,10 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
             },
           ),
           if (isManager) ...[
-            // Solo mostrar botón editar si:
-            // - El crédito NO está activo, O
-            // - Está activo pero con menos de 1 pago registrado
-            // Protege la integridad: incluso con 1 solo pago ya no se puede editar
-            if (currentCredit.status != 'active' ||
-                (currentCredit.paidInstallmentsCount ?? 0) < 1)
+            // Solo mostrar botón editar si el crédito está pendiente de aprobación
+            // o esperando entrega. Una vez activo, no se puede editar.
+            if (currentCredit.status == 'pending_approval' ||
+                currentCredit.status == 'waiting_delivery')
               _buildModernActionButton(
                 icon: Icons.edit_rounded,
                 tooltip: 'Editar Crédito',
@@ -348,6 +346,188 @@ class _CreditDetailScreenState extends ConsumerState<CreditDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 4),
+          // ✅ TARJETA DE CRÉDITO PERSONALIZADO (si aplica)
+          if (credit.isCustomCredit == true) ...[
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.purple.shade50,
+                      Colors.purple.shade100.withValues(alpha: 0.5),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.purple.shade200,
+                    width: 1.5,
+                  ),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.tune,
+                            color: Colors.purple.shade700,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Crédito Personalizado',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.purple.shade900,
+                                ),
+                              ),
+                              Text(
+                                'Venta a crédito con entrega inmediata',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.purple.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.shade700,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'VENTA',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (credit.description != null &&
+                        credit.description!.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.purple.shade100,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.shopping_bag_outlined,
+                              size: 24,
+                              color: Colors.purple.shade600,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Producto / Servicio',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.purple.shade400,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    credit.description!,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.purple.shade900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (credit.downPayment != null && credit.downPayment! > 0) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.green.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.payments_outlined,
+                              size: 20,
+                              color: Colors.green.shade700,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Anticipo entregado',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.green.shade700,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              'Bs. ${NumberFormat('#,##0.00').format(credit.downPayment)}',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           // CRONOGRAMA DE PAGOS - LO MÁS IMPORTANTE PRIMERO
           if (_apiPaymentSchedule != null &&
               _apiPaymentSchedule!.isNotEmpty) ...[

@@ -453,6 +453,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
     // ✅ NUEVO: Parámetros para crédito antiguo
     bool? isLegacyCredit,
     int? paidInstallmentsCount,
+    // ✅ NUEVO: Parámetros para modo personalizado
+    String? description,
+    double? downPayment,
+    bool? isCustomCredit,
   }) async {
     try {
       state = state.copyWith(
@@ -513,6 +517,17 @@ class CreditNotifier extends StateNotifier<CreditState> {
         creditData['is_legacy_credit'] = true;
         if (paidInstallmentsCount != null) {
           creditData['paid_installments_count'] = paidInstallmentsCount;
+        }
+      }
+
+      // ✅ NUEVO: Agregar parámetros para modo personalizado
+      if (isCustomCredit != null && isCustomCredit) {
+        creditData['is_custom_credit'] = true;
+        if (description != null && description.isNotEmpty) {
+          creditData['description'] = description;
+        }
+        if (downPayment != null && downPayment > 0) {
+          creditData['down_payment'] = downPayment;
         }
       }
 

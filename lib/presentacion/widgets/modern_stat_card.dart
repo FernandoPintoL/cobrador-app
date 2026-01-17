@@ -326,45 +326,54 @@ class _ModernStatCardSkeletonState extends State<ModernStatCardSkeleton>
                   : [Colors.grey[300]!, Colors.grey[200]!, Colors.grey[300]!],
             ),
           ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isCompact = constraints.maxHeight < 100;
-              return Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final availableHeight = constraints.maxHeight;
+                final isVeryCompact = availableHeight < 80;
+                final isCompact = availableHeight < 100;
+
+                final iconSize = isVeryCompact ? 24.0 : (isCompact ? 32.0 : 40.0);
+                final valueHeight = isVeryCompact ? 14.0 : (isCompact ? 18.0 : 24.0);
+                final titleHeight = isVeryCompact ? 6.0 : (isCompact ? 8.0 : 12.0);
+                final spacing1 = isVeryCompact ? 4.0 : (isCompact ? 8.0 : 12.0);
+                final spacing2 = isVeryCompact ? 2.0 : (isCompact ? 4.0 : 8.0);
+
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: isCompact ? 32 : 40,
-                      height: isCompact ? 32 : 40,
+                      width: iconSize,
+                      height: iconSize,
                       decoration: BoxDecoration(
                         color: isDark ? Colors.grey[700] : Colors.grey[200],
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(isVeryCompact ? 8 : 12),
                       ),
                     ),
-                    SizedBox(height: isCompact ? 8 : 12),
+                    SizedBox(height: spacing1),
                     Container(
                       width: isCompact ? 60 : 80,
-                      height: isCompact ? 18 : 24,
+                      height: valueHeight,
                       decoration: BoxDecoration(
                         color: isDark ? Colors.grey[700] : Colors.grey[200],
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    SizedBox(height: isCompact ? 4 : 8),
+                    SizedBox(height: spacing2),
                     Container(
                       width: isCompact ? 90 : 120,
-                      height: isCompact ? 8 : 12,
+                      height: titleHeight,
                       decoration: BoxDecoration(
                         color: isDark ? Colors.grey[700] : Colors.grey[200],
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
                   ],
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       },

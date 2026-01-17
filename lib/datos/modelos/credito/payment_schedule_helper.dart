@@ -37,7 +37,7 @@ class PaymentScheduleHelper {
 
         payments.add(
           Pago(
-            id: 0, // No disponible en schedule, pero no es crítico
+            id: installment.paymentId ?? 0, // ID del pago para generar recibos
             cobradorId: installment.receivedById,
             creditId: creditId,
             amount: installment.paidAmount,

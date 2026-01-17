@@ -14,8 +14,10 @@ class Usuario {
   final DateTime fechaActualizacion;
   final List<String> roles;
   final String? clientCategory; // 'A', 'B', or 'C'
-  final int?
-  assignedClientsCount; // Número de clientes asignados (para cobradores)
+  final int? assignedClientsCount; // Número de clientes asignados (para cobradores)
+  // Límites de crédito individuales (override)
+  final double? creditLimitOverride;
+  final int? maxCreditsOverride;
 
   Usuario({
     required this.id,
@@ -34,6 +36,8 @@ class Usuario {
     required this.roles,
     this.clientCategory,
     this.assignedClientsCount,
+    this.creditLimitOverride,
+    this.maxCreditsOverride,
   });
 
   factory Usuario.fromJson(Map<String, dynamic> json) {
@@ -144,6 +148,12 @@ class Usuario {
             : (json['assigned_clients_count'] != null
                   ? int.tryParse(json['assigned_clients_count'].toString())
                   : null),
+        creditLimitOverride: _parseDouble(json['credit_limit_override']),
+        maxCreditsOverride: json['max_credits_override'] is int
+            ? json['max_credits_override']
+            : (json['max_credits_override'] != null
+                  ? int.tryParse(json['max_credits_override'].toString())
+                  : null),
       );
     } catch (e) {
       print('❌ ERROR parsing Usuario.fromJson: $e');
@@ -164,6 +174,8 @@ class Usuario {
         roles: ['client'],
         clientCategory: 'B',
         assignedClientsCount: null,
+        creditLimitOverride: null,
+        maxCreditsOverride: null,
       );
     }
   }
@@ -181,6 +193,8 @@ class Usuario {
       'ci': ci,
       'client_category': clientCategory,
       'assigned_clients_count': assignedClientsCount,
+      'credit_limit_override': creditLimitOverride,
+      'max_credits_override': maxCreditsOverride,
       'location': latitud != null && longitud != null
           ? {
               'type': 'Point',
@@ -249,6 +263,8 @@ class Usuario {
     DateTime? fechaActualizacion,
     List<String>? roles,
     String? clientCategory,
+    double? creditLimitOverride,
+    int? maxCreditsOverride,
   }) {
     return Usuario(
       id: id ?? this.id,
@@ -266,8 +282,14 @@ class Usuario {
       fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
       roles: roles ?? this.roles,
       clientCategory: clientCategory ?? this.clientCategory,
+      creditLimitOverride: creditLimitOverride ?? this.creditLimitOverride,
+      maxCreditsOverride: maxCreditsOverride ?? this.maxCreditsOverride,
     );
   }
+
+  /// Verifica si el cliente tiene límites personalizados
+  bool get hasCustomCreditLimits =>
+      creditLimitOverride != null || maxCreditsOverride != null;
 
   @override
   bool operator ==(Object other) =>

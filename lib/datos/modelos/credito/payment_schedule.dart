@@ -18,6 +18,9 @@ class PaymentSchedule {
   final int? receivedById;
   final String? receivedByName;
 
+  // ID del pago para generar recibos
+  final int? paymentId;
+
   PaymentSchedule({
     required this.installmentNumber,
     required this.dueDate,
@@ -32,6 +35,7 @@ class PaymentSchedule {
     this.paymentMethod,
     this.receivedById,
     this.receivedByName,
+    this.paymentId,
   });
 
   factory PaymentSchedule.fromJson(Map<String, dynamic> json) {
@@ -51,6 +55,7 @@ class PaymentSchedule {
       paymentMethod: json['payment_method'],
       receivedById: json['received_by_id'],
       receivedByName: json['received_by_name'],
+      paymentId: json['payment_id'],
     );
   }
 

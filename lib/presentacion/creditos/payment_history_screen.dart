@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../datos/modelos/credito.dart';
+import '../../datos/api_services/payment_api_service.dart';
 import '../../negocio/providers/credit_provider.dart';
 
 class PaymentHistoryScreen extends ConsumerStatefulWidget {
@@ -157,6 +160,13 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: subtitleChildren,
                               ),
+                              trailing: p.id > 0
+                                  ? IconButton(
+                                      icon: const Icon(Icons.share, color: Colors.blue),
+                                      tooltip: 'Compartir recibo',
+                                      onPressed: () => _shareReceipt(p),
+                                    )
+                                  : null,
                             ),
                           );
                         },
@@ -190,6 +200,82 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
         return Colors.red;
       default:
         return Colors.blueGrey;
+    }
+  }
+
+  Future<void> _shareReceipt(Pago pago) async {
+    // Mostrar loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final receiptUrl = await PaymentApiService().getPublicReceiptUrl(pago.id);
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Cerrar loading
+
+      if (receiptUrl == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo obtener el recibo'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Mostrar opciones
+      showModalBottomSheet(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+                  title: const Text('Ver recibo PDF'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final uri = Uri.parse(receiptUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.share, color: Colors.blue),
+                  title: const Text('Compartir recibo'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await SharePlus.instance.share(
+                      ShareParams(
+                        text: 'Recibo de pago #${pago.id}\n'
+                            'Monto: Bs. ${pago.amount.toStringAsFixed(2)}\n'
+                            'Ver recibo: $receiptUrl',
+                        subject: 'Recibo de Pago #${pago.id}',
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Cerrar loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al obtener recibo: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }
