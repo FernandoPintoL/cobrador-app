@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../config/role_colors.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/user_management_provider.dart';
+import '../../negocio/utils/text_utils.dart';
 import '../../datos/modelos/credito.dart';
-import '../../ui/widgets/validation_error_display.dart';
 import '../../ui/widgets/loading_overlay.dart';
 import '../widgets/payment_dialog.dart';
-import '../cajas/cash_balances_list_screen.dart';
 import 'credit_detail_screen.dart';
 import 'credit_form_screen.dart';
 import 'widgets/credits_list_widget.dart';
+import 'widgets/dialogs/approval_dialog.dart';
+import 'widgets/dialogs/rejection_dialog.dart';
+import 'widgets/dialogs/delivery_dialog.dart';
 import 'widgets/filters/filters.dart';
 
 class CreditTypeScreen extends ConsumerStatefulWidget {
@@ -29,27 +30,23 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
   // UI state
   bool _showAdvancedFilters = false;
-  bool _showQuickFilters = false;
 
   // Controllers
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _quickFiltersController = ScrollController();
   late TabController _tabController;
 
-  DateTime? _lastSearchTime;
-
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    // Listener para detectar cambio de tab y recargar datos filtrados
+    // Al cambiar de tab solo recargamos el contenido (no los contadores)
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
-        // El tab cambió, recargar datos con el filtro correcto
-        _loadInitialData();
+        _loadTabContent();
       }
     });
-    // Listener para búsqueda en tiempo real desactivado (se usará botón de búsqueda u onSubmitted)
+    // Carga inicial completa: contadores + contenido
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
@@ -61,34 +58,6 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     _searchController.dispose();
     _quickFiltersController.dispose();
     super.dispose();
-  }
-
-  void _onSearchChanged() {
-    // NOTE: Mantener para posible reactivación con debounce y _normalizeQuery
-    // Implementar debounce para búsqueda en tiempo real
-    _lastSearchTime = DateTime.now();
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (_lastSearchTime != null &&
-          DateTime.now().difference(_lastSearchTime!) >=
-              const Duration(milliseconds: 500)) {
-        final newSearch = _searchController.text.trim();
-        if (_filterState.search != newSearch) {
-          setState(() {
-            _filterState = _filterState.copyWith(search: newSearch);
-          });
-          _loadInitialData();
-        }
-      }
-    });
-  }
-
-  void _clearAllFilters() {
-    setState(() {
-      _filterState = CreditFilterState.empty();
-      _searchController.clear();
-    });
-    _loadInitialData();
   }
 
   /// Obtiene el status de filtro según el tab actual
@@ -105,16 +74,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     }
   }
 
+  /// Carga completa: contadores de badges + contenido del tab actual.
+  /// Úsalo en la carga inicial y después de mutaciones.
   void _loadInitialData() {
-    debugPrint('📱 CreditTypeScreen: Cargando datos iniciales');
-    debugPrint('📱 CreditTypeScreen: Tab actual: ${_tabController.index}');
-
     // Cargar usuarios si es manager (para selector de cobradores)
     if (ref.read(authProvider).isManager) {
-      print(
-        '📱 CreditTypeScreen: Usuario es manager, cargando lista de usuarios',
-      );
-      // Obtener usuarios usando el método correcto
       try {
         ref
             .read(userManagementProvider.notifier)
@@ -122,31 +86,23 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       } catch (e) {
         print('📱 Error al cargar usuarios: $e');
       }
-    } else {
-      print(
-        '📱 CreditTypeScreen: Usuario NO es manager, rol: ${ref.read(authProvider).usuario?.roles.join(", ")}',
-      );
     }
 
-    // ✅ CARGAR CONTADORES DE TODOS LOS TABS en paralelo (para badges)
-    ref
-        .read(creditProvider.notifier)
-        .loadAllTabCounts(
-          search: _filterState.search.isEmpty ? null : _filterState.search,
-          cobradorId: _filterState.selectedCobradorId,
-        );
+    // 1 request para todos los badges
+    ref.read(creditProvider.notifier).loadTabCounts(
+      search: _filterState.search.isEmpty ? null : _filterState.search,
+      cobradorId: _filterState.selectedCobradorId,
+    );
 
-    // Obtener el status según el tab actual
+    // Contenido del tab actual
+    _loadTabContent();
+  }
+
+  /// Carga solo el contenido del tab activo (sin recargar contadores).
+  /// Úsalo en cambios de tab.
+  void _loadTabContent() {
     final String? tabStatus = _getStatusForCurrentTab();
-
-    // Si hay un filtro de status manual (_filterState.statusFilter), usarlo
-    // Si no, usar el status del tab actual
     final String? finalStatus = _filterState.statusFilter ?? tabStatus;
-
-    // Verificar estado de filtros
-    print('📱 CreditTypeScreen: Filtros activos - ${_filterState.toString()}');
-    print('📱 CreditTypeScreen: Status del tab actual: $tabStatus');
-    print('📱 CreditTypeScreen: Status final a usar: $finalStatus');
 
     ref
         .read(creditProvider.notifier)
@@ -172,7 +128,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
   void _handleSearch() {
     setState(() {
       _filterState = _filterState.copyWith(
-        search: _normalizeQuery(_searchController.text),
+        search: normalizeSearchQuery(_searchController.text),
       );
     });
     _loadInitialData();
@@ -198,21 +154,6 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       _showAdvancedFilters = false;
     });
     _loadInitialData();
-  }
-
-  void _handleApplyQuickFilter(CreditFilterState quickFilter) {
-    setState(() {
-      _filterState = quickFilter;
-    });
-    _loadInitialData();
-  }
-
-  // Normaliza la consulta: si contiene letras -> MAYÚSCULAS, si es solo números/símbolos telefónicos -> tal cual
-  String _normalizeQuery(String v) {
-    final trimmed = v.trim();
-    if (trimmed.isEmpty) return trimmed;
-    final hasLetter = RegExp(r'[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]').hasMatch(trimmed);
-    return hasLetter ? trimmed.toUpperCase() : trimmed;
   }
 
   @override
@@ -391,8 +332,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Activos (${creditState.credits.where((c) => c.status == 'active').length}'
-                          '${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).isNotEmpty ? ' • ${creditState.credits.where((c) => c.status == 'active' && c.isOverdue).length} ⚠' : ''})',
+                          'Activos (${creditState.tabCounts['active'] ?? 0})',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -408,7 +348,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Pendientes (${creditState.pendingApprovalCredits.length})',
+                          'Pendientes (${creditState.tabCounts['pending_approval'] ?? 0})',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -440,8 +380,7 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          // Mostrar todos los créditos waiting_delivery
-                          'Para Entregar (${creditState.waitingDeliveryCredits.length})',
+                          'Para Entregar (${creditState.tabCounts['waiting_delivery'] ?? 0})',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -718,377 +657,14 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     }
   }
 
-  Future<void> _showQuickApprovalDialog(Credito credit) async {
-    final DateTime now = DateTime.now();
-    // Por defecto, programar para el día siguiente a las 09:00 (fecha posterior al día)
-    final DateTime tomorrow = now.add(const Duration(days: 1));
-    DateTime selectedDate = DateTime(
-      tomorrow.year,
-      tomorrow.month,
-      tomorrow.day,
-      9,
-      0,
-    );
+  Future<void> _showQuickApprovalDialog(Credito credit) =>
+      showApprovalDialog(context, ref, credit, onSuccess: _loadInitialData);
 
-    bool deliverImmediately = false;
+  Future<void> _showQuickRejectionDialog(Credito credit) =>
+      showRejectionDialog(context, ref, credit, onSuccess: _loadInitialData);
 
-    // Usamos StatefulBuilder para poder actualizar el diálogo cuando cambian los errores
-    await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          final creditState = ref.watch(creditProvider);
-          return AlertDialog(
-            title: const Text('Aprobar para Entrega'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
-                  ),
-                  Text(
-                    'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Fecha y hora de entrega programada:'),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () async {
-                      final DateTime? pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: now,
-                        lastDate: now.add(const Duration(days: 30)),
-                      );
-                      if (pickedDate != null) {
-                        final TimeOfDay? pickedTime = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(selectedDate),
-                        );
-                        if (pickedTime != null) {
-                          setState(() {
-                            selectedDate = DateTime(
-                              pickedDate.year,
-                              pickedDate.month,
-                              pickedDate.day,
-                              pickedTime.hour,
-                              pickedTime.minute,
-                            );
-                          });
-                        }
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            DateFormat('dd/MM/yyyy HH:mm').format(selectedDate),
-                          ),
-                          const Spacer(),
-                          const Icon(Icons.arrow_drop_down),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    value: deliverImmediately,
-                    onChanged: (v) =>
-                        setState(() => deliverImmediately = v ?? false),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: const Text('Entregar inmediatamente al aprobar'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-
-                  // Mostrar errores de validación si existen
-                  if (creditState.validationErrors.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: ValidationErrorDisplay(
-                        errors: creditState.validationErrors,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  bool result = false;
-                  if (deliverImmediately) {
-                    // Para entrega inmediata, NO enviar fecha
-                    // El backend usa la fecha/hora actual automáticamente
-                    result = await ref
-                        .read(creditProvider.notifier)
-                        .approveAndDeliverCredit(
-                          creditId: credit.id,
-                          approvalNotes:
-                              'Aprobación y entrega desde lista de espera',
-                        );
-                  } else {
-                    result = await ref
-                        .read(creditProvider.notifier)
-                        .approveCreditForDelivery(
-                          creditId: credit.id,
-                          scheduledDeliveryDate: selectedDate,
-                        );
-                  }
-
-                  if (result) {
-                    Navigator.pop(context, true);
-                    _loadInitialData();
-                  } else {
-                    // Actualizar el diálogo para mostrar los errores
-                    setState(() {});
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                ),
-                child: Text(
-                  deliverImmediately ? 'Aprobar y Entregar' : 'Aprobar',
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _showQuickRejectionDialog(Credito credit) async {
-    final reasonController = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rechazar Crédito'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
-              ),
-              Text(
-                'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: reasonController,
-                decoration: const InputDecoration(
-                  labelText: 'Motivo del rechazo',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 2,
-                autofocus: true,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (reasonController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Debe proporcionar un motivo'),
-                    backgroundColor: Colors.red,
-                    duration: Duration(seconds: 3),
-                  ),
-                );
-                return;
-              }
-              Navigator.pop(context, true);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Rechazar'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true) {
-      await ref
-          .read(creditProvider.notifier)
-          .rejectCredit(
-            creditId: credit.id,
-            reason: reasonController.text.trim(),
-          );
-      _loadInitialData();
-    }
-  }
-
-  Future<void> _showQuickDeliveryDialog(Credito credit) async {
-    DateTime now = DateTime.now();
-    DateTime selectedDate = credit.scheduledDeliveryDate ?? now;
-    bool firstPaymentToday = false; // ⭐ NUEVO
-
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Confirmar Entrega'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Cliente: ${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}',
-                ),
-                Text(
-                  'Monto: Bs. ${NumberFormat('#,##0.00').format(credit.amount)}',
-                ),
-                const SizedBox(height: 12),
-                if (credit.scheduledDeliveryDate != null)
-                  Text(
-                    'Programado: ${DateFormat('dd/MM/yyyy HH:mm').format(credit.scheduledDeliveryDate!)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.blueGrey,
-                    ),
-                  ),
-                if (credit.scheduledDeliveryDate == null)
-                  const Text(
-                    'Sin fecha programada. Puedes programar una antes de entregar.',
-                    style: TextStyle(fontSize: 12, color: Colors.orange),
-                  ),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-                const Text(
-                  '¿El cliente realizará el primer pago HOY?',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                CheckboxListTile(
-                  value: firstPaymentToday,
-                  onChanged: (v) =>
-                      setState(() => firstPaymentToday = v ?? false),
-                  title: const Text('Sí, primer pago hoy'),
-                  subtitle: Text(
-                    firstPaymentToday
-                        ? 'El cronograma iniciará desde HOY'
-                        : 'El cronograma iniciará desde MAÑANA',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: firstPaymentToday ? Colors.green : Colors.orange,
-                    ),
-                  ),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '¿Cómo deseas proceder?',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, {'action': 'cancel'}),
-              child: const Text('Cancelar'),
-            ),
-            TextButton.icon(
-              onPressed: () async {
-                final DateTime? pickedDate = await showDatePicker(
-                  context: context,
-                  initialDate: selectedDate,
-                  firstDate: now.subtract(const Duration(days: 0)),
-                  lastDate: DateTime(now.year + 1),
-                );
-                if (pickedDate != null) {
-                  final TimeOfDay? pickedTime = await showTimePicker(
-                    context: context,
-                    initialTime: TimeOfDay.fromDateTime(selectedDate),
-                  );
-                  if (pickedTime != null) {
-                    setState(() {
-                      selectedDate = DateTime(
-                        pickedDate.year,
-                        pickedDate.month,
-                        pickedDate.day,
-                        pickedTime.hour,
-                        pickedTime.minute,
-                      );
-                    });
-
-                    // Llamar a reprogramación inmediatamente para dejar "fecha marcada"
-                    final ok = await ref
-                        .read(creditProvider.notifier)
-                        .rescheduleCreditDelivery(
-                          creditId: credit.id,
-                          newScheduledDate: selectedDate,
-                          reason: 'Reprogramación desde diálogo de entrega',
-                        );
-                    if (ok) {
-                      if (context.mounted)
-                        Navigator.pop(context, {'action': 'rescheduled'});
-                    }
-                  }
-                }
-              },
-              icon: const Icon(Icons.event),
-              label: const Text('Reprogramar fecha'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, {
-                'action': 'deliver_now',
-                'first_payment_today': firstPaymentToday,
-              }),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Entregar ahora'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result != null && result['action'] == 'deliver_now') {
-      final bool firstPaymentToday = result['first_payment_today'] ?? false;
-      await ref
-          .read(creditProvider.notifier)
-          .deliverCreditToClient(
-            creditId: credit.id,
-            notes: 'Entrega confirmada desde lista de espera',
-            firstPaymentToday: firstPaymentToday,
-          );
-      _loadInitialData();
-    } else if (result != null && result['action'] == 'rescheduled') {
-      // Tras reprogramar, refrescar listas para reflejar la nueva fecha
-      _loadInitialData();
-    }
-  }
+  Future<void> _showQuickDeliveryDialog(Credito credit) =>
+      showDeliveryDialog(context, ref, credit, onSuccess: _loadInitialData);
 
   /// Navega al formulario de creación de crédito
   /// El backend se encarga de crear la caja automáticamente si es necesario

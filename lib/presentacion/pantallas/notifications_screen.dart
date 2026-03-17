@@ -63,10 +63,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         foregroundColor: Colors.white,*/
         actions: [
           // Estado de conexión WebSocket
-          Padding(
+          /* Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Center(child: WebSocketStatusWidget(showAsIcon: true)),
-          ),
+          ), */
           // Menú de opciones
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
@@ -76,7 +76,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 value: 'mark_all_read',
                 child: Row(
                   children: [
-                    Icon(Icons.mark_email_read),
+                    Icon(Icons.mark_email_read, color: Colors.green),
                     SizedBox(width: 8),
                     Text('Marcar todas como leídas'),
                   ],
@@ -86,7 +86,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 value: 'clear_all',
                 child: Row(
                   children: [
-                    Icon(Icons.clear_all),
+                    Icon(Icons.clear_all, color: Colors.red),
                     SizedBox(width: 8),
                     Text('Limpiar todas'),
                   ],
@@ -98,7 +98,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   value: 'test_notification',
                   child: Row(
                     children: [
-                      Icon(Icons.bug_report),
+                      Icon(Icons.bug_report, color: Colors.blue),
                       SizedBox(width: 8),
                       Text('Enviar Notificación de Prueba'),
                     ],

@@ -84,6 +84,33 @@ class CreditApiService extends BaseApiService {
     }
   }
 
+  /// Obtiene el conteo de créditos agrupado por status en una sola request.
+  /// Reemplaza las 3 llamadas separadas que usaba loadAllTabCounts.
+  Future<Map<String, dynamic>> getTabCounts({
+    String? search,
+    int? cobradorId,
+  }) async {
+    try {
+      final queryParams = <String, dynamic>{};
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+      if (cobradorId != null) queryParams['cobrador_id'] = cobradorId;
+
+      final response = await get(
+        '/credits/counts',
+        queryParameters: queryParams.isEmpty ? null : queryParams,
+      );
+
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
+      } else {
+        throw Exception('Error al obtener contadores: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al obtener contadores de tabs: $e');
+      throw Exception('Error al obtener contadores: $e');
+    }
+  }
+
   /// Crea un nuevo crédito
   Future<Map<String, dynamic>> createCredit(
     Map<String, dynamic> creditData,

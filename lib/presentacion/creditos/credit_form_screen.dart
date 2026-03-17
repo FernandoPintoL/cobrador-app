@@ -97,6 +97,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   final _paidInstallmentsController = TextEditingController(); // Cuotas pagadas
   String? _paidInstallmentsError; // Error de validación
   final _paidInstallmentsFieldKey = GlobalKey(); // Key para scroll automático
+  int _downPaymentInstallments = 0; // Cuotas calculadas automáticamente del anticipo
 
   // ✅ NUEVO: Variables para modo personalizado
   bool _isCustomCredit = false; // Modo crédito personalizado
@@ -352,21 +353,27 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         : 0.0;
 
     if (amount > 0 && interestRate >= 0) {
-      // Monto financiado = precio - anticipo
-      final financedAmount = amount - downPayment;
+      // Interés se aplica al monto total antes del anticipo
+      final totalWithInterest = amount + (amount * interestRate / 100);
 
-      // Total con interés se calcula sobre el monto financiado
-      final totalAmount =
-          financedAmount + (financedAmount * interestRate / 100);
+      // Monto a financiar (balance) = total con interés - anticipo
+      final totalAmount = totalWithInterest - downPayment;
 
       // Actualizar el saldo total automáticamente
       _balanceController.text = totalAmount.toStringAsFixed(2);
 
-      // Calcular cuota sugerida basada en las cuotas (no en las fechas)
+      // Calcular cuota sugerida basada en el total con interés (no en el saldo restante)
+      // El anticipo solo representa cuotas ya pagadas, no reduce el valor de cada cuota
       final numberOfPayments = int.tryParse(_durationDaysController.text) ?? 1;
       if (numberOfPayments > 0) {
-        final suggestedPayment = totalAmount / numberOfPayments;
+        final suggestedPayment = totalWithInterest / numberOfPayments;
         _installmentAmountController.text = suggestedPayment.toStringAsFixed(2);
+        // Calcular cuotas que cubre el anticipo (solo en modo personalizado)
+        if (_isCustomCredit && downPayment > 0 && suggestedPayment > 0) {
+          _downPaymentInstallments = (downPayment / suggestedPayment).floor();
+        } else {
+          _downPaymentInstallments = 0;
+        }
       }
     }
   }
@@ -676,9 +683,14 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           );
     } else {
       // ✅ NUEVO: Preparar parámetros para crédito antiguo
-      final int? paidInstallmentsCount = _isLegacyCredit
-          ? int.tryParse(_paidInstallmentsController.text)
-          : null;
+      int? paidInstallmentsCount;
+      if (_isLegacyCredit) {
+        // Entrada manual tiene prioridad (legacy mode)
+        paidInstallmentsCount = int.tryParse(_paidInstallmentsController.text);
+      } else if (_isCustomCredit && _downPaymentInstallments > 0) {
+        // Calculado automáticamente desde el anticipo
+        paidInstallmentsCount = _downPaymentInstallments;
+      }
 
       // ✅ NUEVO: Preparar parámetros para modo personalizado
       final String? description =
@@ -1276,6 +1288,13 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     final installmentAmount =
         double.tryParse(_installmentAmountController.text) ?? 0.0;
     final installments = int.tryParse(_durationDaysController.text) ?? 0;
+    final interestRate =
+        double.tryParse(_interestRateController.text) ?? 0.0;
+    final downPayment = _isCustomCredit
+        ? (double.tryParse(_downPaymentController.text) ?? 0.0)
+        : 0.0;
+    final interest = amount * interestRate / 100;
+    final totalWithInterest = amount + interest;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1349,17 +1368,140 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
           ),
 
           // ============================================================
-          // VALORES FINANCIEROS
+          // DESGLOSE FINANCIERO
           // ============================================================
           Divider(color: Colors.orange.shade300, thickness: 2),
+
+          // Precio total
+          if (amount > 0) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Precio total:',
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                  Text(
+                    'Bs. ${amount.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            // + Interés
+            if (interestRate > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '+ Interés (${interestRate.toStringAsFixed(0)}%):',
+                      style: TextStyle(color: Colors.orange.shade700),
+                    ),
+                    Text(
+                      'Bs. ${interest.toStringAsFixed(2)}',
+                      style: TextStyle(color: Colors.orange.shade700),
+                    ),
+                  ],
+                ),
+              ),
+            const Divider(height: 12),
+          ],
+
+          // Total a pagar
           _buildSummaryRow(
             icon: Icons.account_balance_wallet,
-            label: 'Saldo Total a Pagar',
-            value: balance > 0
-                ? 'Bs. ${balance.toStringAsFixed(2)}'
+            label: 'Total a pagar',
+            value: totalWithInterest > 0
+                ? 'Bs. ${totalWithInterest.toStringAsFixed(2)}'
                 : 'Bs. 0.00',
             color: Colors.orange,
           ),
+
+          // Cuota inicial + equivalencia en cuotas
+          if (_isCustomCredit && downPayment > 0) ...[
+            Divider(color: Colors.orange.shade300),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Cuota inicial:',
+                    style: TextStyle(
+                      color: Colors.amber.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '- Bs. ${downPayment.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: Colors.amber.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_downPaymentInstallments > 0)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 13,
+                      color: Colors.blue.shade700,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      () {
+                        final remainder = downPayment -
+                            (_downPaymentInstallments * installmentAmount);
+                        final base =
+                            'Equivale a $_downPaymentInstallments cuota${_downPaymentInstallments != 1 ? 's' : ''}';
+                        return remainder > 0.01
+                            ? '$base + Bs. ${remainder.toStringAsFixed(2)} de adelanto'
+                            : base;
+                      }(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Divider(color: Colors.orange.shade300),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Saldo en cuotas:',
+                    style: TextStyle(
+                      color: Colors.green.shade700,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Bs. ${balance.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: Colors.green.shade700,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           Divider(color: Colors.orange.shade300),
           _buildSummaryRow(
             icon: Icons.payments,
@@ -2000,130 +2142,6 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                               },
                               onChanged: (value) {
                                 _updateCalculations();
-                              },
-                            ),
-                            // Mostrar cálculo del monto financiado
-                            Builder(
-                              builder: (context) {
-                                final amount =
-                                    double.tryParse(_amountController.text) ??
-                                    0;
-                                final downPayment =
-                                    double.tryParse(
-                                      _downPaymentController.text,
-                                    ) ??
-                                    0;
-                                final financedAmount = amount - downPayment;
-                                final interestRate =
-                                    double.tryParse(
-                                      _interestRateController.text,
-                                    ) ??
-                                    0;
-                                final totalWithInterest =
-                                    financedAmount * (1 + interestRate / 100);
-
-                                if (amount > 0 && downPayment > 0) {
-                                  return Container(
-                                    margin: const EdgeInsets.only(top: 8),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.shade50,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: Colors.green.shade200,
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              'Precio total:',
-                                              style: TextStyle(
-                                                color: Colors.grey.shade700,
-                                              ),
-                                            ),
-                                            Text(
-                                              'Bs. ${amount.toStringAsFixed(2)}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              'Anticipo:',
-                                              style: TextStyle(
-                                                color: Colors.grey.shade700,
-                                              ),
-                                            ),
-                                            Text(
-                                              '- Bs. ${downPayment.toStringAsFixed(2)}',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w500,
-                                                color: Colors.red.shade700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const Divider(height: 16),
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              'Monto a financiar:',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.green.shade800,
-                                              ),
-                                            ),
-                                            Text(
-                                              'Bs. ${financedAmount.toStringAsFixed(2)}',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.green.shade800,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (interestRate > 0) ...[
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                'Total con ${interestRate.toStringAsFixed(0)}% interés:',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                              ),
-                                              Text(
-                                                'Bs. ${totalWithInterest.toStringAsFixed(2)}',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  );
-                                }
-                                return const SizedBox.shrink();
                               },
                             ),
                           ],

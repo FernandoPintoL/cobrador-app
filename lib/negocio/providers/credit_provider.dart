@@ -27,6 +27,7 @@ class CreditState {
   final int totalPages;
   final int totalItems;
   final Map<String, dynamic> validationErrors;
+  final Map<String, int> tabCounts;
 
   CreditState({
     this.credits = const [],
@@ -45,6 +46,11 @@ class CreditState {
     this.totalPages = 1,
     this.totalItems = 0,
     this.validationErrors = const {},
+    this.tabCounts = const {
+      'active': 0,
+      'pending_approval': 0,
+      'waiting_delivery': 0,
+    },
   });
 
   CreditState copyWith({
@@ -64,6 +70,7 @@ class CreditState {
     int? totalPages,
     int? totalItems,
     Map<String, dynamic>? validationErrors,
+    Map<String, int>? tabCounts,
   }) {
     return CreditState(
       credits: credits ?? this.credits,
@@ -86,6 +93,7 @@ class CreditState {
       totalPages: totalPages ?? this.totalPages,
       totalItems: totalItems ?? this.totalItems,
       validationErrors: validationErrors ?? this.validationErrors,
+      tabCounts: tabCounts ?? this.tabCounts,
     );
   }
 }
@@ -275,6 +283,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
           totalItems: data['total'] ?? 0,
           readyForDeliveryCredits: readyForDelivery,
           overdueDeliveryCredits: overdueDelivery,
+          waitingDeliveryCredits: status == 'waiting_delivery' ? credits : null,
         );
 
         print('✅ ${credits.length} créditos cargados exitosamente');
@@ -515,9 +524,10 @@ class CreditNotifier extends StateNotifier<CreditState> {
       // ✅ NUEVO: Agregar parámetros para crédito antiguo
       if (isLegacyCredit != null && isLegacyCredit) {
         creditData['is_legacy_credit'] = true;
-        if (paidInstallmentsCount != null) {
-          creditData['paid_installments_count'] = paidInstallmentsCount;
-        }
+      }
+      // Enviar paid_installments_count siempre que exista (legacy manual o custom calculado)
+      if (paidInstallmentsCount != null && paidInstallmentsCount > 0) {
+        creditData['paid_installments_count'] = paidInstallmentsCount;
       }
 
       // ✅ NUEVO: Agregar parámetros para modo personalizado
@@ -2011,6 +2021,31 @@ class CreditNotifier extends StateNotifier<CreditState> {
 
       state = state.copyWith(isLoading: false, errorMessage: errorMessage);
       return false;
+    }
+  }
+
+  /// Carga los contadores de tabs con una sola request al endpoint /credits/counts.
+  /// Úsalo en la carga inicial de la pantalla y después de mutaciones.
+  Future<void> loadTabCounts({String? search, int? cobradorId}) async {
+    try {
+      final response = await _creditApiService.getTabCounts(
+        search: search,
+        cobradorId: cobradorId,
+      );
+      if (response['success'] == true) {
+        final data = response['data'] as Map<String, dynamic>;
+        state = state.copyWith(
+          tabCounts: {
+            'active': (data['active'] as num? ?? 0).toInt(),
+            'pending_approval':
+                (data['pending_approval'] as num? ?? 0).toInt(),
+            'waiting_delivery':
+                (data['waiting_delivery'] as num? ?? 0).toInt(),
+          },
+        );
+      }
+    } catch (e) {
+      print('❌ Error al cargar contadores de tabs: $e');
     }
   }
 
