@@ -12,6 +12,7 @@ class CreditCardFooter extends StatelessWidget {
   final VoidCallback? onReject;
   final VoidCallback? onDeliver;
   final VoidCallback? onPayment;
+  final VoidCallback? onCancel;
 
   const CreditCardFooter({
     super.key,
@@ -23,6 +24,7 @@ class CreditCardFooter extends StatelessWidget {
     this.onReject,
     this.onDeliver,
     this.onPayment,
+    this.onCancel,
   });
 
   @override
@@ -67,20 +69,40 @@ class CreditCardFooter extends StatelessWidget {
     }
     // Botones para créditos listos para entrega (solo en el tab "Para Entregar")
     else if (listType == 'ready_for_delivery' && canDeliver) {
-      buttons.add(
-        Expanded(
-          child: _ModernActionButton(
-            onPressed: onDeliver,
-            icon: Icons.local_shipping_rounded,
-            label: 'Confirmar Entrega',
-            gradientColors: const [
-              Color(0xFF4CAF50),
-              Color(0xFF45A049),
-            ],
-            shadowColor: Colors.green,
+      // Confirmar entrega
+      if (onDeliver != null) {
+        buttons.add(
+          Expanded(
+            child: _ModernActionButton(
+              onPressed: onDeliver,
+              icon: Icons.local_shipping_rounded,
+              label: 'Confirmar Entrega',
+              gradientColors: const [
+                Color(0xFF4CAF50),
+                Color(0xFF45A049),
+              ],
+              shadowColor: Colors.green,
+            ),
           ),
-        ),
-      );
+        );
+      }
+
+      // Cancelar entrega / anular crédito
+      if (onCancel != null) {
+        if (buttons.isNotEmpty) {
+          buttons.add(const SizedBox(width: 10));
+        }
+        buttons.add(
+          Expanded(
+            child: _ModernOutlinedButton(
+              onPressed: onCancel,
+              icon: Icons.cancel_rounded,
+              label: 'Cancelar entrega',
+              color: Colors.orange,
+            ),
+          ),
+        );
+      }
     }
     // Créditos en espera (aún no listos) solo pueden verse, no entregarse
     else if (listType == 'waiting_delivery') {

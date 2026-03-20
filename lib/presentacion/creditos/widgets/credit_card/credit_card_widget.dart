@@ -16,6 +16,7 @@ class CreditCardWidget extends StatelessWidget {
   final VoidCallback? onReject;
   final VoidCallback? onDeliver;
   final VoidCallback? onPayment;
+    final VoidCallback? onCancel;
 
   const CreditCardWidget({
     super.key,
@@ -28,6 +29,7 @@ class CreditCardWidget extends StatelessWidget {
     this.onReject,
     this.onDeliver,
     this.onPayment,
+    this.onCancel,
   });
 
   @override
@@ -217,6 +219,7 @@ class CreditCardWidget extends StatelessWidget {
                             onReject: onReject,
                             onDeliver: onDeliver,
                             onPayment: onPayment,
+                            onCancel: onCancel,
                           ),
                         ],
                       ),

@@ -393,22 +393,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isDark
-                  ? [
-                      primaryColor.withValues(alpha: 0.2),
-                      primaryColor.withValues(alpha: 0.1),
-                    ]
-                  : [
-                      primaryColor.withValues(alpha: 0.15),
-                      primaryColor.withValues(alpha: 0.08),
-                    ],
-            ),
+            color: Theme.of(context).colorScheme.surface,
             boxShadow: [
               BoxShadow(
-                color: primaryColor.withValues(alpha: 0.1),
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.3)
+                    : Colors.black.withValues(alpha: 0.08),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
@@ -416,62 +406,41 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ),
           child: AppBar(
             backgroundColor: Colors.transparent,
+            foregroundColor: Theme.of(context).colorScheme.onSurface,
             elevation: 0,
-            title: Row(
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        primaryColor.withValues(alpha: 0.2),
-                        primaryColor.withValues(alpha: 0.1),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.map_rounded,
-                    color: primaryColor,
-                    size: 24,
+                const Text(
+                  'Mapa de Clientes',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.3,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Mapa de Clientes',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.3,
-                        ),
+                clustersAsync.whenOrNull(
+                  data: (clusters) {
+                    final totalClientes = clusters.fold<int>(
+                      0,
+                      (sum, cluster) => sum + cluster.people.length,
+                    );
+                    return Text(
+                      '$totalClientes ${totalClientes == 1 ? 'cliente' : 'clientes'}',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w500,
                       ),
-                      clustersAsync.whenOrNull(
-                        data: (clusters) {
-                          final totalClientes = clusters.fold<int>(
-                            0,
-                            (sum, cluster) => sum + cluster.people.length,
-                          );
-                          return Text(
-                            '$totalClientes ${totalClientes == 1 ? 'cliente' : 'clientes'}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.7),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          );
-                        },
-                      ) ?? const SizedBox.shrink(),
-                    ],
-                  ),
-                ),
+                    );
+                  },
+                ) ?? const SizedBox.shrink(),
               ],
             ),
             actions: [

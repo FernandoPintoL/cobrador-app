@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../datos/modelos/credito.dart';
+import '../../datos/api_services/notification_service.dart';
 import '../../negocio/providers/credit_provider.dart';
 import '../../negocio/providers/pago_provider.dart';
-import 'error_handler.dart';
 import 'payment_success_dialog.dart';
 
 class PaymentDialog extends ConsumerStatefulWidget {
@@ -289,12 +290,18 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
   }
 
   void _showSnackBar(String message, {required bool isError}) {
-    if (context.mounted) {
-      if (isError) {
-        ErrorHandler.showError(context, message);
-      } else {
-        ErrorHandler.showSuccess(context, message);
-      }
+    if (isError) {
+      NotificationService().showGeneralNotification(
+        title: 'Error de validación',
+        body: message,
+        type: 'error',
+      );
+    } else {
+      NotificationService().showGeneralNotification(
+        title: 'Pago',
+        body: message,
+        type: 'payment',
+      );
     }
   }
 
@@ -474,6 +481,9 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                   : null,
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+            ],
             onChanged: (value) {
               setDialogState(() {});
             },

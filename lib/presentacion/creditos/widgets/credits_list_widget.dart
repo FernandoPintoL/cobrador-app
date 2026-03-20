@@ -20,6 +20,7 @@ class CreditsListWidget extends StatelessWidget {
   final void Function(Credito credit)? onReject;
   final void Function(Credito credit)? onDeliver;
   final void Function(Credito credit)? onPayment;
+  final void Function(Credito credit)? onCancel;
 
   const CreditsListWidget({
     super.key,
@@ -39,6 +40,7 @@ class CreditsListWidget extends StatelessWidget {
     this.onReject,
     this.onDeliver,
     this.onPayment,
+    this.onCancel,
   });
 
   @override
@@ -129,6 +131,7 @@ class CreditsListWidget extends StatelessWidget {
               onReject: onReject != null ? () => onReject!(credit) : null,
               onDeliver: onDeliver != null ? () => onDeliver!(credit) : null,
               onPayment: onPayment != null ? () => onPayment!(credit) : null,
+              onCancel: onCancel != null ? () => onCancel!(credit) : null,
             );
           }
 

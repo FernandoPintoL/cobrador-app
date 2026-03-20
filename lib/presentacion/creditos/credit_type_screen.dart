@@ -6,6 +6,7 @@ import '../../negocio/providers/auth_provider.dart';
 import '../../negocio/providers/user_management_provider.dart';
 import '../../negocio/utils/text_utils.dart';
 import '../../datos/modelos/credito.dart';
+import '../../datos/api_services/notification_service.dart';
 import '../../ui/widgets/loading_overlay.dart';
 import '../widgets/payment_dialog.dart';
 import 'credit_detail_screen.dart';
@@ -201,40 +202,17 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
     ref.listen<CreditState>(creditProvider, (previous, next) {
       if (previous?.errorMessage != next.errorMessage &&
           next.errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 6),
-            action: SnackBarAction(
-              label: 'Cerrar',
-              textColor: Colors.white,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ref.read(creditProvider.notifier).clearError();
-              },
-            ),
-          ),
+        NotificationService().showGeneralNotification(
+          title: 'Error',
+          body: next.errorMessage!,
+          type: 'error',
         );
+        ref.read(creditProvider.notifier).clearError();
       }
 
       if (previous?.successMessage != next.successMessage &&
           next.successMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.successMessage!),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Cerrar',
-              textColor: Colors.white,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ref.read(creditProvider.notifier).clearSuccess();
-              },
-            ),
-          ),
-        );
+        ref.read(creditProvider.notifier).clearSuccess();
       }
     });
 
@@ -529,6 +507,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
                               currentUserRole == 'admin'
                           ? _showQuickDeliveryDialog
                           : null,
+                      onCancel:
+                          currentUserRole == 'manager' ||
+                                  currentUserRole == 'admin'
+                              ? _showQuickCancelDeliveryDialog
+                              : null,
                     ),
                   ],
                 ),
@@ -592,18 +575,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       if (mounted) Navigator.of(context).pop();
 
       if (details == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'No se pudieron cargar los detalles del crédito',
-                style: TextStyle(color: Colors.white),
-              ),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
+        NotificationService().showGeneralNotification(
+          title: 'Error',
+          body: 'No se pudieron cargar los detalles del crédito',
+          type: 'error',
+        );
         return;
       }
 
@@ -617,27 +593,18 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
       if (result != null && result['success'] == true) {
         final message = result['message'] as String?;
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                message ?? 'Pago registrado. Actualizando créditos...',
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
+        NotificationService().showPaymentNotification(
+          title: 'Pago registrado',
+          body: message ?? 'Pago registrado. Actualizando créditos...',
+        );
         ref.read(creditProvider.notifier).loadCredits();
         _loadInitialData();
       } else if (result != null && result['success'] == false) {
         final message = result['message'] as String?;
-        if (message != null && message.isNotEmpty && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
-            ),
+        if (message != null && message.isNotEmpty) {
+          NotificationService().showPaymentNotification(
+            title: 'Error al registrar pago',
+            body: message,
           );
         }
       }
@@ -645,15 +612,11 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
       // Cerrar el indicador de carga si aún está abierto
       if (mounted) Navigator.of(context).pop();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al cargar detalles: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+      NotificationService().showGeneralNotification(
+        title: 'Error',
+        body: 'Error al cargar detalles: $e',
+        type: 'error',
+      );
     }
   }
 
@@ -665,6 +628,50 @@ class _WaitingListScreenState extends ConsumerState<CreditTypeScreen>
 
   Future<void> _showQuickDeliveryDialog(Credito credit) =>
       showDeliveryDialog(context, ref, credit, onSuccess: _loadInitialData);
+
+  Future<void> _showQuickCancelDeliveryDialog(Credito credit) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar entrega'),
+        content: Text(
+          '¿Estás seguro de que deseas cancelar la entrega y anular este crédito?\n\n'
+          'Cliente: \'${credit.client?.nombre ?? 'Cliente #${credit.clientId}'}\'\n'
+          'Monto: Bs. ${credit.amount.toStringAsFixed(2)}\n\n'
+          'El crédito será marcado como cancelado y no podrá entregarse.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Mantener'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cancelar entrega'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final success = await ref
+          .read(creditProvider.notifier)
+          .cancelCredit(credit.id);
+
+      if (success) {
+        NotificationService().showCreditNotification(
+          title: 'Entrega cancelada',
+          body: 'Entrega cancelada y crédito anulado',
+          creditId: credit.id.toString(),
+        );
+        if (mounted) _loadInitialData();
+      }
+    }
+  }
 
   /// Navega al formulario de creación de crédito
   /// El backend se encarga de crear la caja automáticamente si es necesario
