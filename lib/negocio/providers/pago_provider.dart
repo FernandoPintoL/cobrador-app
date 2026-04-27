@@ -56,6 +56,7 @@ class PagoNotifier extends StateNotifier<PagoState> {
     String? notes,
     double? latitude,
     double? longitude,
+    DateTime? paymentDate,
   }) async {
     try {
       // Validaciones previas requeridas por backend
@@ -100,8 +101,10 @@ class PagoNotifier extends StateNotifier<PagoState> {
         print('📍 Ubicación del pago: $latitude, $longitude');
       }
 
-      // Fecha en formato YYYY-MM-DD
-      final String paymentDate = DateTime.now().toIso8601String().split('T')[0];
+      // Fecha en formato YYYY-MM-DD (usa la del dispositivo si no se especifica)
+      final String paymentDateStr = (paymentDate ?? DateTime.now())
+          .toIso8601String()
+          .split('T')[0];
 
       // NOTA: Ya NO enviamos installment_number al backend
       // El backend automáticamente encuentra la primera cuota incompleta y distribuye
@@ -112,7 +115,7 @@ class PagoNotifier extends StateNotifier<PagoState> {
         'credit_id': creditId,
         'amount': amount,
         'payment_method': method,
-        'payment_date': paymentDate,
+        'payment_date': paymentDateStr,
         // 'installment_number': NO SE ENVÍA - el backend lo calcula automáticamente
       };
 
@@ -134,12 +137,12 @@ class PagoNotifier extends StateNotifier<PagoState> {
         if (isCobrador) {
           final cobradorId = authState.usuario!.id;
           print(
-            '🔍 Usuario es cobrador (id=$cobradorId). Intentando abrir/asegurar caja para $paymentDate',
+            '🔍 Usuario es cobrador (id=$cobradorId). Intentando abrir/asegurar caja para $paymentDateStr',
           );
           try {
             final openResp = await _cashBalanceApiService.openCashBalance(
               cobradorId: cobradorId.toInt(),
-              date: paymentDate,
+              date: paymentDateStr,
             );
             print('🔓 openCashBalance response: $openResp');
 

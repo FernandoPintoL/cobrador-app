@@ -14,7 +14,10 @@ import '../cliente/location_picker_screen.dart';
 import '../widgets/client_search_widget.dart';
 import '../../ui/widgets/loading_overlay.dart';
 import '../../negocio/utils/schedule_utils.dart';
+import '../../negocio/utils/credit_calculator.dart';
 import '../widgets/top_notification_service.dart';
+
+part 'credit_form_widgets.dart';
 
 class CreditFormScreen extends ConsumerStatefulWidget {
   final Credito? credit; // Para edición
@@ -108,6 +111,11 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   String? _downPaymentError;
   final _descriptionFieldKey = GlobalKey();
   final _downPaymentFieldKey = GlobalKey();
+
+  // Modo de cálculo de cuotas con anticipo
+  // false = Opción 1: cuota sobre monto total | true = Opción 2: cuota sobre saldo restante
+  bool _calcOnRemainingAmount = false;
+  final ValueNotifier<bool> _calcModeNotifier = ValueNotifier(false);
 
   @override
   void initState() {
@@ -353,28 +361,17 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
         : 0.0;
 
     if (amount > 0 && interestRate >= 0) {
-      // Interés se aplica al monto total antes del anticipo
-      final totalWithInterest = amount + (amount * interestRate / 100);
-
-      // Monto a financiar (balance) = total con interés - anticipo
-      final totalAmount = totalWithInterest - downPayment;
-
-      // Actualizar el saldo total automáticamente
-      _balanceController.text = totalAmount.toStringAsFixed(2);
-
-      // Calcular cuota sugerida basada en el total con interés (no en el saldo restante)
-      // El anticipo solo representa cuotas ya pagadas, no reduce el valor de cada cuota
       final numberOfPayments = int.tryParse(_durationDaysController.text) ?? 1;
-      if (numberOfPayments > 0) {
-        final suggestedPayment = totalWithInterest / numberOfPayments;
-        _installmentAmountController.text = suggestedPayment.toStringAsFixed(2);
-        // Calcular cuotas que cubre el anticipo (solo en modo personalizado)
-        if (_isCustomCredit && downPayment > 0 && suggestedPayment > 0) {
-          _downPaymentInstallments = (downPayment / suggestedPayment).floor();
-        } else {
-          _downPaymentInstallments = 0;
-        }
-      }
+      final calc = CreditCalculation(
+        amount: amount,
+        interestRate: interestRate,
+        downPayment: downPayment,
+        installments: numberOfPayments,
+        calcOnRemainingAmount: _isCustomCredit && _calcOnRemainingAmount,
+      );
+      _balanceController.text = calc.balance.toStringAsFixed(2);
+      _installmentAmountController.text = calc.installmentAmount.toStringAsFixed(2);
+      _downPaymentInstallments = calc.downPaymentInstallments;
     }
   }
 
@@ -724,6 +721,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
             description: description,
             downPayment: downPayment,
             isCustomCredit: _isCustomCredit,
+            calcOnRemainingAmount: _isCustomCredit && _calcOnRemainingAmount,
           );
     }
     setState(() {
@@ -755,6 +753,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
     _paidInstallmentsController.dispose(); // ✅ NUEVO
     _descriptionController.dispose(); // ✅ NUEVO: Modo personalizado
     _downPaymentController.dispose(); // ✅ NUEVO: Modo personalizado
+    _calcModeNotifier.dispose();
     super.dispose();
   }
 
@@ -1018,503 +1017,7 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
   // ============================================================================
 
   /// Widget para títulos de sección
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16, top: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 24, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Widget para card de ubicación
-  Widget _buildLocationCard() {
-    final hasLocation =
-        _latitudeController.text.isNotEmpty &&
-        _longitudeController.text.isNotEmpty;
-
-    return Card(
-      elevation: 0,
-      color: hasLocation ? Colors.green.shade50 : Colors.grey.shade100,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: hasLocation ? Colors.green.shade200 : Colors.grey.shade300,
-          width: 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  hasLocation ? Icons.location_on : Icons.location_off,
-                  color: hasLocation
-                      ? Colors.green.shade700
-                      : Colors.grey.shade600,
-                  size: 24,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        hasLocation ? 'Ubicación registrada' : 'Sin ubicación',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: hasLocation
-                              ? Colors.green.shade900
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                      // Mostrar detalles solo cuando está expandido
-                      if (_isLocationCardExpanded) ...[
-                        if (_addressController.text.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              _addressController.text,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade700,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        if (hasLocation)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              'Lat: ${double.tryParse(_latitudeController.text)?.toStringAsFixed(6) ?? ""}, '
-                              'Lng: ${double.tryParse(_longitudeController.text)?.toStringAsFixed(6) ?? ""}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ],
-                  ),
-                ),
-                // Botón para expandir/colapsar
-                IconButton(
-                  icon: Icon(
-                    _isLocationCardExpanded
-                        ? Icons.expand_less
-                        : Icons.expand_more,
-                    color: Colors.grey.shade600,
-                    size: 20,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _isLocationCardExpanded = !_isLocationCardExpanded;
-                    });
-                  },
-                  tooltip: _isLocationCardExpanded
-                      ? 'Ocultar detalles'
-                      : 'Ver detalles',
-                ),
-                // Botón para refrescar ubicación
-                IconButton(
-                  icon: Icon(
-                    _isLocating ? Icons.hourglass_empty : Icons.my_location,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  onPressed: _isLocating ? null : _useCurrentLocation,
-                  tooltip: 'Obtener ubicación actual',
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Widget para card de fecha fin (calculada)
-  Widget _buildEndDateCard() {
-    return Card(
-      elevation: 0,
-      color: Colors.blue.shade50,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.blue.shade200, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(Icons.event_available, color: Colors.blue.shade700, size: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Fecha estimada de finalización',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _endDate != null
-                        ? DateFormat(
-                            'EEEE, dd \'de\' MMMM \'de\' yyyy',
-                            'es',
-                          ).format(_endDate!)
-                        : 'Selecciona fecha de inicio y cuotas',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: _endDate != null
-                          ? Colors.blue.shade900
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Widget para una fila del resumen financiero
-  Widget _buildSummaryRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Widget compacto para mostrar fechas (versión más pequeña)
-  Widget _buildCompactDateRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Widget para el resumen financiero completo con todas las fechas
-  Widget _buildFinancialSummary() {
-    final amount = double.tryParse(_amountController.text) ?? 0.0;
-    final balance = double.tryParse(_balanceController.text) ?? 0.0;
-    final installmentAmount =
-        double.tryParse(_installmentAmountController.text) ?? 0.0;
-    final installments = int.tryParse(_durationDaysController.text) ?? 0;
-    final interestRate =
-        double.tryParse(_interestRateController.text) ?? 0.0;
-    final downPayment = _isCustomCredit
-        ? (double.tryParse(_downPaymentController.text) ?? 0.0)
-        : 0.0;
-    final interest = amount * interestRate / 100;
-    final totalWithInterest = amount + interest;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.orange.shade50, Colors.orange.shade100],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade200, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.assessment, color: Colors.orange.shade700, size: 28),
-              const SizedBox(width: 8),
-              Text(
-                '📊 Resumen del Crédito',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange.shade900,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // ============================================================
-          // FECHAS CENTRALIZADAS (Formato Compacto)
-          // ============================================================
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue.shade200),
-            ),
-            child: Column(
-              children: [
-                _buildCompactDateRow(
-                  icon: Icons.event_note,
-                  label: 'Inicio:',
-                  value: _startDate != null
-                      ? DateFormat('dd/MM/yyyy').format(_startDate!)
-                      : 'No seleccionada',
-                  color: Colors.blue.shade700,
-                ),
-                _buildCompactDateRow(
-                  icon: Icons.event_available,
-                  label: 'Finalización:',
-                  value: _endDate != null
-                      ? DateFormat('dd/MM/yyyy').format(_endDate!)
-                      : 'Pendiente',
-                  color: Colors.blue.shade700,
-                ),
-                if (_scheduledDeliveryDate != null)
-                  _buildCompactDateRow(
-                    icon: Icons.local_shipping,
-                    label: 'Entrega:',
-                    value: DateFormat(
-                      'dd/MM/yyyy',
-                    ).format(_scheduledDeliveryDate!),
-                    color: Colors.purple.shade700,
-                  ),
-              ],
-            ),
-          ),
-
-          // ============================================================
-          // DESGLOSE FINANCIERO
-          // ============================================================
-          Divider(color: Colors.orange.shade300, thickness: 2),
-
-          // Precio total
-          if (amount > 0) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Precio total:',
-                    style: TextStyle(color: Colors.grey.shade700),
-                  ),
-                  Text(
-                    'Bs. ${amount.toStringAsFixed(2)}',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            // + Interés
-            if (interestRate > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '+ Interés (${interestRate.toStringAsFixed(0)}%):',
-                      style: TextStyle(color: Colors.orange.shade700),
-                    ),
-                    Text(
-                      'Bs. ${interest.toStringAsFixed(2)}',
-                      style: TextStyle(color: Colors.orange.shade700),
-                    ),
-                  ],
-                ),
-              ),
-            const Divider(height: 12),
-          ],
-
-          // Total a pagar
-          _buildSummaryRow(
-            icon: Icons.account_balance_wallet,
-            label: 'Total a pagar',
-            value: totalWithInterest > 0
-                ? 'Bs. ${totalWithInterest.toStringAsFixed(2)}'
-                : 'Bs. 0.00',
-            color: Colors.orange,
-          ),
-
-          // Cuota inicial + equivalencia en cuotas
-          if (_isCustomCredit && downPayment > 0) ...[
-            Divider(color: Colors.orange.shade300),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Cuota inicial:',
-                    style: TextStyle(
-                      color: Colors.amber.shade800,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '- Bs. ${downPayment.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: Colors.amber.shade800,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (_downPaymentInstallments > 0)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 13,
-                      color: Colors.blue.shade700,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      () {
-                        final remainder = downPayment -
-                            (_downPaymentInstallments * installmentAmount);
-                        final base =
-                            'Equivale a $_downPaymentInstallments cuota${_downPaymentInstallments != 1 ? 's' : ''}';
-                        return remainder > 0.01
-                            ? '$base + Bs. ${remainder.toStringAsFixed(2)} de adelanto'
-                            : base;
-                      }(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            Divider(color: Colors.orange.shade300),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Saldo en cuotas:',
-                    style: TextStyle(
-                      color: Colors.green.shade700,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Bs. ${balance.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: Colors.green.shade700,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          Divider(color: Colors.orange.shade300),
-          _buildSummaryRow(
-            icon: Icons.payments,
-            label: 'Cuota Sugerida ($installments cuotas)',
-            value: installmentAmount > 0
-                ? 'Bs. ${installmentAmount.toStringAsFixed(2)}'
-                : 'Bs. 0.00',
-            color: Colors.green,
-          ),
-        ],
-      ),
-    );
-  }
+  // ---- Widget builders movidos a credit_form_widgets.dart ----
 
   @override
   Widget build(BuildContext context) {
@@ -1586,6 +1089,8 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                     // Limpiar campos al desactivar
                     _descriptionController.clear();
                     _downPaymentController.text = '0';
+                    _calcOnRemainingAmount = false;
+                    _calcModeNotifier.value = false;
                     // Restaurar fecha de entrega por defecto
                     _scheduledDeliveryDate = DateTime.now().add(
                       const Duration(days: 1),
@@ -2094,7 +1599,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                             },
                             onChanged: (value) {
                               _clearFieldError('amount');
-                              _updateCalculations();
+                              setState(() {
+                                _updateCalculations();
+                              });
                             },
                           ),
 
@@ -2115,8 +1622,10 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                 suffixIcon: IconButton(
                                   icon: const Icon(Icons.clear),
                                   onPressed: () {
-                                    _downPaymentController.text = '0';
-                                    _updateCalculations();
+                                    setState(() {
+                                      _downPaymentController.text = '0';
+                                      _updateCalculations();
+                                    });
                                   },
                                   tooltip: 'Limpiar anticipo',
                                 ),
@@ -2141,9 +1650,158 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                 return null;
                               },
                               onChanged: (value) {
-                                _updateCalculations();
+                                setState(() {
+                                  _updateCalculations();
+                                });
                               },
                             ),
+                            const SizedBox(height: 16),
+                            // Toggle de modo de cálculo de cuotas
+                            Builder(builder: (context) {
+                              final downPayment = double.tryParse(_downPaymentController.text) ?? 0.0;
+                              if (downPayment <= 0) return const SizedBox.shrink();
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text(
+                                      '¿Cómo calcular las cuotas?',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.purple.shade800,
+                                      ),
+                                    ),
+                                  ),
+                                  // Opción 1
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(10),
+                                    onTap: () => setState(() {
+                                      _calcOnRemainingAmount = false;
+                                      _calcModeNotifier.value = false;
+                                      _updateCalculations();
+                                    }),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: !_calcOnRemainingAmount
+                                            ? Colors.purple.shade100
+                                            : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: !_calcOnRemainingAmount
+                                              ? Colors.purple.shade400
+                                              : Colors.grey.shade300,
+                                          width: !_calcOnRemainingAmount ? 2 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            !_calcOnRemainingAmount
+                                                ? Icons.radio_button_checked
+                                                : Icons.radio_button_off,
+                                            color: !_calcOnRemainingAmount
+                                                ? Colors.purple.shade700
+                                                : Colors.grey.shade500,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Cuotas sobre el monto total',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                    color: !_calcOnRemainingAmount
+                                                        ? Colors.purple.shade900
+                                                        : Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'El anticipo cubre cuotas ya pagadas. Las cuotas se calculan sobre el total.',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Opción 2
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(10),
+                                    onTap: () => setState(() {
+                                      _calcOnRemainingAmount = true;
+                                      _calcModeNotifier.value = true;
+                                      _updateCalculations();
+                                    }),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: _calcOnRemainingAmount
+                                            ? Colors.purple.shade100
+                                            : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: _calcOnRemainingAmount
+                                              ? Colors.purple.shade400
+                                              : Colors.grey.shade300,
+                                          width: _calcOnRemainingAmount ? 2 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            _calcOnRemainingAmount
+                                                ? Icons.radio_button_checked
+                                                : Icons.radio_button_off,
+                                            color: _calcOnRemainingAmount
+                                                ? Colors.purple.shade700
+                                                : Colors.grey.shade500,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Cuotas sobre el saldo restante',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                    color: _calcOnRemainingAmount
+                                                        ? Colors.purple.shade900
+                                                        : Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Las cuotas se calculan sobre lo que queda después del anticipo.',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }),
                           ],
 
                           const SizedBox(height: 16),
@@ -2352,7 +2010,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                   onChanged: _canEditInstallments
                                       ? (value) {
                                           _clearFieldError('duration');
-                                          _updateCalculations();
+                                          setState(() {
+                                            _updateCalculations();
+                                          });
                                         }
                                       : null,
                                 ),
@@ -2383,7 +2043,9 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                                   onChanged: _canEditInterest
                                       ? (value) {
                                           _clearFieldError('interestRate');
-                                          _updateCalculations();
+                                          setState(() {
+                                            _updateCalculations();
+                                          });
 
                                           // Advertir si el interés es 0
                                           final rate =
@@ -2862,8 +2524,17 @@ class _CreditFormScreenState extends ConsumerState<CreditFormScreen> {
                   // ============================================================
                   // 📊 SECCIÓN: RESUMEN DEL CRÉDITO
                   // ============================================================
-                  _buildSectionHeader('Resumen del Crédito', Icons.assessment),
-                  _buildFinancialSummary(),
+                  // _buildSectionHeader('Resumen del Crédito', Icons.assessment),
+                  ListenableBuilder(
+                    listenable: Listenable.merge([
+                      _amountController,
+                      _interestRateController,
+                      _downPaymentController,
+                      _durationDaysController,
+                      _calcModeNotifier,
+                    ]),
+                    builder: (context, _) => _buildFinancialSummary(),
+                  ),
                   const SizedBox(height: 24),
                   // Botón temporal para probar scroll automático
                   /* SizedBox(

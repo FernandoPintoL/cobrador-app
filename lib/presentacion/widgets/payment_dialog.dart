@@ -75,6 +75,7 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
   late TextEditingController notesController;
   bool isProcessing = false;
   String selectedPaymentType = 'cash';
+  DateTime _paymentDate = DateTime.now();
 
   @override
   void initState() {
@@ -153,6 +154,21 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
     }
   }
 
+  Future<void> _pickPaymentDate(StateSetter setDialogState) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _paymentDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now(),
+      helpText: 'Fecha del pago',
+    );
+    if (picked != null) {
+      setDialogState(() {
+        _paymentDate = picked;
+      });
+    }
+  }
+
   Future<void> _processPayment(StateSetter setDialogState) async {
     // Validación de monto
     final amount = double.tryParse(amountController.text);
@@ -209,6 +225,7 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                 : notesController.text.trim(),
             latitude: currentPosition?.latitude,
             longitude: currentPosition?.longitude,
+            paymentDate: _paymentDate,
           );
       debugPrint('💰 Resultado del pagos: $result');
 
@@ -287,6 +304,11 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
         });
       }
     }
+  }
+
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
   }
 
   void _showSnackBar(String message, {required bool isError}) {
@@ -509,6 +531,50 @@ class _PaymentFormState extends ConsumerState<PaymentForm> {
                 });
               }
             },
+          ),
+          const SizedBox(height: 16),
+          // Fecha del pago
+          InkWell(
+            onTap: isProcessing ? null : () => _pickPaymentDate(setDialogState),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 18, color: Colors.grey.shade600),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Fecha del pago',
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _isToday(_paymentDate)
+                              ? 'Hoy (${DateFormat('dd/MM/yyyy').format(_paymentDate)})'
+                              : DateFormat('dd/MM/yyyy').format(_paymentDate),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: _isToday(_paymentDate)
+                                ? Colors.grey.shade700
+                                : Colors.orange.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.edit_calendar_outlined, size: 18, color: Colors.grey.shade500),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           Row(

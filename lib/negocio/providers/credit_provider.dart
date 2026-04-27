@@ -466,6 +466,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
     String? description,
     double? downPayment,
     bool? isCustomCredit,
+    bool? calcOnRemainingAmount,
   }) async {
     try {
       state = state.copyWith(
@@ -538,6 +539,9 @@ class CreditNotifier extends StateNotifier<CreditState> {
         }
         if (downPayment != null && downPayment > 0) {
           creditData['down_payment'] = downPayment;
+        }
+        if (calcOnRemainingAmount == true) {
+          creditData['calc_on_remaining_amount'] = true;
         }
       }
 
@@ -798,6 +802,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
     String? notes,
     double? latitude,
     double? longitude,
+    DateTime? paymentDate,
   }) async {
     // Validar estado del crédito localmente
     final current = state.credits.firstWhere(
@@ -832,6 +837,7 @@ class CreditNotifier extends StateNotifier<CreditState> {
       notes: notes,
       latitude: latitude,
       longitude: longitude,
+      paymentDate: paymentDate,
     );
 
     // Si hay información del crédito retornada, actualizar la lista local.

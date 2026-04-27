@@ -57,14 +57,14 @@ class PaymentScheduleCalendar extends StatelessWidget {
               _compactInfoChip(
                 context,
                 'Cuota',
-                'Bs. ${(credit.installmentAmount ?? 0).toStringAsFixed(0)}',
+                'Bs. ${(credit.installmentAmount ?? 0).toStringAsFixed(2)}',
                 Icons.payments,
                 Colors.blue,
               ),
               _compactInfoChip(
                 context,
                 'Saldo',
-                'Bs. ${(credit.balance).toStringAsFixed(0)}',
+                'Bs. ${(credit.balance).toStringAsFixed(2)}',
                 Icons.account_balance_wallet,
                 Colors.orange,
               ),
